@@ -113,6 +113,26 @@ It must not include:
 
 The updater searches the release ZIP for `FileDentify.exe`, so the ZIP can either contain files at the root or inside one top-level folder.
 
+## Local Backup Copies
+
+After each public release or release-asset refresh, mirror the convention used by Clipman and Sensor Readout:
+
+```text
+<local-path> Builds
+<local-path> Snapshots
+```
+
+- Copy the user-installable ZIP to `Program Builds\FileDentify-<version>.zip`.
+- Create `Source Snapshots\FileDentify-source-<version>.zip` from the released git tree, normally with `git archive`, not from untracked working files.
+- Source snapshots must not include `.git`, `release`, `FileDentify.ini`, startup error logs, token files, or other runtime/private artifacts.
+
+For version `1.0`, the expected backup artifacts are:
+
+```text
+<local-path> Builds\FileDentify-1.0.zip
+<local-path> Snapshots\FileDentify-source-1.0.zip
+```
+
 ## Embedded Third-party Components
 
 FileDentify embeds a Windows build of Unix `file`/libmagic from `third_party\libmagic`.
