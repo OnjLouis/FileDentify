@@ -86,7 +86,7 @@ Before release, update these together:
 - release ZIP filename
 - release notes
 
-Use `1.0`, `1.1`, etc. for user-facing versions unless Andre requests a different versioning scheme. Use four-part assembly/file versions such as `1.0.0.0`.
+Use `1.0`, `1.1`, etc. for user-facing feature versions unless Andre requests a different versioning scheme. Use patch versions such as `1.1.1` for shipped-crash fixes or narrow post-release corrections. Use four-part assembly/file versions such as `1.1.1.0`.
 
 ## Build And Smoke
 
@@ -148,11 +148,11 @@ After each public release or release-asset refresh, mirror the convention used b
 - Create `Source Snapshots\FileDentify-source-<version>.zip` from the released git tree, normally with `git archive`, not from untracked working files.
 - Source snapshots must not include `.git`, `release`, `FileDentify.ini`, startup error logs, token files, or other runtime/private artifacts.
 
-For version `1.1`, the expected backup artifacts are:
+For version `1.1.1`, the expected backup artifacts are:
 
 ```text
-<local-path> Builds\FileDentify-1.1.zip
-<local-path> Snapshots\FileDentify-source-1.1.zip
+<local-path> Builds\FileDentify-1.1.1.zip
+<local-path> Snapshots\FileDentify-source-1.1.1.zip
 ```
 
 ## Embedded Third-party Components

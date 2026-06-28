@@ -53,7 +53,9 @@ namespace FileDentify
             viewMenu.DropDownItems.Add(new ToolStripMenuItem("&Binary", null, delegate { binaryRadio.Checked = true; }));
             viewMenu.DropDownItems.Add(new ToolStripMenuItem("&Octal", null, delegate { octalRadio.Checked = true; }));
             var searchMenu = new ToolStripMenuItem("&Search");
-            searchMenu.DropDownItems.Add(new ToolStripMenuItem("Find next", null, delegate { FindNext(); }) { ShortcutKeys = Keys.F3 });
+            searchMenu.DropDownItems.Add(new ToolStripMenuItem("&Find...", null, delegate { FocusSearchBox(); }) { ShortcutKeys = Keys.Control | Keys.F });
+            searchMenu.DropDownItems.Add(new ToolStripMenuItem("Find &next", null, delegate { FindNext(); }) { ShortcutKeys = Keys.F3 });
+            searchMenu.DropDownItems.Add(new ToolStripMenuItem("Find &previous", null, delegate { FindPrevious(); }) { ShortcutKeys = Keys.Shift | Keys.F3 });
             menu.Items.Add(fileMenu);
             menu.Items.Add(editMenu);
             menu.Items.Add(viewMenu);
@@ -122,8 +124,9 @@ namespace FileDentify
             viewerBox.ScrollBars = ScrollBars.Both;
             viewerBox.Font = new Font("Consolas", 10);
             viewerBox.AccessibleName = "Advanced file view";
-            viewerBox.KeyDown += TextBoxSelectAll_KeyDown;
-            viewerBox.KeyUp += ViewerBox_KeyUp;
+            viewerBox.KeyDown += ViewerBox_KeyDown;
+            viewerBox.KeyUp += delegate { UpdateStatus("Ready."); };
+            viewerBox.MouseUp += delegate { UpdateStatus("Ready."); };
             viewerBox.MouseWheel += delegate { MaybeAutoLoadMore(); };
             layout.Controls.Add(viewerBox, 0, 1);
 
@@ -166,7 +169,15 @@ namespace FileDentify
             }
             else if (e.KeyCode == Keys.F3)
             {
-                FindNext();
+                if (e.Shift)
+                    FindPrevious();
+                else
+                    FindNext();
+                e.Handled = true;
+            }
+            else if (e.Control && e.KeyCode == Keys.F)
+            {
+                FocusSearchBox();
                 e.Handled = true;
             }
             else if (e.Control && e.KeyCode == Keys.L)
@@ -199,18 +210,36 @@ namespace FileDentify
             }
         }
 
-        private void ViewerBox_KeyUp(object sender, KeyEventArgs e)
+        private void ViewerBox_KeyDown(object sender, KeyEventArgs e)
         {
-            if (e.KeyCode == Keys.Down || e.KeyCode == Keys.PageDown || e.KeyCode == Keys.End)
-                MaybeAutoLoadMore();
+            TextBoxSelectAll_KeyDown(sender, e);
+            if (e.Handled)
+                return;
+
+            if (!e.Control && !e.Alt && !e.Shift &&
+                (e.KeyCode == Keys.Down || e.KeyCode == Keys.PageDown) &&
+                IsViewerAtLoadedEnd())
+            {
+                LoadMore();
+                e.Handled = true;
+                e.SuppressKeyPress = true;
+            }
         }
 
         private void MaybeAutoLoadMore()
         {
             if (offset >= fileLength || viewerBox.TextLength == 0)
                 return;
-            if (viewerBox.SelectionStart >= Math.Max(0, viewerBox.TextLength - 2000))
+            if (IsViewerAtLoadedEnd())
                 LoadMore();
+        }
+
+        private bool IsViewerAtLoadedEnd()
+        {
+            if (viewerBox.TextLength == 0)
+                return false;
+            return viewerBox.SelectionStart >= viewerBox.TextLength - 1 ||
+                viewerBox.GetLineFromCharIndex(viewerBox.SelectionStart) >= viewerBox.Lines.Length - 1;
         }
 
         private void ChangeMode(AdvancedViewMode newMode)
@@ -320,10 +349,20 @@ namespace FileDentify
                 searchBox.Focus();
                 return;
             }
+            var text = viewerBox.Text;
+            if (string.IsNullOrEmpty(text))
+            {
+                statusLabel.Text = "No loaded content to search.";
+                viewerBox.Focus();
+                return;
+            }
+
             var start = viewerBox.SelectionStart + Math.Max(viewerBox.SelectionLength, 1);
-            var index = viewerBox.Text.IndexOf(needle, start, StringComparison.OrdinalIgnoreCase);
+            if (start < 0 || start >= text.Length)
+                start = 0;
+            var index = text.IndexOf(needle, start, StringComparison.OrdinalIgnoreCase);
             if (index < 0 && start > 0)
-                index = viewerBox.Text.IndexOf(needle, 0, StringComparison.OrdinalIgnoreCase);
+                index = text.IndexOf(needle, 0, StringComparison.OrdinalIgnoreCase);
             if (index < 0)
             {
                 statusLabel.Text = "Search text not found in loaded content. Load more and press F3 to continue.";
@@ -335,6 +374,49 @@ namespace FileDentify
             viewerBox.SelectionLength = needle.Length;
             viewerBox.ScrollToCaret();
             UpdateStatus("Found search text.");
+        }
+
+        private void FindPrevious()
+        {
+            var needle = searchBox.Text;
+            if (string.IsNullOrEmpty(needle))
+            {
+                statusLabel.Text = "Enter text to search for.";
+                searchBox.Focus();
+                return;
+            }
+
+            var text = viewerBox.Text;
+            if (string.IsNullOrEmpty(text))
+            {
+                statusLabel.Text = "No loaded content to search.";
+                viewerBox.Focus();
+                return;
+            }
+
+            var start = viewerBox.SelectionStart - 1;
+            if (start < 0 || start >= text.Length)
+                start = text.Length - 1;
+            var index = text.LastIndexOf(needle, start, StringComparison.OrdinalIgnoreCase);
+            if (index < 0 && start < text.Length - 1)
+                index = text.LastIndexOf(needle, text.Length - 1, StringComparison.OrdinalIgnoreCase);
+            if (index < 0)
+            {
+                statusLabel.Text = "Search text not found in loaded content. Load more and press Shift+F3 to continue.";
+                viewerBox.Focus();
+                return;
+            }
+            viewerBox.Focus();
+            viewerBox.SelectionStart = index;
+            viewerBox.SelectionLength = needle.Length;
+            viewerBox.ScrollToCaret();
+            UpdateStatus("Found previous search text.");
+        }
+
+        private void FocusSearchBox()
+        {
+            searchBox.Focus();
+            searchBox.SelectAll();
         }
 
         private void SaveLoadedOutput()

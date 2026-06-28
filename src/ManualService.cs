@@ -95,6 +95,14 @@ namespace FileDentify
         private static void Changelog(StringBuilder html)
         {
             html.AppendLine("<h2 id=\"changelog\">Changelog</h2>");
+            html.AppendLine("<h3>1.1.1</h3>");
+            html.AppendLine("<ul>");
+            html.AppendLine("<li>Fixed an advanced file viewer crash when pressing Enter after searching from a selection at the end of the loaded output.</li>");
+            html.AppendLine("<li>Added <code>Ctrl+F</code> in the advanced file viewer to focus the search field and select the previous search text so typing replaces it.</li>");
+            html.AppendLine("<li>Added <code>Shift+F3</code> in the advanced file viewer to search backward through loaded output.</li>");
+            html.AppendLine("<li>Improved advanced viewer scrolling so loading more data only happens when the review cursor is actually at the loaded end, avoiding confusing line jumps near the end of a loaded block.</li>");
+            html.AppendLine("<li>Advanced viewer status now refreshes the current line number while moving through loaded output.</li>");
+            html.AppendLine("</ul>");
             html.AppendLine("<h3>1.1</h3>");
             html.AppendLine("<ul>");
             html.AppendLine("<li>Updated embedded Unix file/libmagic to MSYS2 MinGW-w64 file/libmagic 5.48.</li>");
@@ -137,7 +145,7 @@ namespace FileDentify
             html.AppendLine("<p>Run FileDentify with no arguments to open the main window. Use <code>Ctrl+O</code> or File &gt; Open files to inspect one or more files.</p>");
             html.AppendLine("<p>If FileDentify is opened from Send To with a folder, the graphical app recursively scans the files in that folder and shows each file as a top-level tree item.</p>");
             html.AppendLine("<p>The left side is a tree of files and report sections. The right side is a read-only details edit field for the selected tree item. Use <code>F4</code> on a file or one of its sections to open the advanced file viewer.</p>");
-            html.AppendLine("<p>The advanced file viewer has readable text, hex, binary, and octal modes. Use standard navigation keys, Ctrl+A, Ctrl+C, F3 search, Ctrl+L to load more, Ctrl+Shift+L to load all, and Escape to close the viewer and return to FileDentify. Alt+F4 remains the normal Windows close command.</p>");
+            html.AppendLine("<p>The advanced file viewer has readable text, hex, binary, and octal modes. Use standard navigation keys, Ctrl+A, Ctrl+C, Ctrl+F to focus search, F3 and Shift+F3 to search next or previous, Ctrl+L to load more, Ctrl+Shift+L to load all, and Escape to close the viewer and return to FileDentify. Alt+F4 remains the normal Windows close command.</p>");
             html.AppendLine("<p>The report tree also has a context menu with copy, expand/collapse, save, and HTML report actions. Press the Application key or Shift+F10 while focused on the tree, or right-click with a mouse.</p>");
             html.AppendLine("<p>Save report can write either plain text or HTML depending on the chosen file extension. View HTML report opens a temporary HTML report in the default browser; use Save report if you want to keep it.</p>");
             html.AppendLine("<p>When a report contains more than one file, FileDentify adds a Report overview before the individual file reports. This is useful for spotting unknown files, inspection errors, large files, common strings, common byte patterns, and unusual type or extension clusters.</p>");
@@ -219,7 +227,9 @@ namespace FileDentify
             Row(html, "Alt+X", "Switch to Hex mode.");
             Row(html, "Alt+B", "Switch to Binary mode.");
             Row(html, "Alt+O", "Switch to Octal mode.");
+            Row(html, "Ctrl+F", "Move to the search field and select the previous search text so typing replaces it.");
             Row(html, "F3", "Find next match in the loaded output.");
+            Row(html, "Shift+F3", "Find previous match in the loaded output.");
             Row(html, "Ctrl+L", "Load more content from the file.");
             Row(html, "Ctrl+Shift+L", "Load all remaining content from the file.");
             Row(html, "Ctrl+S", "Save the currently loaded viewer output.");

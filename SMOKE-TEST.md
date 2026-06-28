@@ -108,7 +108,8 @@ Manual NVDA checks:
 - Alt+V / View HTML report opens a temporary combined HTML report in the default browser when a report is loaded, and reports that no report is available when empty.
 - Main-window action mnemonics do not collide with top-level menus. Open files uses Ctrl+O/File > Open files, Help uses F1/Help > Help, and Open containing folder uses Alt+L.
 - F4 opens the advanced file viewer for the selected file. Alt+F4 still closes the current window normally.
-- Advanced file viewer opens focus directly on the output field at the top of the loaded text and supports Text, Hex, Binary, and Octal radio-button modes; F3 search; Ctrl+L load more; Ctrl+Shift+L load all; Ctrl+A; Ctrl+C; Save loaded output; and Escape to close. Scrolling to the bottom loads one more chunk, not the whole file.
+- Advanced file viewer opens focus directly on the output field at the top of the loaded text and supports Text, Hex, Binary, and Octal radio-button modes; Ctrl+F focus/select search; F3 next search; Shift+F3 previous search; Ctrl+L load more; Ctrl+Shift+L load all; Ctrl+A; Ctrl+C; Save loaded output; and Escape to close. Scrolling to the bottom loads one more chunk, not the whole file.
+- Advanced file viewer search does not crash when the current selection is at or beyond the end of the loaded output; searching wraps safely and returns focus to the output field after Enter, F3, or Shift+F3.
 - Command line advanced viewer output works with `--viewer-output`, `--viewer`, `--viewer-mode readable|hex|binary|octal`, and `--viewer-bytes`.
 - Ctrl+C from the tree copies the selected node's details, not the full report.
 - Ctrl+C from the details box copies selected text when text is selected, otherwise the current details text.

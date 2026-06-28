@@ -22,16 +22,16 @@ using System.Windows.Forms;
 [assembly: AssemblyProduct("FileDentify")]
 [assembly: AssemblyCopyright("Copyright (c) Andre Louis")]
 [assembly: AssemblyTrademark("")]
-[assembly: AssemblyVersion("1.1.0.0")]
-[assembly: AssemblyFileVersion("1.1.0.0")]
-[assembly: AssemblyInformationalVersion("1.1")]
+[assembly: AssemblyVersion("1.1.1.0")]
+[assembly: AssemblyFileVersion("1.1.1.0")]
+[assembly: AssemblyInformationalVersion("1.1.1")]
 
 namespace FileDentify
 {
     internal static class Program
     {
         private const string ConsoleStubEnvironmentVariable = "FILEDENTIFY_CONSOLE_STUB";
-        public const string Version = "1.1";
+        public const string Version = "1.1.1";
         public const string ProjectUrl = "https://github.com/OnjLouis/FileDentify";
 
         [STAThread]
