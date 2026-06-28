@@ -20,6 +20,18 @@ Before publishing any FileDentify release, release-asset refresh, or hotfix, rea
 
 If an open issue is fixed by the release, mention it in user-facing release notes with wording such as `Closes issue #N`, `Fixes issue #N`, or `Resolves issue #N`. If an open issue is intentionally deferred, say that explicitly in the handoff or release notes.
 
+When closing or replying to issues after a release:
+
+- be polite and thank the reporter for raising the point or for the useful detail;
+- link the release that contains the fix;
+- explain what changed in practical user-facing terms;
+- mention what to look for in the new version;
+- mention validation as shared work, using `we tested` rather than crediting testing to only Andre or only the agent;
+- state deliberate scope boundaries honestly when a related idea was deferred;
+- close only after the release or release asset containing the fix is actually live.
+
+For FileDentify 1.1, issue-closing comments should follow the NVDASync style. Issue 2 may also mention the SendTo project when relevant, because FileDentify ships as part of that workflow as well as its own portable app.
+
 ## Repository And Project URL
 
 Current provisional project URL in source:
@@ -30,7 +42,7 @@ https://github.com/OnjLouis/FileDentify
 
 If the real GitHub repository uses a different casing or slug, update all of these together:
 
-- `Program.ProjectUrl` in `src\FileDentify.cs`
+- `Program.ProjectUrl` in `src\Program.cs`
 - README project links
 - updater release checks
 - release package scripts
@@ -89,15 +101,17 @@ Then verify:
 - command-line `--report` works;
 - SendTo install/uninstall works;
 - executable metadata is correct;
+- the console companion `fd.com` is built for terminal mode;
 - reports avoid duplicated or useless output.
 - reports include `Unix file/libmagic` when the embedded probe succeeds.
-- Help > Third-party notices shows the embedded `file`/libmagic and libgnurx notices.
+- Help > Third-party notices shows the embedded `file`/libmagic, libsystre, libtre, gettext/libintl, and libiconv notices.
 
 ## Release ZIP
 
 The release ZIP should be clean and portable. It should include only files users need, normally:
 
 - `FileDentify.exe`
+- `fd.com`
 - `README.md`
 - `LICENSE.txt`, if present
 - third-party notices, if release packaging keeps them as a separate file in addition to the embedded Help menu
@@ -111,7 +125,7 @@ It must not include:
 - token files
 - generated update temp folders
 
-The updater searches the release ZIP for `FileDentify.exe`, so the ZIP can either contain files at the root or inside one top-level folder.
+The updater searches the release ZIP for `FileDentify.exe`, so the ZIP can either contain files at the root or inside one top-level folder. Include `fd.com` beside `FileDentify.exe`; terminal mode depends on both files living in the same folder, and the updater rejects ZIP files that do not contain both files together.
 
 ## Local Backup Copies
 
@@ -126,20 +140,21 @@ After each public release or release-asset refresh, mirror the convention used b
 - Create `Source Snapshots\FileDentify-source-<version>.zip` from the released git tree, normally with `git archive`, not from untracked working files.
 - Source snapshots must not include `.git`, `release`, `FileDentify.ini`, startup error logs, token files, or other runtime/private artifacts.
 
-For version `1.0`, the expected backup artifacts are:
+For version `1.1`, the expected backup artifacts are:
 
 ```text
-<local-path> Builds\FileDentify-1.0.zip
-<local-path> Snapshots\FileDentify-source-1.0.zip
+<local-path> Builds\FileDentify-1.1.zip
+<local-path> Snapshots\FileDentify-source-1.1.zip
 ```
 
 ## Embedded Third-party Components
 
 FileDentify embeds a Windows build of Unix `file`/libmagic from `third_party\libmagic`.
 
-- `file.exe`, `libmagic-1.dll`, and `magic.mgc` power the report's `Unix file/libmagic` section.
-- `libgnurx-0.dll` is dynamically extracted and loaded with the tool; it is not statically merged into FileDentify code.
-- `COPYING.file` and `COPYING.libgnurx` are embedded and shown from Help > Third-party notices.
+- The current embedded package is MSYS2 MinGW-w64 `file`/libmagic 5.48.
+- `file.exe`, `libmagic-1.dll`, `magic.mgc`, and the required runtime DLLs power the report's `Unix file/libmagic` section.
+- Runtime DLLs are dynamically extracted and loaded with the tool; they are not statically merged into FileDentify code.
+- Third-party notices for file/libmagic, libsystre, libtre, gettext/libintl, and libiconv are embedded and shown from Help > Third-party notices.
 - Before a public release, confirm the third-party notices are still reachable from the app and that the source package reference in `third_party\libmagic\README.txt` is still accurate.
 
 ## Documentation
@@ -155,6 +170,7 @@ Keep public docs free of private paths except when documenting Andre's private p
 When FileDentify is included in the SendTo Project package:
 
 - `<local-path>` should exist.
+- `<local-path>` should exist for terminal users.
 - `<local-path>` should create `File&Dentify.lnk`.
 - The shortcut should target `%USERPROFILE%\encoders\FileDentify.exe`.
 - The visible SendTo mnemonic should be `D`.
@@ -172,3 +188,4 @@ For future release automation, use the MidiCleaner/MoveToMidi `Release.ps1` mode
 - verify the release page and asset URL.
 
 Do not publish until Andre explicitly asks for a GitHub release.
+
