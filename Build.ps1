@@ -4,13 +4,21 @@ $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $sourceRoot = Join-Path $root 'src'
 $sources = Get-ChildItem -LiteralPath $sourceRoot -Filter '*.cs' -File | Sort-Object Name | ForEach-Object { $_.FullName }
 $stubSource = Join-Path $root 'stub\FdConsoleStub.cs'
-$output = '<local-path>'
-$consoleOutput = '<local-path>'
-$installedOutput = Join-Path $env:USERPROFILE 'encoders\FileDentify.exe'
-$installedConsoleOutput = Join-Path $env:USERPROFILE 'encoders\fd.com'
-$oldPackageOutput = '<local-path>'
-$oldPackageConsoleOutput = '<local-path>'
-$oldInstalledConsoleOutput = Join-Path $env:USERPROFILE 'encoders\FileDentify.com'
+$packageDir = $env:FILEDENTIFY_PACKAGE_DIR
+if ([string]::IsNullOrWhiteSpace($packageDir)) {
+    $packageDir = Join-Path $root 'bin\Release'
+}
+$installDir = $env:FILEDENTIFY_INSTALL_DIR
+if ([string]::IsNullOrWhiteSpace($installDir)) {
+    $installDir = Join-Path $env:USERPROFILE 'encoders'
+}
+$output = Join-Path $packageDir 'FileDentify.exe'
+$consoleOutput = Join-Path $packageDir 'fd.com'
+$installedOutput = Join-Path $installDir 'FileDentify.exe'
+$installedConsoleOutput = Join-Path $installDir 'fd.com'
+$oldPackageOutput = Join-Path $packageDir 'Filedentify.exe'
+$oldPackageConsoleOutput = Join-Path $packageDir 'FileDentify.com'
+$oldInstalledConsoleOutput = Join-Path $installDir 'FileDentify.com'
 $csc = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
 $libmagicRoot = Join-Path $root 'third_party\libmagic\extracted'
 
@@ -21,6 +29,8 @@ if (-not (Test-Path -LiteralPath $csc)) {
 if (-not (Test-Path -LiteralPath $csc)) {
     throw 'Could not find the .NET Framework C# compiler.'
 }
+
+New-Item -ItemType Directory -Force -Path $packageDir | Out-Null
 
 foreach ($oldPath in @($oldPackageOutput, $oldPackageConsoleOutput, $oldInstalledConsoleOutput)) {
     if ($oldPath -and (Test-Path -LiteralPath $oldPath)) {
@@ -71,7 +81,7 @@ if ($LASTEXITCODE -ne 0) {
 
 Write-Host "Built $consoleOutput"
 
-if (Test-Path -LiteralPath (Split-Path -Parent $installedOutput)) {
+if (Test-Path -LiteralPath $installDir) {
     try {
         if (Test-Path -LiteralPath $installedOutput) {
             Remove-Item -LiteralPath $installedOutput -Force

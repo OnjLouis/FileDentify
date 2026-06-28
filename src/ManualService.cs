@@ -128,7 +128,7 @@ namespace FileDentify
             html.AppendLine("<li>Added Ctrl+Shift+Left and Ctrl+Shift+Right to collapse or expand the report tree, matching Sensor Readout.</li>");
             html.AppendLine("<li>Added consistent keyboard access: Open files uses Ctrl+O, Save report uses Ctrl+S, Preferences uses Ctrl+comma, View HTML report uses Alt+V, Open containing folder uses Alt+L, and Help uses F1.</li>");
             html.AppendLine("<li>Added an Edit menu, a report-tree context menu, and a main-screen Help button so copy, expand/collapse, save, HTML report, and help actions are discoverable to mouse and keyboard users.</li>");
-            html.AppendLine("<li>Added Contact, Donate, and Other software entries to the Help menu, matching Andre's other apps.</li>");
+            html.AppendLine("<li>Added Contact, Donate, and Other software entries to the Help menu, matching the other Andre Louis utilities.</li>");
             html.AppendLine("<li>Added combined HTML report output with headings and section tables. Save report can now write either plain text or HTML, and command-line reports automatically use HTML when the output file ends in <code>.html</code> or <code>.htm</code>.</li>");
             html.AppendLine("<li>Added a Report overview at the top of combined reports, with file counts, generation time, total reported size, likely-type distribution, extension distribution, largest files, common sampled byte values, common readable strings, signature-match counts, and files that need attention.</li>");
             html.AppendLine("<li>Added View HTML report on the main screen. It opens a temporary combined HTML report in the default browser and cleans up the temporary file when FileDentify exits.</li>");

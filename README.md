@@ -12,23 +12,9 @@ Build with:
 powershell -ExecutionPolicy Bypass -File .\Build.ps1
 ```
 
-The build script creates the portable executable and, when the configured package output folder exists, updates that installed copy as well.
+By default, the build script writes portable output under `bin\Release`. Set `FILEDENTIFY_PACKAGE_DIR` before building if you want the executable and console companion copied somewhere else.
 
-Before release-style work, maintainers should read:
-
-- `SMOKE-TEST.md`
-- `GITHUB-RELEASE-RULES.md`
-
-Before release, also run GitHub issue/PR checks and the community search checklist:
-
-```powershell
-# Set GH_TOKEN or GITHUB_TOKEN in the environment before running GitHub commands.
-gh issue list --repo OnjLouis/FileDentify --state open
-gh pr list --repo OnjLouis/FileDentify --state open
-powershell -ExecutionPolicy Bypass -File .\CommunitySearch.ps1
-```
-
-This checks GitHub for FileDentify issues and pull requests, then writes web/community search links for public feedback that may not have arrived as a GitHub issue. These checks are release blockers, matching the Sensor Readout and Clipman process.
+FileDentify can also be used from the SendTo Project, available from <https://3.onj.me/programs>.
 
 ## Runtime features
 
@@ -36,7 +22,7 @@ This checks GitHub for FileDentify issues and pull requests, then writes web/com
 - Standard shortcuts include Ctrl+O for Open files, Ctrl+S for Save report, Ctrl+comma for Preferences, Shift+F1 for Check for Updates, and Ctrl+F1 for the project page.
 - `Options > Preferences` has an Automation tab for adding or removing FileDentify from the Windows Send To menu.
 - `Options > Preferences` has an Updates tab for GitHub Releases update checks.
-- `Help > Check for Updates`, `Help > Version History`, `Help > Project page`, `Help > Contact`, `Help > Donate`, and `Help > Other software` follow the same model as Andre's other utilities.
+- `Help > Check for Updates`, `Help > Version History`, `Help > Project page`, `Help > Contact`, `Help > Donate`, and `Help > Other software` are available from the menu bar.
 - `Help > Third-party notices` shows the embedded Unix `file`/libmagic and required runtime notices.
 - Reports include built-in FileDentify analysis plus an embedded Unix `file`/libmagic section for broader signature coverage.
 - Reports include a reader-friendly `Readable text` section for discovered strings, plus offset-based `Printable strings` for forensic detail.
@@ -45,7 +31,7 @@ This checks GitHub for FileDentify issues and pull requests, then writes web/com
 
 ## Source layout
 
-Source files live under `src`. The project intentionally follows the split used by Andre's other utilities: UI, settings, updater, manual, terminal mode, libmagic integration, signatures, models, and file-inspection domains are kept in separate files instead of one monolithic source file.
+Source files live under `src`. UI, settings, updater, manual, terminal mode, libmagic integration, signatures, models, and file-inspection domains are kept in separate files instead of one monolithic source file.
 
 ## Embedded libmagic
 
@@ -83,7 +69,7 @@ A huge thanks to everyone who has submitted a GitHub issue or suggestion. You ha
 
 Questions and feedback can be sent through `Help` > `Contact` in the app or <https://onj.me/contact>.
 
-FileDentify is free software. If you want to support Andre's work, use `Help` > `Donate` in the app or visit <https://onj.me/donate>. Other Andre Louis software is listed at <https://onj.me/software>.
+FileDentify is free software. If you want to support Andre Louis software, use `Help` > `Donate` in the app or visit <https://onj.me/donate>. Other Andre Louis software is listed at <https://onj.me/software>.
 
 FileDentify uses or can use components from these projects:
 

@@ -1,43 +1,33 @@
 # FileDentify Smoke Test
 
-This is the working smoke-test checklist for FileDentify. Use it before replacing the configured installed copy, packaging a release ZIP, or publishing to GitHub.
+This is the working smoke-test checklist for FileDentify. Use it before replacing a local installed copy, packaging a release ZIP, or publishing to GitHub.
 
 ## Scope
 
-FileDentify is a portable, keyboard-first WinForms file identification utility. The source lives in the repository checkout:
+FileDentify is a portable, keyboard-first WinForms file identification utility. The source lives in the repository checkout.
+
+The SendTo Project package should contain the GUI executable and console companion:
 
 ```text
-<local-path>
+encoders\FileDentify.exe
+encoders\fd.com
 ```
 
-The SendTo package should contain the GUI executable and console companion:
-
-```text
-<local-path>
-<local-path>
-```
-
-the configured installed copy is:
-
-```text
-<local-path>
-<local-path>
-```
+Set `FILEDENTIFY_PACKAGE_DIR` and `FILEDENTIFY_INSTALL_DIR` when a local machine needs build output copied to specific folders.
 
 ## Build
 
 Run:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File <local-path>
+powershell -ExecutionPolicy Bypass -File .\Build.ps1
 ```
 
 Expected:
 
-- `<local-path>` exists.
-- `<local-path>` exists.
-- `<local-path>` is updated when the installed encoders folder exists.
-- `<local-path>` is updated when the installed encoders folder exists.
+- `FileDentify.exe` exists in the configured package output folder.
+- `fd.com` exists in the configured package output folder.
+- The configured local installed copy is updated when `FILEDENTIFY_INSTALL_DIR` exists.
 - Old-cased `Filedentify.exe` is not left beside `FileDentify.exe`.
 - Build fails hard if `csc.exe` fails.
 - If the installed copy is running or locked, the package output is still built and the script prints a warning instead of deleting the installed executable.
@@ -50,7 +40,6 @@ Expected:
 Before publishing, run the GitHub issue and pull request checks:
 
 ```powershell
-# Set GH_TOKEN or GITHUB_TOKEN in the environment before running GitHub commands.
 gh issue list --repo OnjLouis/FileDentify --state open
 gh pr list --repo OnjLouis/FileDentify --state open
 ```
@@ -58,7 +47,7 @@ gh pr list --repo OnjLouis/FileDentify --state open
 Then run the community search:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File <local-path>
+powershell -ExecutionPolicy Bypass -File .\CommunitySearch.ps1
 ```
 
 Expected:
@@ -76,7 +65,7 @@ Expected:
 Check:
 
 ```powershell
-$v = [System.Diagnostics.FileVersionInfo]::GetVersionInfo('<local-path>')
+$v = [System.Diagnostics.FileVersionInfo]::GetVersionInfo('<path-to-built-FileDentify.exe>')
 $v | Format-List ProductName,FileDescription,CompanyName,LegalCopyright,FileVersion,ProductVersion
 ```
 
@@ -93,7 +82,7 @@ Expected:
 Run:
 
 ```powershell
-Start-Process <local-path>
+Start-Process <path-to-built-FileDentify.exe>
 ```
 
 Expected:
@@ -150,7 +139,7 @@ Run:
 ```powershell
 $report = Join-Path $env:TEMP 'FileDentify-report-smoke.txt'
 Remove-Item -LiteralPath $report -Force -ErrorAction SilentlyContinue
-Start-Process -FilePath <local-path> -ArgumentList @('--report', $report, '<local-path>') -Wait
+Start-Process -FilePath <path-to-built-FileDentify.exe> -ArgumentList @('--report', $report, '<path-to-built-FileDentify.exe>') -Wait
 Get-Content -LiteralPath $report -TotalCount 80
 ```
 
@@ -178,7 +167,7 @@ Folder report mode:
 $folderReport = Join-Path $env:TEMP 'FileDentify-folder-report-smoke.txt'
 Remove-Item -LiteralPath $folderReport -Force -ErrorAction SilentlyContinue
 $args = '--folder-report "{0}" "{1}"' -f $folderReport, "$env:PUBLIC\Desktop"
-Start-Process -FilePath <local-path> -ArgumentList $args -Wait
+Start-Process -FilePath <path-to-built-FileDentify.exe> -ArgumentList $args -Wait
 Get-Content -LiteralPath $folderReport -TotalCount 80
 ```
 
@@ -191,7 +180,7 @@ Expected:
 Terminal mode:
 
 ```powershell
-<local-path> <local-path>
+<path-to-fd.com> <path-to-built-FileDentify.exe>
 ```
 
 Expected:
@@ -214,8 +203,8 @@ Expected:
 
 Use representative files when available:
 
-- `<local-path>`
-- `<local-path>`, if still present, for Roland SRX detection.
+- The built `FileDentify.exe`.
+- A known Roland SRX sample file, if available.
 - A small UTF-8 text file.
 - A ZIP file.
 - A PNG or JPEG image.
@@ -266,7 +255,7 @@ Expected:
 Install:
 
 ```powershell
-<local-path> --install-sendto
+<path-to-built-FileDentify.exe> --install-sendto
 ```
 
 Check:
@@ -286,15 +275,15 @@ $lnk = $shell.CreateShortcut($shortcut)
 Expected:
 
 - Shortcut name is `File&Dentify.lnk`, with the menu accelerator on `D`.
-- Target is `<local-path>`.
+- Target is the built `FileDentify.exe`.
 - Arguments are empty.
-- Working directory is `<local-path>`.
+- Working directory is the executable folder.
 - Old-cased `File&dentify.lnk` is not present.
 
 Uninstall:
 
 ```powershell
-<local-path> --uninstall-sendto
+<path-to-built-FileDentify.exe> --uninstall-sendto
 ```
 
 Expected:
@@ -305,17 +294,17 @@ Expected:
 Desktop shortcut:
 
 ```powershell
-Start-Process -FilePath <local-path> -ArgumentList '--install-desktop' -Wait
+Start-Process -FilePath <path-to-built-FileDentify.exe> -ArgumentList '--install-desktop' -Wait
 $desktopShortcut = Join-Path ([Environment]::GetFolderPath('DesktopDirectory')) 'FileDentify.lnk'
 Test-Path -LiteralPath $desktopShortcut
-Start-Process -FilePath <local-path> -ArgumentList '--uninstall-desktop' -Wait
+Start-Process -FilePath <path-to-built-FileDentify.exe> -ArgumentList '--uninstall-desktop' -Wait
 Test-Path -LiteralPath $desktopShortcut
 ```
 
 Expected:
 
 - The first `Test-Path` returns `True`.
-- The desktop shortcut targets `<local-path>`.
+- The desktop shortcut targets the built `FileDentify.exe`.
 - The second `Test-Path` returns `False`.
 - `FileDentify.ini` records `DesktopShortcutEnabled=False` after uninstall.
 
@@ -324,7 +313,7 @@ Expected:
 Check:
 
 ```powershell
-Get-Content <local-path>
+Get-Content <path-to-FileDentify.ini>
 ```
 
 Expected:
@@ -361,6 +350,21 @@ It must not include:
 - logs
 - temp files
 - token files
+- private token paths
+- private machine paths
+- local user profile paths
 - private Codex handover files
 - source-only build artifacts
+
+Before publishing, extract or inspect the final release ZIP and scan all included text files:
+
+```powershell
+rg -n "token\\.txt|GH_TOKEN\\s*=|the repository checkout|backups\\\\Codex|[A-Z]:\\\\|Users\\\\[^\\\\]+|private token|local token" <extracted-release-folder>
+```
+
+Expected:
+
+- No matches in shipped user-facing files.
+- Public URLs such as GitHub, `onj.me`, and `3.onj.me/programs` are fine.
+- Maintainer-only release instructions are not included in `README.md`.
 

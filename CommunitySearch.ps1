@@ -11,14 +11,6 @@ function Get-GitHubHeaders {
     if ([string]::IsNullOrWhiteSpace($token)) {
         $token = $env:GITHUB_TOKEN
     }
-    if ([string]::IsNullOrWhiteSpace($token)) {
-        $tokenFile = Join-Path $repoRoot 'token.txt'
-        if (Test-Path -LiteralPath $tokenFile) {
-            $token = (Get-Content -LiteralPath $tokenFile -Raw).Trim()
-        }
-        }
-    }
-
     $headers = @{
         'Accept' = 'application/vnd.github+json'
         'User-Agent' = 'FileDentify-CommunitySearch'

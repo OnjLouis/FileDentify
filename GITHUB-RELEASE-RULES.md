@@ -8,7 +8,7 @@ Never use a GitHub path that opens an interactive browser, passkey, Git Credenti
 
 Use only non-interactive authentication:
 
-- `gh` with `GH_TOKEN` or `GITHUB_TOKEN` set from the local token file.
+- `gh` with `GH_TOKEN` or `GITHUB_TOKEN` already set in the environment.
 - `git` with `GIT_TERMINAL_PROMPT=0`, `GCM_INTERACTIVE=Never`, credential helpers disabled, askpass disabled, and an explicit authorization header derived from the token.
 - An already-authenticated GitHub connector.
 
@@ -18,10 +18,9 @@ If token-based authentication fails, stop and report it. Do not trigger an inter
 
 Before publishing any FileDentify release, release-asset refresh, or hotfix, reading GitHub issues, GitHub pull requests, and community mentions is mandatory. This is a release blocker, matching the Sensor Readout and Clipman release process. Do not publish first and inspect issues afterward.
 
-Run the GitHub issue and pull request checks with non-interactive authentication:
+Run the GitHub issue and pull request checks with non-interactive authentication. `GH_TOKEN` or `GITHUB_TOKEN` must already be set by the caller:
 
 ```powershell
-# Set GH_TOKEN or GITHUB_TOKEN in the environment before running GitHub commands.
 gh issue list --repo OnjLouis/FileDentify --state open
 gh pr list --repo OnjLouis/FileDentify --state open
 ```
@@ -31,7 +30,7 @@ If either command fails, stop the release until GitHub can be checked. If open i
 Also run the repeatable community search checklist before release:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File <local-path>
+powershell -ExecutionPolicy Bypass -File .\CommunitySearch.ps1
 ```
 
 Review public/community mentions for feedback that did not arrive as a GitHub issue. Because `FileDentify` is a niche name, exact-name searches should be useful; still check accessibility-community terms, SendTo references, libmagic/file-command comparisons, terminal-mode comments, and unsupported file-format requests. If the community search fails or surfaces actionable release-relevant feedback, stop and review it before publishing.
@@ -68,13 +67,13 @@ If the real GitHub repository uses a different casing or slug, update all of the
 
 ## Source Layout
 
-- Durable source lives in `<local-path>`.
+- Durable source lives in the repository checkout.
 - Source code lives under `src`.
 - Embedded third-party `file`/libmagic build inputs live under `third_party\libmagic`.
 - `Build.ps1` builds the packaged executable.
 - `SMOKE-TEST.md` is the smoke/release checklist.
-- `<local-path>` is package output, not the durable source.
-- `<local-path>` is the configured installed copy.
+- `FILEDENTIFY_PACKAGE_DIR`, when set, controls where build output is copied.
+- `FILEDENTIFY_INSTALL_DIR`, when set, controls where the local installed copy is refreshed.
 
 Do not commit or publish local runtime files:
 
@@ -103,13 +102,13 @@ Use `1.0`, `1.1`, etc. for user-facing feature versions unless Andre requests a 
 Before publishing, run the smoke checklist in:
 
 ```text
-<local-path>
+SMOKE-TEST.md
 ```
 
 At minimum:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File <local-path>
+powershell -ExecutionPolicy Bypass -File .\Build.ps1
 ```
 
 Then verify:
@@ -150,8 +149,8 @@ The updater searches the release ZIP for `FileDentify.exe`, so the ZIP can eithe
 After each public release or release-asset refresh, mirror the convention used by Clipman and Sensor Readout:
 
 ```text
-<local-path> Builds
-<local-path> Snapshots
+<backup-root>\FileDentify\Program Builds
+<backup-root>\FileDentify\Source Snapshots
 ```
 
 - Copy the user-installable ZIP to `Program Builds\FileDentify-<version>.zip`.
@@ -161,8 +160,8 @@ After each public release or release-asset refresh, mirror the convention used b
 For version `1.1.1`, the expected backup artifacts are:
 
 ```text
-<local-path> Builds\FileDentify-1.1.1.zip
-<local-path> Snapshots\FileDentify-source-1.1.1.zip
+<backup-root>\FileDentify\Program Builds\FileDentify-1.1.1.zip
+<backup-root>\FileDentify\Source Snapshots\FileDentify-source-1.1.1.zip
 ```
 
 ## Embedded Third-party Components
@@ -181,15 +180,15 @@ Update `README.md` for user-facing behavior changes.
 
 Update `SMOKE-TEST.md` whenever release checks, updater behavior, SendTo integration, accessibility behavior, package layout, or command-line behavior changes.
 
-Keep public docs free of private paths except when documenting Andre's private paths for internal smoke-test use. Do not include private tokens, local machine names, or unrelated the repository checkout contents in release notes.
+Keep public docs free of private paths. Do not include private token paths, local machine names, local user names, or unrelated personal folders in release notes, README files, source comments, or release assets.
 
 ## SendTo Packaging
 
-When FileDentify is included in the SendTo Project package:
+When FileDentify is included in the SendTo Project:
 
-- `<local-path>` should exist.
-- `<local-path>` should exist for terminal users.
-- `<local-path>` should create `File&Dentify.lnk`.
+- the package should include `encoders\FileDentify.exe`.
+- the package should include `encoders\fd.com` for terminal users.
+- the SendTo installer should create `File&Dentify.lnk`.
 - The shortcut should target `%USERPROFILE%\encoders\FileDentify.exe`.
 - The visible SendTo mnemonic should be `D`.
 - Old-cased `Filedentify.exe` and `File&dentify.lnk` should not be left behind.
