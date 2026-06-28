@@ -109,6 +109,7 @@ At minimum:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\Build.ps1
+powershell -ExecutionPolicy Bypass -File .\Test-ReleasePrivacy.ps1 -ReleaseZip <path-to-release-zip> -AllHistory
 ```
 
 Then verify:
@@ -122,6 +123,7 @@ Then verify:
 - reports avoid duplicated or useless output.
 - reports include `Unix file/libmagic` when the embedded probe succeeds.
 - Help > Third-party notices shows the embedded `file`/libmagic, libsystre, libtre, gettext/libintl, and libiconv notices.
+- `Test-ReleasePrivacy.ps1` passes against the working tree, the final release ZIP, and reachable Git history. This is a hard blocker, matching the Clipman/Sensor Readout release discipline for private paths, private machine/user names, and token-file loading snippets.
 
 ## Release ZIP
 
@@ -141,6 +143,10 @@ It must not include:
 - private handover files
 - token files
 - generated update temp folders
+- private local paths or user profile paths
+- private machine/user names
+- token-file loading snippets
+- private Codex handover path wording
 
 The updater searches the release ZIP for `FileDentify.exe`, so the ZIP can either contain files at the root or inside one top-level folder. Include `fd.com` beside `FileDentify.exe`; terminal mode depends on both files living in the same folder, and the updater rejects ZIP files that do not contain both files together.
 

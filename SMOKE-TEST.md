@@ -336,6 +336,18 @@ After the GitHub repository exists:
 
 ## Release Package Cleanliness
 
+Run the automated privacy blocker before any release, release-asset refresh, source snapshot, or hotfix:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\Test-ReleasePrivacy.ps1 -ReleaseZip <path-to-release-zip> -AllHistory
+```
+
+Expected:
+
+- The command exits successfully.
+- Public docs, source text, generated release files, and reachable Git history do not contain private local paths, private machine/user names, token-file loading snippets, or private Codex handover path wording.
+- Any failure is a release blocker. Fix the source, rebuild the ZIP, regenerate source snapshots if needed, and rerun this check before publishing.
+
 A future release ZIP should include only shipped user-facing files, normally:
 
 - `FileDentify.exe`
@@ -356,15 +368,5 @@ It must not include:
 - private Codex handover files
 - source-only build artifacts
 
-Before publishing, extract or inspect the final release ZIP and scan all included text files:
-
-```powershell
-rg -n "token\\.txt|GH_TOKEN\\s*=|[A-Z]:\\\\|Users\\\\[^\\\\]+|private token|local token" <extracted-release-folder>
-```
-
-Expected:
-
-- No matches in shipped user-facing files.
-- Public URLs such as GitHub, `onj.me`, and `3.onj.me/programs` are fine.
-- Maintainer-only release instructions are not included in `README.md`.
+Public URLs such as GitHub, `onj.me`, and `3.onj.me/programs` are fine. Maintainer-only release instructions must not be included in `README.md`.
 
