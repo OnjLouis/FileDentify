@@ -87,19 +87,31 @@ internal static class FdConsoleStub
                 arg.Equals("-h", StringComparison.OrdinalIgnoreCase) ||
                 arg.Equals("/?", StringComparison.OrdinalIgnoreCase) ||
                 arg.Equals("--version", StringComparison.OrdinalIgnoreCase) ||
+                arg.Equals("-v", StringComparison.OrdinalIgnoreCase) ||
                 arg.Equals("--update", StringComparison.OrdinalIgnoreCase) ||
                 arg.Equals("-u", StringComparison.OrdinalIgnoreCase) ||
                 arg.Equals("--report", StringComparison.OrdinalIgnoreCase) ||
                 arg.Equals("-r", StringComparison.OrdinalIgnoreCase) ||
                 arg.Equals("--html-report", StringComparison.OrdinalIgnoreCase) ||
+                arg.Equals("-hr", StringComparison.OrdinalIgnoreCase) ||
                 arg.Equals("--folder-report", StringComparison.OrdinalIgnoreCase) ||
+                arg.Equals("-fr", StringComparison.OrdinalIgnoreCase) ||
+                arg.Equals("--advanced-view", StringComparison.OrdinalIgnoreCase) ||
+                arg.Equals("-av", StringComparison.OrdinalIgnoreCase) ||
                 arg.Equals("--viewer-output", StringComparison.OrdinalIgnoreCase) ||
+                arg.Equals("-vo", StringComparison.OrdinalIgnoreCase) ||
                 arg.Equals("--viewer", StringComparison.OrdinalIgnoreCase) ||
+                arg.Equals("-vw", StringComparison.OrdinalIgnoreCase) ||
                 arg.Equals("--close", StringComparison.OrdinalIgnoreCase) ||
+                arg.Equals("-c", StringComparison.OrdinalIgnoreCase) ||
                 arg.Equals("--install-sendto", StringComparison.OrdinalIgnoreCase) ||
+                arg.Equals("-is", StringComparison.OrdinalIgnoreCase) ||
                 arg.Equals("--uninstall-sendto", StringComparison.OrdinalIgnoreCase) ||
+                arg.Equals("-us", StringComparison.OrdinalIgnoreCase) ||
                 arg.Equals("--install-desktop", StringComparison.OrdinalIgnoreCase) ||
-                arg.Equals("--uninstall-desktop", StringComparison.OrdinalIgnoreCase))
+                arg.Equals("-id", StringComparison.OrdinalIgnoreCase) ||
+                arg.Equals("--uninstall-desktop", StringComparison.OrdinalIgnoreCase) ||
+                arg.Equals("-ud", StringComparison.OrdinalIgnoreCase))
                 return true;
         }
 

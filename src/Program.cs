@@ -12,6 +12,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
+using System.Runtime.InteropServices;
 using System.Web.Script.Serialization;
 using System.Windows.Forms;
 
@@ -22,16 +23,16 @@ using System.Windows.Forms;
 [assembly: AssemblyProduct("FileDentify")]
 [assembly: AssemblyCopyright("Copyright (c) Andre Louis")]
 [assembly: AssemblyTrademark("")]
-[assembly: AssemblyVersion("1.1.1.0")]
-[assembly: AssemblyFileVersion("1.1.1.0")]
-[assembly: AssemblyInformationalVersion("1.1.1")]
+[assembly: AssemblyVersion("1.2.0.0")]
+[assembly: AssemblyFileVersion("1.2.0.0")]
+[assembly: AssemblyInformationalVersion("1.2")]
 
 namespace FileDentify
 {
     internal static class Program
     {
         private const string ConsoleStubEnvironmentVariable = "FILEDENTIFY_CONSOLE_STUB";
-        public const string Version = "1.1.1";
+        public const string Version = "1.2";
         public const string ProjectUrl = "https://github.com/OnjLouis/FileDentify";
 
         [STAThread]
@@ -77,6 +78,7 @@ namespace FileDentify
             var viewerMode = AdvancedViewMode.ReadableText;
             long viewerBytes = 4 * 1024 * 1024;
             var forceHtmlReport = false;
+            var advancedView = false;
             var showHelp = false;
             var terminalMode = false;
 
@@ -85,12 +87,12 @@ namespace FileDentify
                 var arg = args[i] ?? string.Empty;
                 if (arg.Equals("--help", StringComparison.OrdinalIgnoreCase) || arg.Equals("-h", StringComparison.OrdinalIgnoreCase) || arg.Equals("/?", StringComparison.OrdinalIgnoreCase))
                     showHelp = true;
-                else if (arg.Equals("--version", StringComparison.OrdinalIgnoreCase))
+                else if (IsSwitch(arg, "--version", "-v"))
                 {
                     WriteConsoleOrMessage("FileDentify " + Version, "FileDentify");
                     return true;
                 }
-                else if (arg.Equals("--install-sendto", StringComparison.OrdinalIgnoreCase))
+                else if (IsSwitch(arg, "--install-sendto", "-is"))
                 {
                     SendToInstaller.SetInstalled(true);
                     var settings = AppSettings.Load();
@@ -98,7 +100,7 @@ namespace FileDentify
                     settings.Save();
                     return true;
                 }
-                else if (arg.Equals("--uninstall-sendto", StringComparison.OrdinalIgnoreCase))
+                else if (IsSwitch(arg, "--uninstall-sendto", "-us"))
                 {
                     SendToInstaller.SetInstalled(false);
                     var settings = AppSettings.Load();
@@ -106,7 +108,7 @@ namespace FileDentify
                     settings.Save();
                     return true;
                 }
-                else if (arg.Equals("--install-desktop", StringComparison.OrdinalIgnoreCase))
+                else if (IsSwitch(arg, "--install-desktop", "-id"))
                 {
                     DesktopShortcutInstaller.SetInstalled(true);
                     var settings = AppSettings.Load();
@@ -114,7 +116,7 @@ namespace FileDentify
                     settings.Save();
                     return true;
                 }
-                else if (arg.Equals("--uninstall-desktop", StringComparison.OrdinalIgnoreCase))
+                else if (IsSwitch(arg, "--uninstall-desktop", "-ud"))
                 {
                     DesktopShortcutInstaller.SetInstalled(false);
                     var settings = AppSettings.Load();
@@ -127,37 +129,39 @@ namespace FileDentify
                     CheckForUpdatesFromCommandLine();
                     return true;
                 }
-                else if (arg.Equals("--close", StringComparison.OrdinalIgnoreCase))
+                else if (IsSwitch(arg, "--close", "-c"))
                 {
                     CloseOtherInstances();
                     return true;
                 }
                 else if ((arg.Equals("--report", StringComparison.OrdinalIgnoreCase) || arg.Equals("-r", StringComparison.OrdinalIgnoreCase)) && i + 1 < args.Length)
                     reportPath = args[++i];
-                else if (arg.Equals("--html-report", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length)
+                else if (IsSwitch(arg, "--html-report", "-hr") && i + 1 < args.Length)
                 {
                     reportPath = args[++i];
                     forceHtmlReport = true;
                 }
-                else if (arg.Equals("--folder-report", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length)
+                else if (IsSwitch(arg, "--folder-report", "-fr") && i + 1 < args.Length)
                     folderReportPath = args[++i];
-                else if (arg.Equals("--viewer-output", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length)
+                else if (IsSwitch(arg, "--viewer-output", "-vo") && i + 1 < args.Length)
                     viewerOutputPath = args[++i];
-                else if (arg.Equals("--viewer", StringComparison.OrdinalIgnoreCase))
+                else if (IsSwitch(arg, "--viewer", "-vw"))
                     viewerStdout = true;
-                else if (arg.Equals("--viewer-mode", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length)
+                else if (IsSwitch(arg, "--advanced-view", "-av"))
+                    advancedView = true;
+                else if (IsSwitch(arg, "--viewer-mode", "-vm") && i + 1 < args.Length)
                 {
                     AdvancedViewMode parsedMode;
                     if (!AdvancedFileViewRenderer.TryParseMode(args[++i], out parsedMode))
                         throw new InvalidOperationException("Unknown viewer mode. Use readable, hex, binary, or octal.");
                     viewerMode = parsedMode;
                 }
-                else if (arg.Equals("--viewer-bytes", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length)
+                else if (IsSwitch(arg, "--viewer-bytes", "-vb") && i + 1 < args.Length)
                 {
                     if (!long.TryParse(args[++i], NumberStyles.Integer, CultureInfo.InvariantCulture, out viewerBytes) || viewerBytes <= 0)
                         throw new InvalidOperationException("--viewer-bytes must be a positive integer.");
                 }
-                else if (arg.Equals("--terminal", StringComparison.OrdinalIgnoreCase))
+                else if (IsSwitch(arg, "--terminal", "-t"))
                 {
                     if (isConsoleCompanion || launchedByConsoleStub)
                         terminalMode = true;
@@ -175,6 +179,7 @@ namespace FileDentify
                 string.IsNullOrWhiteSpace(reportPath) &&
                 string.IsNullOrWhiteSpace(folderReportPath) &&
                 string.IsNullOrWhiteSpace(viewerOutputPath) &&
+                !advancedView &&
                 !viewerStdout &&
                 files.Count > 0)
                 terminalMode = true;
@@ -188,6 +193,16 @@ namespace FileDentify
             if (terminalMode)
             {
                 TerminalMode.Show(files);
+                Environment.Exit(0);
+                return true;
+            }
+
+            if (advancedView)
+            {
+                var existing = files.Where(File.Exists).ToArray();
+                if (existing.Length == 0)
+                    throw new InvalidOperationException("No readable files were supplied for the advanced viewer.");
+                ShowAdvancedViewerDirect(existing[0]);
                 Environment.Exit(0);
                 return true;
             }
@@ -230,6 +245,20 @@ namespace FileDentify
             }
 
             return false;
+        }
+
+        private static bool IsSwitch(string value, string longName, string shortName)
+        {
+            return value.Equals(longName, StringComparison.OrdinalIgnoreCase) ||
+                value.Equals(shortName, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static void ShowAdvancedViewerDirect(string path)
+        {
+            Application.EnableVisualStyles();
+            Application.SetCompatibleTextRenderingDefault(false);
+            using (var dialog = new AdvancedFileViewerForm(path))
+                dialog.ShowDialog();
         }
 
         private static IEnumerable<string> CollectFolderReportTargets(IEnumerable<string> inputs)
@@ -420,6 +449,7 @@ namespace FileDentify
 
                         if (process.MainWindowHandle != IntPtr.Zero)
                             process.CloseMainWindow();
+                        PostCloseToTopLevelWindows(process.Id);
                         process.WaitForExit(5000);
                     }
                     catch
@@ -428,6 +458,37 @@ namespace FileDentify
                 }
             }
         }
+
+        private static void PostCloseToTopLevelWindows(int processId)
+        {
+            try
+            {
+                EnumWindows(delegate(IntPtr hwnd, IntPtr lParam)
+                {
+                    int windowProcessId;
+                    GetWindowThreadProcessId(hwnd, out windowProcessId);
+                    if (windowProcessId == processId)
+                        PostMessage(hwnd, WM_CLOSE, IntPtr.Zero, IntPtr.Zero);
+                    return true;
+                }, IntPtr.Zero);
+            }
+            catch
+            {
+            }
+        }
+
+        private const int WM_CLOSE = 0x0010;
+
+        private delegate bool EnumWindowsProc(IntPtr hwnd, IntPtr lParam);
+
+        [DllImport("user32.dll")]
+        private static extern bool EnumWindows(EnumWindowsProc callback, IntPtr lParam);
+
+        [DllImport("user32.dll")]
+        private static extern uint GetWindowThreadProcessId(IntPtr hwnd, out int processId);
+
+        [DllImport("user32.dll")]
+        private static extern bool PostMessage(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam);
 
         private static string SafeProcessPath(Process process)
         {
@@ -459,20 +520,23 @@ namespace FileDentify
                 "Usage:" + Environment.NewLine +
                 "  FileDentify.exe [files...]" + Environment.NewLine +
                 "  FileDentify.exe --report report.txt [files...]" + Environment.NewLine +
-                "  FileDentify.exe --html-report report.html [files...]" + Environment.NewLine +
-                "  FileDentify.exe --folder-report report.txt [folders-or-files...]" + Environment.NewLine +
-                "  FileDentify.exe --viewer-output output.txt --viewer-mode hex [file]" + Environment.NewLine +
-                "  FileDentify.exe --viewer --viewer-mode readable [file]" + Environment.NewLine +
+                "  FileDentify.exe --html-report (-hr) report.html [files...]" + Environment.NewLine +
+                "  FileDentify.exe --folder-report (-fr) report.txt [folders-or-files...]" + Environment.NewLine +
+                "  FileDentify.exe --advanced-view (-av) [file]" + Environment.NewLine +
+                "  FileDentify.exe --viewer-output (-vo) output.txt --viewer-mode (-vm) hex [file]" + Environment.NewLine +
+                "  FileDentify.exe --viewer (-vw) --viewer-mode (-vm) readable [file]" + Environment.NewLine +
+                "  FileDentify.exe --viewer-bytes (-vb) 4194304" + Environment.NewLine +
                 "  fd.com [files...]" + Environment.NewLine +
-                "  fd.com -u" + Environment.NewLine +
-                "  FileDentify.exe --close" + Environment.NewLine +
-                "  FileDentify.exe -u" + Environment.NewLine +
-                "  FileDentify.exe --update" + Environment.NewLine +
-                "  FileDentify.exe --install-sendto" + Environment.NewLine +
-                "  FileDentify.exe --uninstall-sendto" + Environment.NewLine +
-                "  FileDentify.exe --install-desktop" + Environment.NewLine +
-                "  FileDentify.exe --uninstall-desktop" + Environment.NewLine + Environment.NewLine +
-                "Opening FileDentify.exe with file paths shows the inspection window. --report writes a report without opening the UI. Use .html or --html-report for HTML. --folder-report recursively scans folders into one report. --viewer-output writes advanced viewer output. Use fd.com for interactive terminal paging mode. fd.com and FileDentify.exe must be in the same folder. --close asks other FileDentify windows from the same executable to close.";
+                "  fd.com --terminal (-t)" + Environment.NewLine +
+                "  FileDentify.exe --close (-c)" + Environment.NewLine +
+                "  FileDentify.exe --update (-u)" + Environment.NewLine +
+                "  FileDentify.exe --install-sendto (-is)" + Environment.NewLine +
+                "  FileDentify.exe --uninstall-sendto (-us)" + Environment.NewLine +
+                "  FileDentify.exe --install-desktop (-id)" + Environment.NewLine +
+                "  FileDentify.exe --uninstall-desktop (-ud)" + Environment.NewLine +
+                "  FileDentify.exe --version (-v)" + Environment.NewLine +
+                "  FileDentify.exe --help (-h)" + Environment.NewLine + Environment.NewLine +
+                "Opening FileDentify.exe with file paths shows the inspection window. --report writes a report without opening the UI. Use .html or --html-report for HTML. --folder-report recursively scans folders into one report. --advanced-view opens the GUI advanced viewer directly. --viewer-output writes advanced viewer output. Use fd.com for interactive terminal paging mode. fd.com and FileDentify.exe must be in the same folder. --close asks other FileDentify windows from the same executable to close.";
         }
     }
 

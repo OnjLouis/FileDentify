@@ -120,8 +120,11 @@ Manual NVDA checks:
 - Main-window action mnemonics do not collide with top-level menus. Open files uses Ctrl+O/File > Open files, Help uses F1/Help > Help, and Open containing folder uses Alt+L.
 - F4 opens the advanced file viewer for the selected file. Alt+F4 still closes the current window normally.
 - Advanced file viewer opens focus directly on the output field at the top of the loaded text and supports Text, Hex, Binary, and Octal radio-button modes; Ctrl+F focus/select search; F3 next search; Shift+F3 previous search; Ctrl+L load more; Ctrl+Shift+L load all; Ctrl+A; Ctrl+C; Save loaded output; and Escape to close. Scrolling to the bottom loads one more chunk, not the whole file.
+- Advanced file viewer status is exposed through a native bottom-docked status bar. NVDA's status command should read the current line first, followed by loaded-data and mode details.
 - Advanced file viewer search does not crash when the current selection is at or beyond the end of the loaded output; searching wraps safely and returns focus to the output field after Enter, F3, or Shift+F3.
 - Command line advanced viewer output works with `--viewer-output`, `--viewer`, `--viewer-mode readable|hex|binary|octal`, and `--viewer-bytes`.
+- Short command-line aliases work, including `-r`, `-hr`, `-fr`, `-av`, `-vo`, `-vw`, `-vm`, `-vb`, `-t`, `-c`, `-u`, `-is`, `-us`, `-id`, `-ud`, `-v`, and `-h`.
+- `FileDentify.exe --advanced-view file` and `FileDentify.exe -av file` open the graphical advanced viewer directly.
 - Ctrl+C from the tree copies the selected node's details, not the full report.
 - Ctrl+C from the details box copies selected text when text is selected, otherwise the current details text.
 - Ctrl+A selects all text in read-only edit fields such as details, notices, version history, and update notes.
@@ -231,6 +234,9 @@ Expected:
 - DMG files show the Apple disk image/UDIF trailer section when a `koly` trailer is present.
 - RAR files show the RAR archive generation where supported.
 - PDF files show PDF version, linearized hint, encryption hint, and sampled Info/XMP metadata such as title, author, creator, producer, creation date, and modification date when present.
+- Files with Explorer property-handler metadata show a Windows property metadata section when Windows exposes useful non-filesystem properties.
+- Office Open XML files such as `.docx`, `.xlsx`, and `.pptx` show an Office document metadata section with document kind, core properties, application properties, structure counts, and custom properties when present.
+- OpenDocument files such as `.odt`, `.ods`, and `.odp` show an OpenDocument metadata section with document kind, title/creator/generator fields, editing details, and document statistics when present.
 - RIFF/WAV files show RIFF form, chunks, and WAV format details when present.
 - AIFF/AIFC and MIDI files show header-level structure details.
 - SQLite and plist files show useful header-level metadata.

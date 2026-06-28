@@ -44,6 +44,7 @@ namespace FileDentify
             Add(summary, "Modified", file.LastWriteTime.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture));
             Add(summary, "Created", file.CreationTime.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture));
             AddFilesystemInfo(sections, file);
+            AddWindowsPropertyMetadata(sections, path);
             AddDmgInfo(sections, path, file.Length);
 
             var signatures = AddSection(sections, "Signature matches");
@@ -68,6 +69,7 @@ namespace FileDentify
             AddInternetShortcutInfo(sections, path, header);
             AddImageInfo(sections, header);
             AddPdfInfo(sections, path, header, file.Length);
+            AddZipDocumentMetadata(sections, path, header);
             AddFontInfo(sections, header);
             AddOleCompoundInfo(sections, path, header);
             AddCompressedStreamInfo(sections, header);

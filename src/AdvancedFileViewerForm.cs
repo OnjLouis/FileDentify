@@ -22,7 +22,7 @@ namespace FileDentify
         private readonly TextBox viewerBox;
         private readonly Button loadMoreButton;
         private readonly Button loadAllButton;
-        private readonly Label statusLabel;
+        private readonly StatusBar statusBar;
         private long offset;
         private long fileLength;
         private AdvancedViewMode mode;
@@ -48,10 +48,10 @@ namespace FileDentify
             editMenu.DropDownItems.Add(new ToolStripMenuItem("&Copy", null, delegate { viewerBox.Copy(); }) { ShortcutKeys = Keys.Control | Keys.C });
             editMenu.DropDownItems.Add(new ToolStripMenuItem("Select &all", null, delegate { viewerBox.SelectAll(); }) { ShortcutKeys = Keys.Control | Keys.A });
             var viewMenu = new ToolStripMenuItem("&View");
-            viewMenu.DropDownItems.Add(new ToolStripMenuItem("&Text", null, delegate { readableRadio.Checked = true; }));
-            viewMenu.DropDownItems.Add(new ToolStripMenuItem("He&x", null, delegate { hexRadio.Checked = true; }));
-            viewMenu.DropDownItems.Add(new ToolStripMenuItem("&Binary", null, delegate { binaryRadio.Checked = true; }));
-            viewMenu.DropDownItems.Add(new ToolStripMenuItem("&Octal", null, delegate { octalRadio.Checked = true; }));
+            viewMenu.DropDownItems.Add(new ToolStripMenuItem("&Text", null, delegate { SelectMode(AdvancedViewMode.ReadableText, true); }));
+            viewMenu.DropDownItems.Add(new ToolStripMenuItem("He&x", null, delegate { SelectMode(AdvancedViewMode.Hex, true); }));
+            viewMenu.DropDownItems.Add(new ToolStripMenuItem("&Binary", null, delegate { SelectMode(AdvancedViewMode.Binary, true); }));
+            viewMenu.DropDownItems.Add(new ToolStripMenuItem("&Octal", null, delegate { SelectMode(AdvancedViewMode.Octal, true); }));
             var searchMenu = new ToolStripMenuItem("&Search");
             searchMenu.DropDownItems.Add(new ToolStripMenuItem("&Find...", null, delegate { FocusSearchBox(); }) { ShortcutKeys = Keys.Control | Keys.F });
             searchMenu.DropDownItems.Add(new ToolStripMenuItem("Find &next", null, delegate { FindNext(); }) { ShortcutKeys = Keys.F3 });
@@ -66,11 +66,10 @@ namespace FileDentify
             var layout = new TableLayoutPanel();
             layout.Dock = DockStyle.Fill;
             layout.ColumnCount = 1;
-            layout.RowCount = 3;
+            layout.RowCount = 2;
             layout.Padding = new Padding(10);
             layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             Controls.Add(layout);
             layout.BringToFront();
 
@@ -130,11 +129,14 @@ namespace FileDentify
             viewerBox.MouseWheel += delegate { MaybeAutoLoadMore(); };
             layout.Controls.Add(viewerBox, 0, 1);
 
-            statusLabel = new Label();
-            statusLabel.Dock = DockStyle.Fill;
-            statusLabel.AutoSize = true;
-            statusLabel.AccessibleName = "Status";
-            layout.Controls.Add(statusLabel, 0, 2);
+            statusBar = new StatusBar();
+            statusBar.Dock = DockStyle.Fill;
+            statusBar.SizingGrip = false;
+            statusBar.ShowPanels = false;
+            statusBar.AccessibleRole = AccessibleRole.StatusBar;
+            statusBar.Height = 22;
+            Controls.Add(statusBar);
+            statusBar.BringToFront();
 
             KeyDown += AdvancedFileViewerForm_KeyDown;
             Shown += delegate
@@ -142,6 +144,32 @@ namespace FileDentify
                 LoadMore();
                 BeginInvoke(new MethodInvoker(ResetViewerToTop));
             };
+        }
+
+        protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+        {
+            if (keyData == (Keys.Alt | Keys.T))
+            {
+                SelectMode(AdvancedViewMode.ReadableText, true);
+                return true;
+            }
+            if (keyData == (Keys.Alt | Keys.X))
+            {
+                SelectMode(AdvancedViewMode.Hex, true);
+                return true;
+            }
+            if (keyData == (Keys.Alt | Keys.B))
+            {
+                SelectMode(AdvancedViewMode.Binary, true);
+                return true;
+            }
+            if (keyData == (Keys.Alt | Keys.O))
+            {
+                SelectMode(AdvancedViewMode.Octal, true);
+                return true;
+            }
+
+            return base.ProcessCmdKey(ref msg, keyData);
         }
 
         private RadioButton CreateModeRadio(string text, string accessibleName, AdvancedViewMode radioMode, bool isChecked)
@@ -190,23 +218,27 @@ namespace FileDentify
             }
             else if (e.Alt && e.KeyCode == Keys.T)
             {
-                readableRadio.Checked = true;
+                SelectMode(AdvancedViewMode.ReadableText, true);
                 e.Handled = true;
+                e.SuppressKeyPress = true;
             }
             else if (e.Alt && e.KeyCode == Keys.X)
             {
-                hexRadio.Checked = true;
+                SelectMode(AdvancedViewMode.Hex, true);
                 e.Handled = true;
+                e.SuppressKeyPress = true;
             }
             else if (e.Alt && e.KeyCode == Keys.B)
             {
-                binaryRadio.Checked = true;
+                SelectMode(AdvancedViewMode.Binary, true);
                 e.Handled = true;
+                e.SuppressKeyPress = true;
             }
             else if (e.Alt && e.KeyCode == Keys.O)
             {
-                octalRadio.Checked = true;
+                SelectMode(AdvancedViewMode.Octal, true);
                 e.Handled = true;
+                e.SuppressKeyPress = true;
             }
         }
 
@@ -249,6 +281,36 @@ namespace FileDentify
             viewerBox.Clear();
             LoadMore();
             BeginInvoke(new MethodInvoker(ResetViewerToTop));
+        }
+
+        private void SelectMode(AdvancedViewMode newMode, bool focusViewer)
+        {
+            if (mode == newMode)
+            {
+                if (focusViewer)
+                    viewerBox.Focus();
+                UpdateStatus("Ready.");
+                return;
+            }
+
+            switch (newMode)
+            {
+                case AdvancedViewMode.ReadableText:
+                    readableRadio.Checked = true;
+                    break;
+                case AdvancedViewMode.Hex:
+                    hexRadio.Checked = true;
+                    break;
+                case AdvancedViewMode.Binary:
+                    binaryRadio.Checked = true;
+                    break;
+                case AdvancedViewMode.Octal:
+                    octalRadio.Checked = true;
+                    break;
+            }
+
+            if (focusViewer)
+                BeginInvoke(new MethodInvoker(delegate { viewerBox.Focus(); }));
         }
 
         private void LoadMore()
@@ -345,14 +407,14 @@ namespace FileDentify
             var needle = searchBox.Text;
             if (string.IsNullOrEmpty(needle))
             {
-                statusLabel.Text = "Enter text to search for.";
+                SetStatusText("Enter text to search for.");
                 searchBox.Focus();
                 return;
             }
             var text = viewerBox.Text;
             if (string.IsNullOrEmpty(text))
             {
-                statusLabel.Text = "No loaded content to search.";
+                SetStatusText("No loaded content to search.");
                 viewerBox.Focus();
                 return;
             }
@@ -365,7 +427,7 @@ namespace FileDentify
                 index = text.IndexOf(needle, 0, StringComparison.OrdinalIgnoreCase);
             if (index < 0)
             {
-                statusLabel.Text = "Search text not found in loaded content. Load more and press F3 to continue.";
+                SetStatusText("Search text not found in loaded content. Load more and press F3 to continue.");
                 viewerBox.Focus();
                 return;
             }
@@ -381,7 +443,7 @@ namespace FileDentify
             var needle = searchBox.Text;
             if (string.IsNullOrEmpty(needle))
             {
-                statusLabel.Text = "Enter text to search for.";
+                SetStatusText("Enter text to search for.");
                 searchBox.Focus();
                 return;
             }
@@ -389,7 +451,7 @@ namespace FileDentify
             var text = viewerBox.Text;
             if (string.IsNullOrEmpty(text))
             {
-                statusLabel.Text = "No loaded content to search.";
+                SetStatusText("No loaded content to search.");
                 viewerBox.Focus();
                 return;
             }
@@ -402,7 +464,7 @@ namespace FileDentify
                 index = text.LastIndexOf(needle, text.Length - 1, StringComparison.OrdinalIgnoreCase);
             if (index < 0)
             {
-                statusLabel.Text = "Search text not found in loaded content. Load more and press Shift+F3 to continue.";
+                SetStatusText("Search text not found in loaded content. Load more and press Shift+F3 to continue.");
                 viewerBox.Focus();
                 return;
             }
@@ -429,7 +491,7 @@ namespace FileDentify
                 if (dialog.ShowDialog(this) == DialogResult.OK)
                 {
                     File.WriteAllText(dialog.FileName, viewerBox.Text, Encoding.UTF8);
-                    statusLabel.Text = "Loaded output saved.";
+                    SetStatusText("Loaded output saved.");
                 }
             }
         }
@@ -437,7 +499,14 @@ namespace FileDentify
         private void UpdateStatus(string prefix)
         {
             var more = offset < fileLength ? " More data is available; use Ctrl+L, Load all, or keep scrolling near the bottom." : string.Empty;
-            statusLabel.Text = prefix + " Current line " + CurrentLineNumber().ToString(CultureInfo.InvariantCulture) + " of " + viewerBox.Lines.Length.ToString(CultureInfo.InvariantCulture) + "." + more;
+            SetStatusText("Line " + CurrentLineNumber().ToString(CultureInfo.InvariantCulture) + " of " + viewerBox.Lines.Length.ToString(CultureInfo.InvariantCulture) + ". " + prefix + " Mode " + AdvancedFileViewRenderer.ModeName(mode) + ". Keys: Alt+T text, Alt+X hex, Alt+B binary, Alt+O octal." + more);
+        }
+
+        private void SetStatusText(string text)
+        {
+            statusBar.Text = text;
+            statusBar.AccessibleName = text;
+            statusBar.AccessibleDescription = text;
         }
 
         private int CurrentLineNumber()

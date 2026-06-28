@@ -14,6 +14,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Web.Script.Serialization;
 using System.Windows.Forms;
+using System.Xml;
 
 namespace FileDentify
 {
@@ -71,6 +72,187 @@ namespace FileDentify
             catch
             {
             }
+        }
+
+        private static void AddWindowsPropertyMetadata(List<ReportSection> sections, string path)
+        {
+            try
+            {
+                if (!ShouldReadWindowsPropertyMetadata(path))
+                    return;
+                var directory = Path.GetDirectoryName(path);
+                var name = Path.GetFileName(path);
+                if (string.IsNullOrWhiteSpace(directory) || string.IsNullOrWhiteSpace(name))
+                    return;
+
+                var shellType = Type.GetTypeFromProgID("Shell.Application");
+                if (shellType == null)
+                    return;
+                var shell = Activator.CreateInstance(shellType);
+                try
+                {
+                    var folder = shellType.InvokeMember("NameSpace", BindingFlags.InvokeMethod, null, shell, new object[] { directory });
+                    if (folder == null)
+                        return;
+                    var folderType = folder.GetType();
+                    var item = folderType.InvokeMember("ParseName", BindingFlags.InvokeMethod, null, folder, new object[] { name });
+                    if (item == null)
+                        return;
+
+                    var section = AddSection(sections, "Windows property metadata");
+                    var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    for (var i = 0; i <= 320 && section.Items.Count < 80; i++)
+                    {
+                        var label = Convert.ToString(folderType.InvokeMember("GetDetailsOf", BindingFlags.InvokeMethod, null, folder, new object[] { null, i }), CultureInfo.InvariantCulture);
+                        var value = Convert.ToString(folderType.InvokeMember("GetDetailsOf", BindingFlags.InvokeMethod, null, folder, new object[] { item, i }), CultureInfo.InvariantCulture);
+                        label = CleanWindowsPropertyValue(label);
+                        value = CleanWindowsPropertyValue(value);
+                        if (string.IsNullOrWhiteSpace(label) || string.IsNullOrWhiteSpace(value))
+                            continue;
+                        if (ShouldSkipWindowsProperty(label) || ShouldSkipWindowsPropertyValue(value) || !seen.Add(label))
+                            continue;
+                        Add(section, label, value);
+                    }
+
+                    if (section.Items.Count == 0)
+                        sections.Remove(section);
+                }
+                finally
+                {
+                    try
+                    {
+                        var disposable = shell as IDisposable;
+                        if (disposable != null)
+                            disposable.Dispose();
+                    }
+                    catch
+                    {
+                    }
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        private static bool ShouldReadWindowsPropertyMetadata(string path)
+        {
+            switch ((Path.GetExtension(path) ?? string.Empty).TrimStart('.').ToLowerInvariant())
+            {
+                case "doc":
+                case "docx":
+                case "docm":
+                case "dot":
+                case "dotx":
+                case "dotm":
+                case "xls":
+                case "xlsx":
+                case "xlsm":
+                case "xlt":
+                case "xltx":
+                case "xltm":
+                case "ppt":
+                case "pptx":
+                case "pptm":
+                case "pot":
+                case "potx":
+                case "potm":
+                case "odt":
+                case "ods":
+                case "odp":
+                case "odg":
+                case "pdf":
+                case "rtf":
+                case "txt":
+                case "html":
+                case "htm":
+                case "jpg":
+                case "jpeg":
+                case "png":
+                case "gif":
+                case "bmp":
+                case "tif":
+                case "tiff":
+                case "webp":
+                case "heic":
+                case "mp3":
+                case "m4a":
+                case "mp4":
+                case "m4v":
+                case "mov":
+                case "wav":
+                case "wma":
+                case "wmv":
+                case "avi":
+                case "mkv":
+                case "flac":
+                case "ogg":
+                case "opus":
+                case "mid":
+                case "midi":
+                case "epub":
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        private static bool ShouldSkipWindowsProperty(string label)
+        {
+            switch ((label ?? string.Empty).Trim().ToLowerInvariant())
+            {
+                case "name":
+                case "size":
+                case "item type":
+                case "type":
+                case "folder path":
+                case "path":
+                case "extension":
+                case "date modified":
+                case "date created":
+                case "date accessed":
+                case "attributes":
+                case "availability":
+                case "availability status":
+                case "offline status":
+                case "shared with":
+                case "shared":
+                case "owner":
+                case "computer":
+                case "file location":
+                case "total size":
+                case "space free":
+                case "space used":
+                case "folder":
+                case "folder name":
+                case "filename":
+                case "file extension":
+                case "link status":
+                case "sharing status":
+                case "status":
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        private static bool ShouldSkipWindowsPropertyValue(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return true;
+            if (value.Length < 120)
+                return false;
+            var hexCount = value.Count(ch => (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f') || (ch >= 'A' && ch <= 'F'));
+            return hexCount > value.Length * 9 / 10;
+        }
+
+        private static string CleanWindowsPropertyValue(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return string.Empty;
+            value = value.Replace("\u200e", string.Empty).Replace("\u200f", string.Empty).Replace("\0", string.Empty);
+            value = Regex.Replace(value, "\\s+", " ").Trim();
+            return value.Length > 1000 ? value.Substring(0, 1000) + "..." : value;
         }
 
         private static void AddImageInfo(List<ReportSection> sections, byte[] header)
@@ -504,6 +686,395 @@ namespace FileDentify
                     if (tables.Count > 0)
                         Add(section, "Table directory", string.Join("\r\n", tables.ToArray()));
                 }
+            }
+        }
+
+        private static string ZipDocumentTypeName(string path, byte[] header)
+        {
+            if (!IsZipHeader(header))
+                return null;
+            var ext = Path.GetExtension(path);
+            switch ((ext ?? string.Empty).ToLowerInvariant())
+            {
+                case ".docx": return "Microsoft Word document";
+                case ".docm": return "Microsoft Word macro-enabled document";
+                case ".dotx": return "Microsoft Word template";
+                case ".dotm": return "Microsoft Word macro-enabled template";
+                case ".xlsx": return "Microsoft Excel workbook";
+                case ".xlsm": return "Microsoft Excel macro-enabled workbook";
+                case ".xltx": return "Microsoft Excel template";
+                case ".xltm": return "Microsoft Excel macro-enabled template";
+                case ".pptx": return "Microsoft PowerPoint presentation";
+                case ".pptm": return "Microsoft PowerPoint macro-enabled presentation";
+                case ".potx": return "Microsoft PowerPoint template";
+                case ".potm": return "Microsoft PowerPoint macro-enabled template";
+                case ".odt": return "OpenDocument text document";
+                case ".ods": return "OpenDocument spreadsheet";
+                case ".odp": return "OpenDocument presentation";
+                case ".odg": return "OpenDocument drawing";
+                case ".odf": return "OpenDocument formula";
+                case ".ott": return "OpenDocument text template";
+                case ".ots": return "OpenDocument spreadsheet template";
+                case ".otp": return "OpenDocument presentation template";
+            }
+
+            try
+            {
+                using (var archive = ZipFile.OpenRead(path))
+                {
+                    if (archive.GetEntry("[Content_Types].xml") != null)
+                        return OfficeOpenXmlTypeName(archive) ?? "Office Open XML package";
+                    if (archive.GetEntry("META-INF/manifest.xml") != null && archive.GetEntry("meta.xml") != null)
+                        return "OpenDocument package";
+                }
+            }
+            catch
+            {
+            }
+
+            return null;
+        }
+
+        private static void AddZipDocumentMetadata(List<ReportSection> sections, string path, byte[] header)
+        {
+            if (!IsZipHeader(header))
+                return;
+
+            try
+            {
+                using (var archive = ZipFile.OpenRead(path))
+                {
+                    if (archive.GetEntry("[Content_Types].xml") != null)
+                        AddOfficeOpenXmlMetadata(sections, archive);
+                    if (archive.GetEntry("META-INF/manifest.xml") != null || archive.GetEntry("meta.xml") != null)
+                        AddOpenDocumentMetadata(sections, archive);
+                }
+            }
+            catch (Exception ex)
+            {
+                var ext = Path.GetExtension(path);
+                if (IsOfficeOpenXmlExtension(ext) || IsOpenDocumentExtension(ext))
+                    Add(AddSection(sections, "Document metadata"), "Metadata read error", ex.Message);
+            }
+        }
+
+        private static void AddOfficeOpenXmlMetadata(List<ReportSection> sections, ZipArchive archive)
+        {
+            var section = AddSection(sections, "Office document metadata");
+            Add(section, "Container", "Office Open XML / Open Packaging Convention");
+            Add(section, "Document kind", OfficeOpenXmlTypeName(archive) ?? "Office Open XML package");
+
+            var core = ReadZipXml(archive, "docProps/core.xml");
+            if (core != null)
+            {
+                AddFirstXmlText(section, core, "Title", "title");
+                AddFirstXmlText(section, core, "Subject", "subject");
+                AddFirstXmlText(section, core, "Creator", "creator");
+                AddFirstXmlText(section, core, "Last modified by", "lastModifiedBy");
+                AddFirstXmlText(section, core, "Created", "created");
+                AddFirstXmlText(section, core, "Modified", "modified");
+                AddFirstXmlText(section, core, "Keywords", "keywords");
+                AddFirstXmlText(section, core, "Category", "category");
+                AddFirstXmlText(section, core, "Content status", "contentStatus");
+                AddFirstXmlText(section, core, "Revision", "revision");
+                AddFirstXmlText(section, core, "Version", "version");
+                AddFirstXmlText(section, core, "Description", "description");
+            }
+
+            var app = ReadZipXml(archive, "docProps/app.xml");
+            if (app != null)
+            {
+                AddFirstXmlText(section, app, "Application", "Application");
+                AddFirstXmlText(section, app, "Application version", "AppVersion");
+                AddFirstXmlText(section, app, "Company", "Company");
+                AddFirstXmlText(section, app, "Manager", "Manager");
+                AddFirstXmlText(section, app, "Template", "Template");
+                AddFirstXmlText(section, app, "Pages", "Pages");
+                AddFirstXmlText(section, app, "Words", "Words");
+                AddFirstXmlText(section, app, "Characters", "Characters");
+                AddFirstXmlText(section, app, "Characters with spaces", "CharactersWithSpaces");
+                AddFirstXmlText(section, app, "Paragraphs", "Paragraphs");
+                AddFirstXmlText(section, app, "Lines", "Lines");
+                AddFirstXmlText(section, app, "Slides", "Slides");
+                AddFirstXmlText(section, app, "Notes", "Notes");
+                AddFirstXmlText(section, app, "Hidden slides", "HiddenSlides");
+                AddFirstXmlText(section, app, "Multimedia clips", "MMClips");
+                AddFirstXmlText(section, app, "Total editing time", "TotalTime");
+                AddTitlesOfParts(section, app);
+            }
+
+            AddOfficeStructureCounts(section, archive);
+            AddCustomOfficeProperties(section, archive);
+
+            if (section.Items.Count == 2)
+                Add(section, "Metadata", "No core, application, or custom document property values were found.");
+        }
+
+        private static void AddOpenDocumentMetadata(List<ReportSection> sections, ZipArchive archive)
+        {
+            var meta = ReadZipXml(archive, "meta.xml");
+            if (meta == null)
+                return;
+
+            var section = AddSection(sections, "OpenDocument metadata");
+            Add(section, "Container", "OpenDocument package");
+            Add(section, "Document kind", OpenDocumentTypeName(archive) ?? "OpenDocument package");
+            AddFirstXmlText(section, meta, "Title", "title");
+            AddFirstXmlText(section, meta, "Subject", "subject");
+            AddFirstXmlText(section, meta, "Description", "description");
+            AddFirstXmlText(section, meta, "Creator", "creator");
+            AddFirstXmlText(section, meta, "Initial creator", "initial-creator");
+            AddFirstXmlText(section, meta, "Created", "creation-date");
+            AddFirstXmlText(section, meta, "Modified", "date");
+            AddFirstXmlText(section, meta, "Generator", "generator");
+            AddFirstXmlText(section, meta, "Keyword", "keyword");
+            AddFirstXmlText(section, meta, "Editing cycles", "editing-cycles");
+            AddFirstXmlText(section, meta, "Editing duration", "editing-duration");
+
+            var statistics = FirstXmlElement(meta, "document-statistic");
+            if (statistics != null && statistics.Attributes != null)
+            {
+                AddXmlAttribute(section, statistics, "Pages", "page-count");
+                AddXmlAttribute(section, statistics, "Tables", "table-count");
+                AddXmlAttribute(section, statistics, "Images", "image-count");
+                AddXmlAttribute(section, statistics, "Objects", "object-count");
+                AddXmlAttribute(section, statistics, "Paragraphs", "paragraph-count");
+                AddXmlAttribute(section, statistics, "Words", "word-count");
+                AddXmlAttribute(section, statistics, "Characters", "character-count");
+            }
+        }
+
+        private static string OfficeOpenXmlTypeName(ZipArchive archive)
+        {
+            var contentTypes = ReadZipXml(archive, "[Content_Types].xml");
+            if (contentTypes == null)
+                return null;
+            var text = contentTypes.OuterXml;
+            if (text.IndexOf("wordprocessingml.document.macroEnabled", StringComparison.OrdinalIgnoreCase) >= 0) return "Microsoft Word macro-enabled document";
+            if (text.IndexOf("wordprocessingml.document.main+xml", StringComparison.OrdinalIgnoreCase) >= 0) return "Microsoft Word document";
+            if (text.IndexOf("spreadsheetml.sheet.macroEnabled", StringComparison.OrdinalIgnoreCase) >= 0) return "Microsoft Excel macro-enabled workbook";
+            if (text.IndexOf("spreadsheetml.sheet.main+xml", StringComparison.OrdinalIgnoreCase) >= 0) return "Microsoft Excel workbook";
+            if (text.IndexOf("presentationml.presentation.macroEnabled", StringComparison.OrdinalIgnoreCase) >= 0) return "Microsoft PowerPoint macro-enabled presentation";
+            if (text.IndexOf("presentationml.presentation.main+xml", StringComparison.OrdinalIgnoreCase) >= 0) return "Microsoft PowerPoint presentation";
+            if (text.IndexOf("wordprocessingml.template", StringComparison.OrdinalIgnoreCase) >= 0) return "Microsoft Word template";
+            if (text.IndexOf("spreadsheetml.template", StringComparison.OrdinalIgnoreCase) >= 0) return "Microsoft Excel template";
+            if (text.IndexOf("presentationml.template", StringComparison.OrdinalIgnoreCase) >= 0) return "Microsoft PowerPoint template";
+            return null;
+        }
+
+        private static string OpenDocumentTypeName(ZipArchive archive)
+        {
+            var mimetype = archive.GetEntry("mimetype");
+            if (mimetype == null || mimetype.Length > 200)
+                return null;
+            var value = ReadZipEntryText(mimetype, 512).Trim();
+            switch (value)
+            {
+                case "application/vnd.oasis.opendocument.text": return "OpenDocument text document";
+                case "application/vnd.oasis.opendocument.spreadsheet": return "OpenDocument spreadsheet";
+                case "application/vnd.oasis.opendocument.presentation": return "OpenDocument presentation";
+                case "application/vnd.oasis.opendocument.graphics": return "OpenDocument drawing";
+                case "application/vnd.oasis.opendocument.formula": return "OpenDocument formula";
+                case "application/vnd.oasis.opendocument.text-template": return "OpenDocument text template";
+                case "application/vnd.oasis.opendocument.spreadsheet-template": return "OpenDocument spreadsheet template";
+                case "application/vnd.oasis.opendocument.presentation-template": return "OpenDocument presentation template";
+                default: return string.IsNullOrWhiteSpace(value) ? null : value;
+            }
+        }
+
+        private static void AddOfficeStructureCounts(ReportSection section, ZipArchive archive)
+        {
+            var worksheets = archive.Entries.Count(e => e.FullName.StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) && e.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase));
+            var slides = archive.Entries.Count(e => e.FullName.StartsWith("ppt/slides/", StringComparison.OrdinalIgnoreCase) && e.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase));
+            var notes = archive.Entries.Count(e => e.FullName.StartsWith("ppt/notesSlides/", StringComparison.OrdinalIgnoreCase) && e.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase));
+            var embedded = archive.Entries.Count(e => e.FullName.StartsWith("word/embeddings/", StringComparison.OrdinalIgnoreCase) || e.FullName.StartsWith("xl/embeddings/", StringComparison.OrdinalIgnoreCase) || e.FullName.StartsWith("ppt/embeddings/", StringComparison.OrdinalIgnoreCase));
+            var media = archive.Entries.Count(e => e.FullName.StartsWith("word/media/", StringComparison.OrdinalIgnoreCase) || e.FullName.StartsWith("xl/media/", StringComparison.OrdinalIgnoreCase) || e.FullName.StartsWith("ppt/media/", StringComparison.OrdinalIgnoreCase));
+            if (worksheets > 0) Add(section, "Worksheets", worksheets.ToString(CultureInfo.InvariantCulture));
+            if (slides > 0) Add(section, "Slide files", slides.ToString(CultureInfo.InvariantCulture));
+            if (notes > 0) Add(section, "Notes slide files", notes.ToString(CultureInfo.InvariantCulture));
+            if (embedded > 0) Add(section, "Embedded object files", embedded.ToString(CultureInfo.InvariantCulture));
+            if (media > 0) Add(section, "Media files", media.ToString(CultureInfo.InvariantCulture));
+        }
+
+        private static void AddCustomOfficeProperties(ReportSection section, ZipArchive archive)
+        {
+            var custom = ReadZipXml(archive, "docProps/custom.xml");
+            if (custom == null)
+                return;
+            var values = new List<string>();
+            foreach (XmlElement property in custom.GetElementsByTagName("*"))
+            {
+                if (!string.Equals(property.LocalName, "property", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                var name = property.GetAttribute("name");
+                if (string.IsNullOrWhiteSpace(name))
+                    continue;
+                var value = FirstChildElementText(property);
+                if (!string.IsNullOrWhiteSpace(value))
+                    values.Add(name + ": " + value);
+                if (values.Count >= 30)
+                    break;
+            }
+            if (values.Count > 0)
+                Add(section, "Custom properties", string.Join("\r\n", values.ToArray()));
+        }
+
+        private static void AddTitlesOfParts(ReportSection section, XmlDocument app)
+        {
+            var titles = FirstXmlElement(app, "TitlesOfParts");
+            if (titles == null)
+                return;
+            var values = VectorValues(titles).Where(v => !string.IsNullOrWhiteSpace(v)).Take(40).ToArray();
+            if (values.Length > 0)
+                Add(section, "Titles of parts", string.Join("\r\n", values));
+        }
+
+        private static IEnumerable<string> VectorValues(XmlElement element)
+        {
+            var vector = FirstDescendantElement(element, "vector");
+            if (vector == null)
+                yield break;
+            foreach (XmlNode node in vector.ChildNodes)
+            {
+                if (node.NodeType != XmlNodeType.Element)
+                    continue;
+                var valueElement = (XmlElement)node;
+                if (string.Equals(valueElement.LocalName, "variant", StringComparison.OrdinalIgnoreCase))
+                    valueElement = FirstChildElement(valueElement) ?? valueElement;
+                var text = CleanXmlMetadataValue(valueElement.InnerText);
+                if (!string.IsNullOrWhiteSpace(text))
+                    yield return text;
+            }
+        }
+
+        private static XmlElement FirstDescendantElement(XmlElement element, string localName)
+        {
+            foreach (XmlElement child in element.GetElementsByTagName("*"))
+                if (string.Equals(child.LocalName, localName, StringComparison.OrdinalIgnoreCase))
+                    return child;
+            return null;
+        }
+
+        private static XmlElement FirstChildElement(XmlElement element)
+        {
+            foreach (XmlNode child in element.ChildNodes)
+                if (child.NodeType == XmlNodeType.Element)
+                    return (XmlElement)child;
+            return null;
+        }
+
+        private static XmlDocument ReadZipXml(ZipArchive archive, string entryName)
+        {
+            var entry = archive.GetEntry(entryName);
+            if (entry == null || entry.Length > 4 * 1024 * 1024)
+                return null;
+            var text = ReadZipEntryText(entry, 4 * 1024 * 1024);
+            if (string.IsNullOrWhiteSpace(text))
+                return null;
+            var doc = new XmlDocument();
+            doc.XmlResolver = null;
+            doc.LoadXml(text);
+            return doc;
+        }
+
+        private static string ReadZipEntryText(ZipArchiveEntry entry, int maxChars)
+        {
+            using (var stream = entry.Open())
+            using (var reader = new StreamReader(stream, Encoding.UTF8, true))
+            {
+                var buffer = new char[maxChars];
+                var read = reader.Read(buffer, 0, buffer.Length);
+                return new string(buffer, 0, read);
+            }
+        }
+
+        private static void AddFirstXmlText(ReportSection section, XmlDocument document, string label, string localName)
+        {
+            var element = FirstXmlElement(document, localName);
+            if (element == null)
+                return;
+            var value = CleanXmlMetadataValue(element.InnerText);
+            if (!string.IsNullOrWhiteSpace(value))
+                Add(section, label, value);
+        }
+
+        private static XmlElement FirstXmlElement(XmlDocument document, string localName)
+        {
+            foreach (XmlElement element in document.GetElementsByTagName("*"))
+                if (string.Equals(element.LocalName, localName, StringComparison.OrdinalIgnoreCase))
+                    return element;
+            return null;
+        }
+
+        private static void AddXmlAttribute(ReportSection section, XmlElement element, string label, string localName)
+        {
+            if (element.Attributes == null)
+                return;
+            foreach (XmlAttribute attribute in element.Attributes)
+            {
+                if (!string.Equals(attribute.LocalName, localName, StringComparison.OrdinalIgnoreCase))
+                    continue;
+                var value = CleanXmlMetadataValue(attribute.Value);
+                if (!string.IsNullOrWhiteSpace(value))
+                    Add(section, label, value);
+                return;
+            }
+        }
+
+        private static string FirstChildElementText(XmlElement element)
+        {
+            foreach (XmlNode child in element.ChildNodes)
+                if (child.NodeType == XmlNodeType.Element)
+                    return CleanXmlMetadataValue(child.InnerText);
+            return string.Empty;
+        }
+
+        private static string CleanXmlMetadataValue(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return string.Empty;
+            value = WebUtility.HtmlDecode(value).Replace("\0", string.Empty);
+            value = Regex.Replace(value, "\\s+", " ").Trim();
+            return value.Length > 1000 ? value.Substring(0, 1000) + "..." : value;
+        }
+
+        private static bool IsOfficeOpenXmlExtension(string ext)
+        {
+            switch ((ext ?? string.Empty).ToLowerInvariant())
+            {
+                case ".docx":
+                case ".docm":
+                case ".dotx":
+                case ".dotm":
+                case ".xlsx":
+                case ".xlsm":
+                case ".xltx":
+                case ".xltm":
+                case ".pptx":
+                case ".pptm":
+                case ".potx":
+                case ".potm":
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        private static bool IsOpenDocumentExtension(string ext)
+        {
+            switch ((ext ?? string.Empty).ToLowerInvariant())
+            {
+                case ".odt":
+                case ".ods":
+                case ".odp":
+                case ".odg":
+                case ".odf":
+                case ".ott":
+                case ".ots":
+                case ".otp":
+                    return true;
+                default:
+                    return false;
             }
         }
 

@@ -57,7 +57,7 @@ if (-not (Test-Path -LiteralPath $stubSource)) {
     throw "Console stub source is missing: $stubSource"
 }
 
-& $csc /nologo /target:winexe /optimize+ /out:$output /reference:System.dll /reference:System.Core.dll /reference:System.Drawing.dll /reference:System.Web.Extensions.dll /reference:System.Windows.Forms.dll /reference:System.IO.Compression.dll /reference:System.IO.Compression.FileSystem.dll $resources $sources
+& $csc /nologo /target:winexe /optimize+ /out:$output /reference:System.dll /reference:System.Core.dll /reference:System.Drawing.dll /reference:System.Web.Extensions.dll /reference:System.Windows.Forms.dll /reference:System.IO.Compression.dll /reference:System.IO.Compression.FileSystem.dll /reference:System.Xml.dll $resources $sources
 if ($LASTEXITCODE -ne 0) {
     throw "C# compile failed with exit code $LASTEXITCODE."
 }

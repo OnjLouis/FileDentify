@@ -105,6 +105,9 @@ namespace FileDentify
                 return steinbergType;
             if (IsZipHeader(header) && string.Equals(Path.GetExtension(path), ".ablbundle", StringComparison.OrdinalIgnoreCase))
                 return "Ableton Move/Live bundle (ZIP-compatible container)";
+            var zipDocumentType = ZipDocumentTypeName(path, header);
+            if (zipDocumentType != null)
+                return zipDocumentType;
             var font = FontFormatName(header);
             if (font != null)
                 return font;

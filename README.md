@@ -73,7 +73,7 @@ FileDentify.exe --version
 FileDentify.exe --help
 ```
 
-The `--report` mode writes one combined report without opening the UI. Use a `.html` or `.htm` output path, or `--html-report`, to write an HTML report with per-file headings and section tables. `--folder-report` recursively scans folders into one combined report. Terminal mode uses `fd.com`, which pages through the report with Up, Down, PageUp, PageDown, Home, End, Q, and Escape. `fd.com` and `FileDentify.exe` must live in the same folder. `-u` and `--update` check GitHub Releases. `--close` asks other FileDentify windows from the same executable to close gracefully. The SendTo and desktop shortcut install switches are non-interactive and update `FileDentify.ini` beside the executable.
+The `--report` / `-r` mode writes one combined report without opening the UI. Use a `.html` or `.htm` output path, or `--html-report` / `-hr`, to write an HTML report with per-file headings and section tables. `--folder-report` / `-fr` recursively scans folders into one combined report. `--advanced-view` / `-av` opens the graphical advanced viewer directly on a file. Terminal mode uses `fd.com`, which pages through the report with Up, Down, PageUp, PageDown, Home, End, Q, and Escape. `fd.com` and `FileDentify.exe` must live in the same folder. `-u` and `--update` check GitHub Releases. `--close` / `-c` asks other FileDentify windows from the same executable to close gracefully. The SendTo and desktop shortcut install switches are non-interactive, have short forms, and update `FileDentify.ini` beside the executable.
 
 ## Credits
 
