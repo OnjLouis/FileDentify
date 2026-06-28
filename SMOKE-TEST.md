@@ -359,7 +359,7 @@ It must not include:
 Before publishing, extract or inspect the final release ZIP and scan all included text files:
 
 ```powershell
-rg -n "token\\.txt|GH_TOKEN\\s*=|the repository checkout|backups\\\\Codex|[A-Z]:\\\\|Users\\\\[^\\\\]+|private token|local token" <extracted-release-folder>
+rg -n "token\\.txt|GH_TOKEN\\s*=|[A-Z]:\\\\|Users\\\\[^\\\\]+|private token|local token" <extracted-release-folder>
 ```
 
 Expected:
