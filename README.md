@@ -19,13 +19,16 @@ Before release-style work, maintainers should read:
 - `SMOKE-TEST.md`
 - `GITHUB-RELEASE-RULES.md`
 
-Before release, also run the community search checklist:
+Before release, also run GitHub issue/PR checks and the community search checklist:
 
 ```powershell
+# Set GH_TOKEN or GITHUB_TOKEN in the environment before running GitHub commands.
+gh issue list --repo OnjLouis/FileDentify --state open
+gh pr list --repo OnjLouis/FileDentify --state open
 powershell -ExecutionPolicy Bypass -File .\CommunitySearch.ps1
 ```
 
-This checks GitHub for FileDentify activity and writes web/community search links for public feedback that may not have arrived as a GitHub issue.
+This checks GitHub for FileDentify issues and pull requests, then writes web/community search links for public feedback that may not have arrived as a GitHub issue. These checks are release blockers, matching the Sensor Readout and Clipman process.
 
 ## Runtime features
 

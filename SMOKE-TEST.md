@@ -45,9 +45,17 @@ Expected:
 - Embedded `file.exe --version` reports the intended libmagic version, currently `file-5.48`.
 - Build compiles all `.cs` files under `src`; the source is intentionally split by responsibility rather than kept in one monolithic file.
 
-## Community Search
+## Release Gate: GitHub And Community
 
-Before publishing, run:
+Before publishing, run the GitHub issue and pull request checks:
+
+```powershell
+# Set GH_TOKEN or GITHUB_TOKEN in the environment before running GitHub commands.
+gh issue list --repo OnjLouis/FileDentify --state open
+gh pr list --repo OnjLouis/FileDentify --state open
+```
+
+Then run the community search:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File <local-path>
@@ -55,10 +63,13 @@ powershell -ExecutionPolicy Bypass -File <local-path>
 
 Expected:
 
+- GitHub issue and PR checks complete. If they fail, stop the release until GitHub can be checked.
+- Open issues and PRs are reviewed before publishing. Fix, explicitly defer, or ask Andre before release.
 - `CommunitySearch.md` is written as a generated checklist and is not committed.
-- GitHub issue search completes or reports a clear API/search error.
+- GitHub issue and PR searches in `CommunitySearch.md` complete or report a clear API/search error.
 - The checklist includes exact-name searches for `FileDentify`, `OnjLouis/FileDentify`, accessibility terms such as NVDA/JAWS/screen reader, SendTo, libmagic, and public forum/community sites.
 - Review public/community feedback before release, especially accessibility complaints, unsupported common formats, report readability problems, terminal-mode friction, update issues, and safety/privacy concerns.
+- This gate is mandatory for FileDentify releases, release-asset refreshes, and hotfixes. Do not ship first and check afterward.
 
 ## Version Metadata
 

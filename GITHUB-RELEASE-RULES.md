@@ -14,9 +14,19 @@ Use only non-interactive authentication:
 
 If token-based authentication fails, stop and report it. Do not trigger an interactive login prompt.
 
-## GitHub Issue Gate
+## Release Gate: Issues, PRs, And Community
 
-Before publishing any FileDentify release, release-asset refresh, or hotfix, read open GitHub issues and pull requests. Do not publish first and inspect issues afterward.
+Before publishing any FileDentify release, release-asset refresh, or hotfix, reading GitHub issues, GitHub pull requests, and community mentions is mandatory. This is a release blocker, matching the Sensor Readout and Clipman release process. Do not publish first and inspect issues afterward.
+
+Run the GitHub issue and pull request checks with non-interactive authentication:
+
+```powershell
+# Set GH_TOKEN or GITHUB_TOKEN in the environment before running GitHub commands.
+gh issue list --repo OnjLouis/FileDentify --state open
+gh pr list --repo OnjLouis/FileDentify --state open
+```
+
+If either command fails, stop the release until GitHub can be checked. If open issues or PRs exist, read them before release. Fix, defer with explicit reasoning, or ask Andre before publishing. User-raised release blockers must be handled before shipping.
 
 Also run the repeatable community search checklist before release:
 
@@ -24,7 +34,7 @@ Also run the repeatable community search checklist before release:
 powershell -ExecutionPolicy Bypass -File <local-path>
 ```
 
-Review public/community mentions for feedback that did not arrive as a GitHub issue. Because `FileDentify` is a niche name, exact-name searches should be useful; still check accessibility-community terms, SendTo references, libmagic/file-command comparisons, terminal-mode comments, and unsupported file-format requests.
+Review public/community mentions for feedback that did not arrive as a GitHub issue. Because `FileDentify` is a niche name, exact-name searches should be useful; still check accessibility-community terms, SendTo references, libmagic/file-command comparisons, terminal-mode comments, and unsupported file-format requests. If the community search fails or surfaces actionable release-relevant feedback, stop and review it before publishing.
 
 If an open issue is fixed by the release, mention it in user-facing release notes with wording such as `Closes issue #N`, `Fixes issue #N`, or `Resolves issue #N`. If an open issue is intentionally deferred, say that explicitly in the handoff or release notes.
 

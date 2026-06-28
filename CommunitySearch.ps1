@@ -93,6 +93,20 @@ if ($repoIssues.Count -eq 0) {
     }
 }
 $lines.Add("")
+$lines.Add("## GitHub pull requests")
+$repoPulls = Invoke-GitHubSearch 'issues' 'repo:OnjLouis/FileDentify is:pr'
+if ($repoPulls.Count -eq 0) {
+    $lines.Add("- No GitHub pull requests found by search.")
+} else {
+    foreach ($item in $repoPulls) {
+        if ($item.Error) {
+            $lines.Add("- GitHub pull request search failed: $($item.Error)")
+        } else {
+            $lines.Add("- PR #$($item.number) $($item.title) - $($item.html_url)")
+        }
+    }
+}
+$lines.Add("")
 $lines.Add("## GitHub public mention search")
 $mentionQueries = @(
     '"FileDentify"',
