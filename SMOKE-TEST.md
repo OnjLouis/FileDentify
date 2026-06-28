@@ -45,6 +45,21 @@ Expected:
 - Embedded `file.exe --version` reports the intended libmagic version, currently `file-5.48`.
 - Build compiles all `.cs` files under `src`; the source is intentionally split by responsibility rather than kept in one monolithic file.
 
+## Community Search
+
+Before publishing, run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File <local-path>
+```
+
+Expected:
+
+- `CommunitySearch.md` is written as a generated checklist and is not committed.
+- GitHub issue search completes or reports a clear API/search error.
+- The checklist includes exact-name searches for `FileDentify`, `OnjLouis/FileDentify`, accessibility terms such as NVDA/JAWS/screen reader, SendTo, libmagic, and public forum/community sites.
+- Review public/community feedback before release, especially accessibility complaints, unsupported common formats, report readability problems, terminal-mode friction, update issues, and safety/privacy concerns.
+
 ## Version Metadata
 
 Check:

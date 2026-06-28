@@ -18,6 +18,14 @@ If token-based authentication fails, stop and report it. Do not trigger an inter
 
 Before publishing any FileDentify release, release-asset refresh, or hotfix, read open GitHub issues and pull requests. Do not publish first and inspect issues afterward.
 
+Also run the repeatable community search checklist before release:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File <local-path>
+```
+
+Review public/community mentions for feedback that did not arrive as a GitHub issue. Because `FileDentify` is a niche name, exact-name searches should be useful; still check accessibility-community terms, SendTo references, libmagic/file-command comparisons, terminal-mode comments, and unsupported file-format requests.
+
 If an open issue is fixed by the release, mention it in user-facing release notes with wording such as `Closes issue #N`, `Fixes issue #N`, or `Resolves issue #N`. If an open issue is intentionally deferred, say that explicitly in the handoff or release notes.
 
 When closing or replying to issues after a release:

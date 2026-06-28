@@ -19,6 +19,14 @@ Before release-style work, maintainers should read:
 - `SMOKE-TEST.md`
 - `GITHUB-RELEASE-RULES.md`
 
+Before release, also run the community search checklist:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\CommunitySearch.ps1
+```
+
+This checks GitHub for FileDentify activity and writes web/community search links for public feedback that may not have arrived as a GitHub issue.
+
 ## Runtime features
 
 - Screen-reader-first WinForms UI with a tree view, selected-item details, an HTML manual on F1, and predictable keyboard shortcuts.
