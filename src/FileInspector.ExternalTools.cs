@@ -76,7 +76,8 @@ namespace FileDentify
         {
             var lines = output.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None);
             var format = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            var tags = new List<string>();
+            var tags = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var formatTags = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             var streams = new List<Dictionary<string, string>>();
             Dictionary<string, string> current = null;
             var inFormat = false;
@@ -119,7 +120,12 @@ namespace FileDentify
                 {
                     var tagName = key.Substring(4);
                     if (!string.IsNullOrWhiteSpace(tagName))
-                        tags.Add(tagName + "=" + value);
+                    {
+                        if (!tags.ContainsKey(tagName))
+                            tags[tagName] = value;
+                        if (inFormat && !formatTags.ContainsKey(tagName))
+                            formatTags[tagName] = value;
+                    }
                     continue;
                 }
                 if (current != null)
@@ -167,7 +173,68 @@ namespace FileDentify
             if (streamLines.Count > 0)
                 Add(section, "Stream summary", string.Join("\r\n", streamLines.ToArray()));
             if (tags.Count > 0)
-                Add(section, "Tags", string.Join("\r\n", tags.Take(24).ToArray()));
+                Add(section, "Tags", string.Join("\r\n", tags.Take(24).Select(pair => pair.Key + "=" + pair.Value).ToArray()));
+            AddQuickTimeMetadataSummary(sections, formatTags.Count > 0 ? formatTags : tags);
+        }
+
+        private static void AddQuickTimeMetadataSummary(List<ReportSection> sections, Dictionary<string, string> tags)
+        {
+            if (tags == null || tags.Count == 0)
+                return;
+
+            var interesting = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            AddQuickTimeTag(interesting, tags, "com.apple.quicktime.make", "Camera make");
+            AddQuickTimeTag(interesting, tags, "com.apple.quicktime.model", "Camera/device model");
+            AddQuickTimeTag(interesting, tags, "com.apple.quicktime.software", "Software");
+            AddQuickTimeTag(interesting, tags, "com.apple.quicktime.creationdate", "QuickTime creation date");
+            AddQuickTimeTag(interesting, tags, "creation_time", "Container creation time");
+            AddQuickTimeTag(interesting, tags, "com.apple.quicktime.location.ISO6709", "Location");
+            AddQuickTimeTag(interesting, tags, "com.apple.quicktime.copyright", "Copyright");
+            AddQuickTimeTag(interesting, tags, "com.apple.quicktime.description", "Description");
+            AddQuickTimeCommentFields(interesting, tags);
+
+            if (interesting.Count == 0)
+                return;
+
+            var section = AddSection(sections, "QuickTime metadata");
+            foreach (var pair in interesting)
+                Add(section, pair.Key, pair.Value);
+        }
+
+        private static void AddQuickTimeTag(Dictionary<string, string> target, Dictionary<string, string> tags, string key, string label)
+        {
+            string value;
+            if (tags.TryGetValue(key, out value) && !string.IsNullOrWhiteSpace(value) && !target.ContainsKey(label))
+                target[label] = value;
+        }
+
+        private static void AddQuickTimeCommentFields(Dictionary<string, string> target, Dictionary<string, string> tags)
+        {
+            string comment;
+            if (!tags.TryGetValue("com.apple.quicktime.comment", out comment) || string.IsNullOrWhiteSpace(comment))
+                return;
+
+            AddQueryField(target, comment, "app", "App");
+            AddQueryField(target, comment, "device", "Device");
+            AddQueryField(target, comment, "id", "Device/media id");
+            if (!target.ContainsKey("Comment"))
+                target["Comment"] = comment;
+        }
+
+        private static void AddQueryField(Dictionary<string, string> target, string query, string key, string label)
+        {
+            foreach (var part in query.Split('&'))
+            {
+                var equals = part.IndexOf('=');
+                if (equals <= 0)
+                    continue;
+                var name = part.Substring(0, equals);
+                if (!string.Equals(name, key, StringComparison.OrdinalIgnoreCase))
+                    continue;
+                var value = WebUtility.UrlDecode(part.Substring(equals + 1));
+                if (!string.IsNullOrWhiteSpace(value) && !target.ContainsKey(label))
+                    target[label] = value;
+            }
         }
 
         private static void AddDictionaryValue(ReportSection section, Dictionary<string, string> values, string key, string label)

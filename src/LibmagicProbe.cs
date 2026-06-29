@@ -106,7 +106,8 @@ namespace FileDentify
                 new ThirdPartyNotice("gettext runtime notice", ReadResourceText("FileDentify.Embedded.COPYING.gettext-runtime")),
                 new ThirdPartyNotice("libintl notice", ReadResourceText("FileDentify.Embedded.COPYING.libintl")),
                 new ThirdPartyNotice("libiconv GPL notice", ReadResourceText("FileDentify.Embedded.COPYING.libiconv-gpl")),
-                new ThirdPartyNotice("libiconv LGPL notice", ReadResourceText("FileDentify.Embedded.COPYING.libiconv-lgpl"))
+                new ThirdPartyNotice("libiconv LGPL notice", ReadResourceText("FileDentify.Embedded.COPYING.libiconv-lgpl")),
+                ScreenReaderOutput.NoticeEntry()
             };
         }
 

@@ -32,6 +32,24 @@ namespace FileDentify
 
             if (data.Length >= 32 && Ascii(data, 0, Math.Min(64, data.Length)).Contains("Roland SRX"))
                 yield return new ReportItem { Title = "Roland SRX", Detail = "Roland SRX expansion ROM marker found at file start." };
+            if (data.Length >= 4 && BitConverter.ToUInt32(data, 0) == 0x10201A7A)
+                yield return new ReportItem { Title = "Symbian SIS", Detail = "Symbian installation package UID" };
+            if (StartsWith(data, Encoding.ASCII.GetBytes("_PT_")))
+                yield return new ReportItem { Title = "Firmware marker", Detail = "PC BIOS/UEFI firmware image marker" };
+            if (StartsWith(data, Encoding.ASCII.GetBytes("RSVQ")))
+                yield return new ReportItem { Title = "Roland SVQ", Detail = "Roland sequencer song" };
+            if (data.Length >= 6 && data[2] == (byte)'S' && data[3] == (byte)'V' && data[4] == (byte)'D' && data[5] == (byte)'1')
+                yield return new ReportItem { Title = "Roland SVD", Detail = "Roland sound/backup data" };
+            if (StartsWith(data, Encoding.ASCII.GetBytes("RFWV")))
+                yield return new ReportItem { Title = "Roland sample", Detail = "Roland FA sample waveform data" };
+            if (StartsWith(data, Encoding.ASCII.GetBytes("vawt")))
+                yield return new ReportItem { Title = "Surge wavetable", Detail = "Surge wavetable file" };
+            if (StartsWith(data, Encoding.ASCII.GetBytes("CcnK")))
+                yield return new ReportItem { Title = "VST preset chunk", Detail = "VST FXP/FXB preset or bank" };
+            if (Ascii(data, 0, Math.Min(4096, data.Length)).IndexOf("\"Format\":\"FileDentify report\"", StringComparison.OrdinalIgnoreCase) >= 0)
+                yield return new ReportItem { Title = "FileDentify report", Detail = "Native FileDentify saved report" };
+            if (data.Length > 0 && data[0] == 0xF0)
+                yield return new ReportItem { Title = "MIDI SysEx", Detail = "MIDI System Exclusive data" };
             if (StartsWith(data, Encoding.ASCII.GetBytes("NESM\x1A")))
                 yield return new ReportItem { Title = "NES Sound Format", Detail = "Nintendo Entertainment System music file" };
             if (StartsWith(data, Encoding.ASCII.GetBytes("NES\x1A")))
@@ -58,6 +76,10 @@ namespace FileDentify
                 yield return new ReportItem { Title = "CMX/PMD", Detail = "Qualcomm CMX/PMD mobile audio container" };
             if (StartsWith(data, Encoding.ASCII.GetBytes("#!AMR")))
                 yield return new ReportItem { Title = "AMR", Detail = "Adaptive Multi-Rate speech/audio" };
+            if (StartsWith(data, Encoding.ASCII.GetBytes("ECLW")))
+                yield return new ReportItem { Title = "Creative ECW", Detail = "Creative/E-mu ECW wavetable bank" };
+            if (data.Length >= 8 && StartsWith(data, new byte[] { 0x00, 0x61, 0x73, 0x6D }))
+                yield return new ReportItem { Title = "WebAssembly", Detail = "WebAssembly binary module" };
 
             var headText = Ascii(data, 0, Math.Min(512, data.Length)).TrimStart('\uFEFF', '.', ' ', '\t', '\r', '\n');
             if (data.Length >= 18 && headText.StartsWith("[InternetShortcut]", StringComparison.OrdinalIgnoreCase))
@@ -78,6 +100,46 @@ namespace FileDentify
                 yield return new ReportItem { Title = "Clipman database", Detail = "Clipman CLIPDB2 encrypted history database" };
             if (string.Equals(Path.GetExtension(path), ".clipdb", StringComparison.OrdinalIgnoreCase))
                 yield return new ReportItem { Title = "Clipman extension", Detail = "Clipman history database" };
+            if (string.Equals(Path.GetExtension(path), ".sis", StringComparison.OrdinalIgnoreCase))
+                yield return new ReportItem { Title = "Symbian extension", Detail = "Symbian installation package" };
+            if (string.Equals(Path.GetExtension(path), ".sisx", StringComparison.OrdinalIgnoreCase))
+                yield return new ReportItem { Title = "Symbian extension", Detail = "Symbian signed installation package" };
+            var symbianResource = SymbianResourceExtensionDescription(path);
+            if (symbianResource != null)
+                yield return new ReportItem { Title = "Symbian resource extension", Detail = symbianResource };
+            var midlet = JavaMidletExtensionDescription(path);
+            if (midlet != null)
+                yield return new ReportItem { Title = "Java MIDlet extension", Detail = midlet };
+            if (string.Equals(Path.GetExtension(path), ".fdreport", StringComparison.OrdinalIgnoreCase))
+                yield return new ReportItem { Title = "FileDentify report extension", Detail = "Native FileDentify saved report" };
+            if (StartsWith(data, Encoding.ASCII.GetBytes("Spitfire")))
+                yield return new ReportItem { Title = "Spitfire marker", Detail = "Spitfire Audio sample container or metadata" };
+            if (StartsWith(data, Encoding.ASCII.GetBytes("BOMStore")))
+                yield return new ReportItem { Title = "Apple asset catalog", Detail = "Compiled Apple asset catalog" };
+            if (StartsWith(data, Encoding.ASCII.GetBytes("xar!")))
+                yield return new ReportItem { Title = "XAR archive", Detail = "macOS installer/package archive" };
+            if (StartsWith(data, Encoding.ASCII.GetBytes("VEXP")))
+                yield return new ReportItem { Title = "Roland Cloud expansion", Detail = "Roland Cloud VEXP expansion package" };
+            if (StartsWith(data, Encoding.ASCII.GetBytes("KoaBankFile")))
+                yield return new ReportItem { Title = "Roland Cloud preset bank", Detail = "Roland Cloud KoaBankFile preset bank" };
+            if (StartsWith(data, Encoding.ASCII.GetBytes("<FileSystem>")))
+                yield return new ReportItem { Title = "Embedded file-system index", Detail = "Readable FileSystem index, used by some sample-library containers" };
+            if (StartsWith(data, Encoding.ASCII.GetBytes("Korg")))
+                yield return new ReportItem { Title = "Korg marker", Detail = "Korg sample-library or synthesizer data" };
+            if (StartsWith(data, Encoding.ASCII.GetBytes("WMMS")))
+                yield return new ReportItem { Title = "Korg WaveMotion marker", Detail = "Korg WaveMotion sample/keymap data" };
+            if (StartsWith(data, Encoding.ASCII.GetBytes("WzooWzoo")))
+                yield return new ReportItem { Title = "AIR Music Technology archive", Detail = "AIR Music Technology content archive" };
+            if (StartsWith(data, Encoding.ASCII.GetBytes("MSE ")))
+                yield return new ReportItem { Title = "Maize Sampler marker", Detail = "Maize Sampler exported instrument" };
+            if (data.Length >= 4 && data[0] == 0x1B && data[1] == (byte)'L' && data[2] == (byte)'u' && data[3] == (byte)'a')
+                yield return new ReportItem { Title = "Lua bytecode", Detail = "Lua bytecode or Lua-based resource bundle" };
+            if (StartsWith(data, Encoding.ASCII.GetBytes("GGUF")))
+                yield return new ReportItem { Title = "GGUF model", Detail = "GGUF machine-learning model" };
+            if (data.Length > 196 && data[4] == 0x47 && data[196] == 0x47)
+                yield return new ReportItem { Title = "Blu-ray transport stream", Detail = "MPEG-2 transport stream with 192-byte Blu-ray source packets" };
+            if (data.Length > 188 && data[0] == 0x47 && data[188] == 0x47)
+                yield return new ReportItem { Title = "MPEG transport stream", Detail = "MPEG-2 transport stream" };
 
             var mobileTone = MobileToneExtensionDescription(path);
             if (mobileTone != null)
@@ -94,6 +156,32 @@ namespace FileDentify
             var steinberg = SteinbergExtensionDescription(path);
             if (steinberg != null)
                 yield return new ReportItem { Title = "Steinberg extension", Detail = steinberg };
+
+            var musicProject = MusicProjectExtensionDescription(path);
+            if (musicProject != null)
+                yield return new ReportItem { Title = "Music/project extension", Detail = musicProject };
+
+            var sampleLibrary = SampleLibraryExtensionDescription(path);
+            if (sampleLibrary != null)
+                yield return new ReportItem { Title = "Sample-library extension", Detail = sampleLibrary };
+
+            var developer = DeveloperExtensionDescription(path, data);
+            if (developer != null)
+                yield return new ReportItem { Title = "Programming/resource extension", Detail = developer };
+
+            if (data.Length >= 7 && data[2] == (byte)'-' && data[6] == (byte)'-')
+            {
+                var method = Encoding.ASCII.GetString(data, 2, 5);
+                if (method.StartsWith("-lh", StringComparison.OrdinalIgnoreCase) || method.StartsWith("-lz", StringComparison.OrdinalIgnoreCase))
+                    yield return new ReportItem { Title = "LHA archive method", Detail = method };
+            }
+
+            if (data.Length >= 1084)
+            {
+                var mod = Encoding.ASCII.GetString(data, 1080, 4);
+                if (mod == "M.K." || mod == "M!K!" || mod == "M&K!" || mod == "N.T." || mod == "FLT4" || mod == "FLT8")
+                    yield return new ReportItem { Title = "Tracker module signature", Detail = "ProTracker/Amiga MOD marker " + mod };
+            }
         }
 
         private static string GameExtensionDescription(string path)
@@ -158,6 +246,34 @@ namespace FileDentify
             }
         }
 
+        private static string SymbianResourceExtensionDescription(string path)
+        {
+            switch (Path.GetExtension(path).ToLowerInvariant())
+            {
+                case ".app": return "Symbian OS application binary";
+                case ".aif": return "Symbian application information file";
+                case ".rsc": return "Symbian compiled resource file";
+                case ".mbm": return "Symbian multi-bitmap image resource";
+                case ".mif": return "Symbian icon/resource file";
+                case ".mdl": return "Symbian recognizer or plug-in module";
+                default: return null;
+            }
+        }
+
+        private static string JavaMidletExtensionDescription(string path)
+        {
+            switch (Path.GetExtension(path).ToLowerInvariant())
+            {
+                case ".jad": return "Java ME MIDlet application descriptor";
+                case ".jar":
+                    return path.IndexOf("\\MIDlets\\", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                        path.IndexOf("\\MIDlet\\", StringComparison.OrdinalIgnoreCase) >= 0
+                        ? "Java ME MIDlet archive"
+                        : null;
+                default: return null;
+            }
+        }
+
         private static string SteinbergExtensionDescription(string path)
         {
             switch (Path.GetExtension(path).ToLowerInvariant())
@@ -209,6 +325,144 @@ namespace FileDentify
             }
         }
 
+        private static string MusicProjectExtensionDescription(string path)
+        {
+            switch (Path.GetExtension(path).ToLowerInvariant())
+            {
+                case ".ablbundle": return "Ableton Move/Live bundle";
+                case ".abl": return "Ableton Move/Live song JSON";
+                case ".ablpreset": return "Ableton preset";
+                case ".rpp": return "REAPER project";
+                case ".rpp-bak": return "REAPER project backup";
+                case ".als": return "Ableton Live Set";
+                case ".adg": return "Ableton device rack";
+                case ".adv": return "Ableton device preset";
+                case ".lha":
+                case ".lzh": return "LHA/LZH archive";
+                case ".mod": return "ProTracker/Amiga MOD tracker module";
+                case ".xm": return "FastTracker XM tracker module";
+                case ".s3m": return "Scream Tracker 3 module";
+                case ".it": return "Impulse Tracker module";
+                case ".mogg": return "MOGG multitrack Ogg audio";
+                case ".sfz": return "SFZ sampler instrument";
+                case ".exs": return "Apple Logic EXS sampler instrument";
+                case ".dls": return "Downloadable Sounds instrument bank";
+                case ".sbk": return "Sound Blaster / E-mu sound bank";
+                case ".ecw": return "Creative/E-mu ECW wavetable bank";
+                case ".sxt": return "Reason NN-XT sampler patch";
+                case ".kit": return "Drum kit or sampler kit file";
+                case ".bank": return "FMOD/Wwise/game audio bank";
+                case ".syx": return "MIDI System Exclusive data";
+                case ".jlw":
+                case ".vop": return "Legacy JLW/VOP sound bank or voice data";
+                case ".svd": return "Roland sound/backup data";
+                case ".svq": return "Roland sequencer song";
+                case ".smp": return "Sampler or device sample data";
+                case ".helm": return "Helm synthesizer preset";
+                case ".wt": return "Surge wavetable";
+                case ".nam": return "Neural Amp Modeler model";
+                case ".mtdrum": return "Microtonic drum preset";
+                case ".chords": return "Chord preset";
+                case ".spitfire": return "Spitfire Audio sample container";
+                case ".zmulti": return "Spitfire Audio multi/patch data";
+                case ".zpreset": return "Spitfire Audio preset data";
+                case ".zconfig": return "Spitfire Audio configuration data";
+                case ".lm": return "Spitfire Audio licence or library metadata";
+                case ".aupreset": return "Apple Audio Unit preset";
+                case ".component": return "Apple Audio Unit plug-in bundle";
+                case ".vst": return "Mac VST plug-in bundle";
+                case ".vst3": return "VST3 plug-in bundle";
+                case ".clap": return "CLAP plug-in bundle";
+                case ".aaxplugin": return "Avid AAX plug-in bundle";
+                case ".strings": return "Apple localization strings";
+                case ".car": return "Apple compiled asset catalog";
+                case ".nib": return "Apple Interface Builder nib";
+                case ".mobileconfig": return "Apple configuration profile";
+                case ".ipa": return "iOS application archive";
+                case ".ipsw": return "Apple device firmware restore package";
+                case ".pkg": return "macOS installer package";
+                case ".crash": return "Apple crash report";
+                case ".ips": return "Apple diagnostic report";
+                case ".exz": return "Roland Cloud expansion package";
+                case ".xpak": return "XLN Audio sample pack";
+                case ".mlt_omn": return "Spectrasonics Omnisphere multi";
+                case ".mlt_key": return "Spectrasonics Keyscape multi";
+                case ".mlt_trl": return "Spectrasonics Trilian multi";
+                case ".mlt_rmx": return "Spectrasonics Stylus RMX multi";
+                case ".fxp_rmx": return "Spectrasonics Stylus RMX effect preset";
+                case ".fxr_rmx": return "Spectrasonics Stylus RMX effect rack";
+                case ".kit_rmx": return "Spectrasonics Stylus RMX kit";
+                case ".prt_rmx": return "Spectrasonics Stylus RMX part";
+                default: return null;
+            }
+        }
+
+        private static string SampleLibraryExtensionDescription(string path)
+        {
+            var lowerPath = path.ToLowerInvariant();
+            switch (Path.GetExtension(path).ToLowerInvariant())
+            {
+                case ".wmss": return "Korg WaveMotion sample set";
+                case ".adsr": return "Korg wavestate ADSR randomization data";
+                case ".voiceamp": return "Korg wavestate voice-amp randomization data";
+                case ".pitch": return "Korg wavestate pitch randomization data";
+                case ".dynamicarpeggiator": return "Korg dynamic arpeggiator data";
+                case ".classicvectoreg": return "Korg classic vector envelope data";
+                case ".cpt2": return "GForce M-Tron tape bank";
+                case ".obw": return "Toontrack sound library data";
+                case ".dspreset": return "Decent Sampler preset";
+                case ".dsbundle": return "Decent Sampler bundle";
+                case ".big":
+                    return lowerPath.Contains("air music technology") ? "AIR Music Technology content archive" : null;
+                case ".patch":
+                    return lowerPath.Contains("air music technology") || lowerPath.Contains("\\structure\\") ? "AIR Structure patch" : null;
+                case ".mse": return "Maize Sampler exported instrument";
+                case ".vpreset": return "Valhalla DSP preset";
+                case ".cir": return lowerPath.Contains("universal audio") ? "Universal Audio LUNA convolution/impulse data" : null;
+                case ".cmr": return lowerPath.Contains("universal audio") ? "Universal Audio LUNA model/resource data" : null;
+                case ".rev": return lowerPath.Contains("universal audio") ? "Universal Audio LUNA reverb/response data" : null;
+                case ".aasbank": return "Applied Acoustics Systems bank";
+                case ".aas-gui": return "Applied Acoustics Systems GUI resource";
+                case ".lbin": return lowerPath.Contains("applied acoustics systems") ? "Applied Acoustics Systems resource bundle" : null;
+                case ".ptq": return lowerPath.Contains("modartt") || lowerPath.Contains("pianoteq") ? "Modartt Pianoteq add-on package" : null;
+                case ".mfxp": return lowerPath.Contains("modartt") || lowerPath.Contains("pianoteq") ? "Modartt Pianoteq preset" : null;
+                case ".cv-1 preset":
+                case ".cv-2 preset":
+                case ".cv-3 preset":
+                case ".cv-2 effect preset":
+                case ".cv-3 effect preset":
+                case ".ep-4 bank":
+                case ".vs-2 bank":
+                case ".vs-3 pack":
+                case ".va-2 bank":
+                case ".chromaphone 2 bank":
+                case ".objeq delay bank":
+                    return "Applied Acoustics Systems bank, pack, or preset";
+                default: return null;
+            }
+        }
+
+        private static string DeveloperExtensionDescription(string path, byte[] data)
+        {
+            switch (Path.GetExtension(path).ToLowerInvariant())
+            {
+                case ".apk": return "Android application package";
+                case ".pyc": return "Python bytecode cache";
+                case ".wasm": return "WebAssembly binary module";
+                case ".msg": return "Outlook or installer message/resource file";
+                case ".pak":
+                    if (data.Length >= 10)
+                    {
+                        var version = BitConverter.ToUInt32(data, 0);
+                        var encoding = BitConverter.ToUInt32(data, 4);
+                        if (version >= 4 && version <= 6 && encoding <= 3)
+                            return "Chromium/Electron resource pack";
+                    }
+                    return null;
+                default: return null;
+            }
+        }
+
         private static readonly Signature[] Signatures =
         {
             new Signature("%PDF-", "PDF header", "PDF document"),
@@ -230,6 +484,7 @@ namespace FileDentify
             new Signature("MZ", "MZ executable header", "Windows executable or DLL"),
             new Signature("\x7FELF", "ELF header", "ELF executable"),
             new Signature("SQLite format 3\0", "SQLite header", "SQLite database"),
+            new Signature(new byte[] { 0x00, 0x61, 0x73, 0x6D }, "WebAssembly header", "WebAssembly binary module"),
             new Signature("FORM", "FORM header", "IFF/AIFF-style container"),
             new Signature("BM", "BMP header", "BMP image"),
             new Signature("BZh", "bzip2 header", "bzip2 compressed data"),

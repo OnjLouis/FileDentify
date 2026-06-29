@@ -20,9 +20,13 @@ namespace FileDentify
     {
         public bool SendToEnabled;
         public bool DesktopShortcutEnabled;
+        public bool FileAssociationEnabled;
+        public bool AutoSaveLastReport = true;
         public string UpdateCheckFrequency = "Startup";
         public bool InstallUpdatesQuietly;
         public DateTime? LastAutomaticUpdateCheckUtc;
+        public List<string> SectionOrder = new List<string>();
+        public List<string> RecentReports = new List<string>();
 
         public static string SettingsPath
         {
@@ -48,10 +52,18 @@ namespace FileDentify
                     settings.SendToEnabled = ParseBool(value, settings.SendToEnabled);
                 else if (key.Equals("DesktopShortcutEnabled", StringComparison.OrdinalIgnoreCase))
                     settings.DesktopShortcutEnabled = ParseBool(value, settings.DesktopShortcutEnabled);
+                else if (key.Equals("FileAssociationEnabled", StringComparison.OrdinalIgnoreCase))
+                    settings.FileAssociationEnabled = ParseBool(value, settings.FileAssociationEnabled);
+                else if (key.Equals("AutoSaveLastReport", StringComparison.OrdinalIgnoreCase))
+                    settings.AutoSaveLastReport = ParseBool(value, settings.AutoSaveLastReport);
                 else if (key.Equals("UpdateCheckFrequency", StringComparison.OrdinalIgnoreCase))
                     settings.UpdateCheckFrequency = UpdateService.NormalizeUpdateCheckFrequency(value);
                 else if (key.Equals("InstallUpdatesQuietly", StringComparison.OrdinalIgnoreCase))
                     settings.InstallUpdatesQuietly = ParseBool(value, settings.InstallUpdatesQuietly);
+                else if (key.Equals("SectionOrder", StringComparison.OrdinalIgnoreCase))
+                    settings.SectionOrder = ParseList(value);
+                else if (key.Equals("RecentReports", StringComparison.OrdinalIgnoreCase))
+                    settings.RecentReports = ParseList(value);
                 else if (key.Equals("LastAutomaticUpdateCheckUtc", StringComparison.OrdinalIgnoreCase))
                 {
                     DateTime parsed;
@@ -69,8 +81,12 @@ namespace FileDentify
                 "[Settings]",
                 "SendToEnabled=" + SendToEnabled,
                 "DesktopShortcutEnabled=" + DesktopShortcutEnabled,
+                "FileAssociationEnabled=" + FileAssociationEnabled,
+                "AutoSaveLastReport=" + AutoSaveLastReport,
                 "UpdateCheckFrequency=" + UpdateService.NormalizeUpdateCheckFrequency(UpdateCheckFrequency),
                 "InstallUpdatesQuietly=" + InstallUpdatesQuietly,
+                "SectionOrder=" + FormatList(SectionOrder),
+                "RecentReports=" + FormatList(RecentReports),
                 "LastAutomaticUpdateCheckUtc=" + (LastAutomaticUpdateCheckUtc.HasValue ? LastAutomaticUpdateCheckUtc.Value.ToUniversalTime().ToString("o", CultureInfo.InvariantCulture) : string.Empty)
             };
             File.WriteAllLines(SettingsPath, lines.ToArray(), Encoding.ASCII);
@@ -80,6 +96,45 @@ namespace FileDentify
         {
             bool parsed;
             return bool.TryParse(value, out parsed) ? parsed : fallback;
+        }
+
+        private static List<string> ParseList(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return new List<string>();
+            return value.Split('|')
+                .Select(DecodeListValue)
+                .Where(item => !string.IsNullOrWhiteSpace(item))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+
+        private static string FormatList(IEnumerable<string> values)
+        {
+            if (values == null)
+                return string.Empty;
+            return string.Join("|", values
+                .Where(item => !string.IsNullOrWhiteSpace(item))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Select(EncodeListValue)
+                .ToArray());
+        }
+
+        private static string EncodeListValue(string value)
+        {
+            return Convert.ToBase64String(Encoding.UTF8.GetBytes(value ?? string.Empty));
+        }
+
+        private static string DecodeListValue(string value)
+        {
+            try
+            {
+                return Encoding.UTF8.GetString(Convert.FromBase64String(value ?? string.Empty));
+            }
+            catch
+            {
+                return string.Empty;
+            }
         }
     }
 

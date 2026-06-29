@@ -19,8 +19,10 @@ $installedConsoleOutput = Join-Path $installDir 'fd.com'
 $oldPackageOutput = Join-Path $packageDir 'Filedentify.exe'
 $oldPackageConsoleOutput = Join-Path $packageDir 'FileDentify.com'
 $oldInstalledConsoleOutput = Join-Path $installDir 'FileDentify.com'
+$packageStartupError = Join-Path $packageDir 'FileDentify-startup-error.txt'
 $csc = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
 $libmagicRoot = Join-Path $root 'third_party\libmagic\extracted'
+$tolkRoot = Join-Path $root 'third_party\tolk'
 
 if (-not (Test-Path -LiteralPath $csc)) {
     $csc = Join-Path $env:WINDIR 'Microsoft.NET\Framework\v4.0.30319\csc.exe'
@@ -32,7 +34,7 @@ if (-not (Test-Path -LiteralPath $csc)) {
 
 New-Item -ItemType Directory -Force -Path $packageDir | Out-Null
 
-foreach ($oldPath in @($oldPackageOutput, $oldPackageConsoleOutput, $oldInstalledConsoleOutput)) {
+foreach ($oldPath in @($oldPackageOutput, $oldPackageConsoleOutput, $oldInstalledConsoleOutput, $packageStartupError)) {
     if ($oldPath -and (Test-Path -LiteralPath $oldPath)) {
         Remove-Item -LiteralPath $oldPath -Force
         Write-Host "Removed old output $oldPath"
@@ -53,7 +55,10 @@ $resources = @(
     ('/resource:"{0}",FileDentify.Embedded.COPYING.gettext-runtime' -f (Join-Path $libmagicRoot 'COPYING.gettext-runtime')),
     ('/resource:"{0}",FileDentify.Embedded.COPYING.libintl' -f (Join-Path $libmagicRoot 'COPYING.libintl')),
     ('/resource:"{0}",FileDentify.Embedded.COPYING.libiconv-gpl' -f (Join-Path $libmagicRoot 'COPYING.libiconv-gpl')),
-    ('/resource:"{0}",FileDentify.Embedded.COPYING.libiconv-lgpl' -f (Join-Path $libmagicRoot 'COPYING.libiconv-lgpl'))
+    ('/resource:"{0}",FileDentify.Embedded.COPYING.libiconv-lgpl' -f (Join-Path $libmagicRoot 'COPYING.libiconv-lgpl')),
+    ('/resource:"{0}",FileDentify.Embedded.Tolk.dll' -f (Join-Path $tolkRoot 'Tolk.dll')),
+    ('/resource:"{0}",FileDentify.Embedded.nvdaControllerClient64.dll' -f (Join-Path $tolkRoot 'nvdaControllerClient64.dll')),
+    ('/resource:"{0}",FileDentify.Embedded.Tolk.LICENSE.txt' -f (Join-Path $tolkRoot 'Tolk.LICENSE.txt'))
 )
 
 foreach ($resource in $resources) {
@@ -66,6 +71,8 @@ foreach ($resource in $resources) {
 if (-not (Test-Path -LiteralPath $stubSource)) {
     throw "Console stub source is missing: $stubSource"
 }
+
+& (Join-Path $root 'Test-MenuSanity.ps1')
 
 & $csc /nologo /target:winexe /optimize+ /out:$output /reference:System.dll /reference:System.Core.dll /reference:System.Drawing.dll /reference:System.Web.Extensions.dll /reference:System.Windows.Forms.dll /reference:System.IO.Compression.dll /reference:System.IO.Compression.FileSystem.dll /reference:System.Xml.dll $resources $sources
 if ($LASTEXITCODE -ne 0) {

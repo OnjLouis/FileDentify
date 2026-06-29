@@ -20,8 +20,11 @@ namespace FileDentify
     {
         private readonly CheckBox sendToCheckBox;
         private readonly CheckBox desktopShortcutCheckBox;
+        private readonly CheckBox fileAssociationCheckBox;
+        private readonly CheckBox autoSaveLastReportCheckBox;
         private readonly ComboBox updateCheckFrequencyBox;
         private readonly CheckBox installUpdatesQuietlyCheckBox;
+        private readonly ToolTip toolTip;
 
         public PreferencesForm(AppSettings settings)
         {
@@ -30,6 +33,7 @@ namespace FileDentify
             Size = new Size(540, 330);
             MinimumSize = new Size(460, 260);
             AccessibleName = "Preferences";
+            toolTip = new ToolTip();
 
             var tabs = new TabControl { Dock = DockStyle.Fill, AccessibleName = "Preference tabs" };
             Controls.Add(tabs);
@@ -54,6 +58,22 @@ namespace FileDentify
                 AccessibleName = "Create a desktop shortcut for FileDentify"
             };
             automationPanel.Controls.Add(desktopShortcutCheckBox);
+            fileAssociationCheckBox = new CheckBox
+            {
+                Text = "Register FileDentify &reports (.fdreport) with Windows",
+                Checked = settings.FileAssociationEnabled,
+                AutoSize = true,
+                AccessibleName = "Register FileDentify reports with Windows"
+            };
+            automationPanel.Controls.Add(fileAssociationCheckBox);
+            autoSaveLastReportCheckBox = new CheckBox
+            {
+                Text = "Automatically keep the &last report for recovery",
+                Checked = settings.AutoSaveLastReport,
+                AutoSize = true,
+                AccessibleName = "Automatically keep the last report for recovery"
+            };
+            automationPanel.Controls.Add(autoSaveLastReportCheckBox);
 
             var updatesTab = new TabPage("Updates") { AccessibleName = "Updates" };
             tabs.TabPages.Add(updatesTab);
@@ -75,8 +95,10 @@ namespace FileDentify
 
             var buttons = new FlowLayoutPanel { Dock = DockStyle.Bottom, FlowDirection = FlowDirection.RightToLeft, AutoSize = true, Padding = new Padding(10) };
             Controls.Add(buttons);
-            var ok = new Button { Text = "OK", DialogResult = DialogResult.OK, AutoSize = true };
-            var cancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, AutoSize = true };
+            var ok = new ShortcutButton { Text = "OK", DialogResult = DialogResult.OK, AutoSize = true, AccessibleName = "OK", AccessibleDescription = "Save preferences and close this dialog.", ShortcutText = "Enter" };
+            var cancel = new ShortcutButton { Text = "Cancel", DialogResult = DialogResult.Cancel, AutoSize = true, AccessibleName = "Cancel", AccessibleDescription = "Close this dialog without saving changes.", ShortcutText = "ESC" };
+            toolTip.SetToolTip(ok, "Enter");
+            toolTip.SetToolTip(cancel, "ESC");
             buttons.Controls.Add(ok);
             buttons.Controls.Add(cancel);
             AcceptButton = ok;
@@ -87,6 +109,8 @@ namespace FileDentify
         {
             settings.SendToEnabled = sendToCheckBox.Checked;
             settings.DesktopShortcutEnabled = desktopShortcutCheckBox.Checked;
+            settings.FileAssociationEnabled = fileAssociationCheckBox.Checked;
+            settings.AutoSaveLastReport = autoSaveLastReportCheckBox.Checked;
             settings.UpdateCheckFrequency = UpdateFrequencyFromIndex(updateCheckFrequencyBox.SelectedIndex);
             settings.InstallUpdatesQuietly = installUpdatesQuietlyCheckBox.Checked;
         }

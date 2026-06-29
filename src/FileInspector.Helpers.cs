@@ -80,6 +80,18 @@ namespace FileDentify
                 return "Windows shortcut (.lnk)";
             if (IsInternetShortcut(path, header))
                 return "Internet shortcut or web favorite (.url)";
+            var savedReportType = SavedReportTypeName(path, header);
+            if (savedReportType != null)
+                return savedReportType;
+            var developerType = DeveloperFormatTypeName(path, header);
+            if (developerType != null)
+                return developerType;
+            var backupConfigType = BackupConfigTypeName(path, header);
+            if (backupConfigType != null)
+                return backupConfigType;
+            var legacySoundBankType = LegacySoundBankTypeName(path, header, length);
+            if (legacySoundBankType != null)
+                return legacySoundBankType;
             var gameType = GameFileTypeName(path, header);
             if (gameType != null)
                 return gameType;
@@ -88,6 +100,9 @@ namespace FileDentify
             var mobileToneType = MobilePhoneToneTypeName(path, header);
             if (mobileToneType != null)
                 return mobileToneType;
+            var sampleLibraryType = SampleLibraryTypeName(path, header);
+            if (sampleLibraryType != null)
+                return sampleLibraryType;
             if (header.Length >= 4 && StartsWith(header, Encoding.ASCII.GetBytes("UFS2")))
                 return "UVI/Falcon UFS sample library container";
             if (string.Equals(Path.GetExtension(path), ".ufs", StringComparison.OrdinalIgnoreCase))
@@ -97,12 +112,50 @@ namespace FileDentify
             var clipmanType = ClipmanTypeName(path, header);
             if (clipmanType != null)
                 return clipmanType;
+            var symbianAppType = SymbianAppResourceTypeName(path, header);
+            if (symbianAppType != null)
+                return symbianAppType;
+            var midletType = JavaMidletTypeName(path, header);
+            if (midletType != null)
+                return midletType;
             var nativeInstrumentsType = NativeInstrumentsTypeName(path);
             if (nativeInstrumentsType != null)
                 return nativeInstrumentsType;
             var steinbergType = SteinbergCubaseTypeName(path);
             if (steinbergType != null)
                 return steinbergType;
+            var rolandCloudType = RolandCloudTypeName(path, header);
+            if (rolandCloudType != null)
+                return rolandCloudType;
+            var musicProjectType = MusicProjectFormatTypeName(path, header);
+            if (musicProjectType != null)
+                return musicProjectType;
+            var macAudioPluginType = MacAudioPluginTypeName(path, header);
+            if (macAudioPluginType != null)
+                return macAudioPluginType;
+            var appleType = AppleFormatTypeName(path, header);
+            if (appleType != null)
+                return appleType;
+            var firmwareType = FirmwareTypeName(path, header);
+            if (firmwareType != null)
+                return firmwareType;
+            var symbianType = SymbianPackageTypeName(path, header);
+            if (symbianType != null)
+                return symbianType;
+            var cabinetType = CabinetTypeName(path, header);
+            if (cabinetType != null)
+                return cabinetType;
+            var windowsImageType = WindowsImageTypeName(path, header);
+            if (windowsImageType != null)
+                return windowsImageType;
+            var auType = SunAuTypeName(path, header);
+            if (auType != null)
+                return auType;
+            var transportStreamType = MpegTransportStreamTypeName(path, header);
+            if (transportStreamType != null)
+                return transportStreamType;
+            if (string.Equals(Path.GetExtension(path), ".nrg", StringComparison.OrdinalIgnoreCase))
+                return "Nero Burning ROM disc image";
             if (IsZipHeader(header) && string.Equals(Path.GetExtension(path), ".ablbundle", StringComparison.OrdinalIgnoreCase))
                 return "Ableton Move/Live bundle (ZIP-compatible container)";
             var zipDocumentType = ZipDocumentTypeName(path, header);
@@ -181,7 +234,9 @@ namespace FileDentify
                 case "WAVE": return "WAV audio";
                 case "WEBP": return "WebP image";
                 case "AVI ": return "AVI video";
-                case "sfbk": return "SoundFont 2 sound bank";
+                case "sfbk": return "SoundFont/SBK sound bank";
+                case "DLS ": return "DLS instrument bank";
+                case "RMID": return "RIFF MIDI container";
                 case "ACON": return "Animated cursor";
                 default: return null;
             }

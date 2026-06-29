@@ -52,6 +52,7 @@ namespace FileDentify
             KeyboardShortcuts(html);
             AdvancedViewer(html);
             CommandLineOptions(html);
+            SupportedFileTypes(html);
             ReportSections(html);
             Preferences(html);
             AccessibilityNotes(html);
@@ -74,6 +75,7 @@ namespace FileDentify
             Link(html, "keyboard-shortcuts", "Keyboard shortcuts");
             Link(html, "advanced-viewer", "Advanced file viewer");
             Link(html, "command-line-options", "Command line options");
+            Link(html, "supported-file-types", "Supported file types");
             Link(html, "report-sections", "Report sections");
             Link(html, "preferences", "Preferences");
             Link(html, "accessibility-notes", "Accessibility notes");
@@ -95,6 +97,24 @@ namespace FileDentify
         private static void Changelog(StringBuilder html)
         {
             html.AppendLine("<h2 id=\"changelog\">Changelog</h2>");
+            html.AppendLine("<h3>1.3</h3>");
+            html.AppendLine("<ul>");
+            html.AppendLine("<li>Added configurable report-section ordering from the main tree. Use <code>Ctrl+Up</code> and <code>Ctrl+Down</code> on a report section to move it earlier or later. <code>Summary</code> stays pinned first, and file order stays natural.</li>");
+            html.AppendLine("<li>Added Sensor Readout-style section navigation. <code>Ctrl+0</code> through <code>Ctrl+9</code> jump through the current file's first ten sections, <code>Ctrl+Shift+0</code> through <code>Ctrl+Shift+9</code> jump through sections 10 to 19, <code>Alt+Up</code> / <code>Alt+Down</code> move to the previous or next section, and <code>Alt+Home</code> / <code>Alt+End</code> jump to the first or last section without leaving the details field.</li>");
+            html.AppendLine("<li>Added file navigation shortcuts for multi-file reports. <code>Alt+Left</code> and <code>Alt+Right</code> jump to the previous or next file, <code>Alt+PageUp</code> and <code>Alt+PageDown</code> jump to the first or last file, and <code>Alt+1</code> through <code>Alt+0</code> jump directly to files 1 through 10. File navigation keeps the same report section selected when that section exists in the destination file, otherwise it falls back to Summary.</li>");
+            html.AppendLine("<li>Added <code>Ctrl+Shift+O</code> to append files to the current report. <code>Ctrl+O</code> now clearly starts a new report and offers to save the current report first.</li>");
+            html.AppendLine("<li>Added File &gt; Open folder with <code>Ctrl+Shift+L</code> to recursively inspect an entire folder from inside FileDentify.</li>");
+            html.AppendLine("<li>Added native <code>.fdreport</code> saved reports that reopen inside FileDentify with the tree intact. These reports can be sent to another user for analysis, and FileDentify can optionally register the extension with Windows.</li>");
+            html.AppendLine("<li>Added package-folder reporting for macOS-style bundles that Windows exposes as folders, including Logic Pro projects, GarageBand projects, Time Machine sparse bundles, app bundles, framework/loadable bundles, and audio plug-in bundles.</li>");
+            html.AppendLine("<li>Added automatic last-report recovery. When enabled, FileDentify keeps a private <code>FileDentify.fdreport</code> recovery file beside the app. Use <code>Ctrl+Shift+T</code> or File &gt; Reopen last report to bring it back, including the selected file and section where possible.</li>");
+            html.AppendLine("<li>Added <code>F5</code> to refresh original files from a live or reopened report. If the original files are not available on the current machine, FileDentify explains why the report cannot be fully refreshed.</li>");
+            html.AppendLine("<li>Changed the default section order so high-value FileDentify-specific sections appear immediately after Summary. Safety hints and format-specific sections such as Korg, Toontrack, Decent Sampler, Native Instruments, Clipman, project files, package folders, and media/document details are surfaced before generic evidence such as hashes and raw header bytes. If you explicitly move one of those sections, your saved position for that section is respected.</li>");
+            html.AppendLine("<li>Added embedded Tolk screen-reader output, including the NVDA controller client companion DLL, for concise shortcut and section-move announcements when a supported screen reader is running.</li>");
+            html.AppendLine("<li>Expanded format-specific identification across music production files, sample libraries, Mac package folders, game/audio assets, archives, firmware, AI model files, documents, and media containers. See <a href=\"#supported-file-types\">Supported file types</a> for the maintained coverage table.</li>");
+            html.AppendLine("<li>Improved main-window section details so multiline values stay on separate lines instead of being flattened into very long pipe-separated lines.</li>");
+            html.AppendLine("<li>Added safety hints for obvious header and extension mismatches, such as a file with a document, archive, image, shortcut, or executable header but an unexpected extension. FileDentify does not declare malware; it recommends caution and a trusted security scan when the mismatch is suspicious.</li>");
+            html.AppendLine("<li>Added command-line output safety checks so report and advanced-viewer output refuse to overwrite one of the input files. Console companion errors now print to stderr instead of opening a GUI error window.</li>");
+            html.AppendLine("</ul>");
             html.AppendLine("<h3>1.2</h3>");
             html.AppendLine("<ul>");
             html.AppendLine("<li>Added Windows property metadata reporting for formats supported by Explorer property handlers, giving FileDentify another way to surface useful title, author, tag, media, document, and image metadata without bundling a large new parser. Closes <a href=\"https://github.com/OnjLouis/FileDentify/issues/3\">issue 3</a>.</li>");
@@ -153,13 +173,16 @@ namespace FileDentify
         private static void GettingStarted(StringBuilder html)
         {
             html.AppendLine("<h2 id=\"getting-started\">Getting started</h2>");
-            html.AppendLine("<p>Run FileDentify with no arguments to open the main window. Use <code>Ctrl+O</code> or File &gt; Open files to inspect one or more files.</p>");
-            html.AppendLine("<p>If FileDentify is opened from Send To with a folder, the graphical app recursively scans the files in that folder and shows each file as a top-level tree item.</p>");
+            html.AppendLine("<p>Run FileDentify with no arguments to open the main window. Use <code>Ctrl+O</code> or File &gt; Open files to inspect one or more files. Use <code>Ctrl+Shift+L</code> or File &gt; Open folder to recursively inspect a folder. If a report is already loaded, <code>Ctrl+O</code> and Open folder start a new report and offer to save the current report first. Use <code>Ctrl+Shift+O</code> or File &gt; Append files to report to add more files without clearing the current report.</p>");
+            html.AppendLine("<p>Use <code>Ctrl+R</code>, File &gt; Open FileDentify report, or open a <code>.fdreport</code> file from Explorer to reload a saved report with the tree intact. Use <code>Ctrl+Shift+T</code> or File &gt; Reopen last report to reopen FileDentify's automatic recovery report after an accidental close. Saved reports remember the selected file and section where possible. A saved report is static evidence; press <code>F5</code> to re-inspect the original files if those paths still exist on the current machine.</p>");
+            html.AppendLine("<p>If FileDentify is opened from Send To with a folder, the graphical app recursively scans the files in that folder and shows each file as a top-level tree item. Package folders such as <code>.logicx</code>, <code>.sparsebundle</code>, <code>.app</code>, and Mac plug-in bundles are inspected as single report items instead of being flattened into all of their internal files.</p>");
             html.AppendLine("<p>The left side is a tree of files and report sections. The right side is a read-only details edit field for the selected tree item. Use <code>F4</code> on a file or one of its sections to open the advanced file viewer.</p>");
             html.AppendLine("<p>The advanced file viewer has readable text, hex, binary, and octal modes. Use standard navigation keys, Ctrl+A, Ctrl+C, Ctrl+F to focus search, F3 and Shift+F3 to search next or previous, Ctrl+L to load more, Ctrl+Shift+L to load all, and Escape to close the viewer and return to FileDentify. Alt+F4 remains the normal Windows close command.</p>");
+            html.AppendLine("<p>When opened from the main FileDentify window, the advanced viewer is an owned part of the same app rather than a separate Alt+Tab target. If you close it with Escape and press F4 again while the same file is still loaded, FileDentify restores the previously loaded amount, mode, search text, and review position.</p>");
             html.AppendLine("<p>The report tree also has a context menu with copy, expand/collapse, save, and HTML report actions. Press the Application key or Shift+F10 while focused on the tree, or right-click with a mouse.</p>");
-            html.AppendLine("<p>Save report can write either plain text or HTML depending on the chosen file extension. View HTML report opens a temporary HTML report in the default browser; use Save report if you want to keep it.</p>");
+            html.AppendLine("<p>Save report writes a native <code>.fdreport</code> by default. It can also write plain text or HTML depending on the chosen file extension. View HTML report opens a temporary HTML report in the default browser; use Save report if you want to keep it.</p>");
             html.AppendLine("<p>When a report contains more than one file, FileDentify adds a Report overview before the individual file reports. This is useful for spotting unknown files, inspection errors, large files, common strings, common byte patterns, and unusual type or extension clusters.</p>");
+            html.AppendLine("<p>Report section order is configurable from the tree. Select a section such as Readable text, Hashes, or Printable strings and press <code>Ctrl+Up</code> or <code>Ctrl+Down</code> to move it. The order is saved in <code>FileDentify.ini</code> and applies to all loaded files. Summary stays pinned first, then FileDentify surfaces newly detected high-value safety and format-specific sections before generic evidence unless you have explicitly moved that same section. Report overview stays pinned above files.</p>");
             html.AppendLine("<p>FileDentify can also be installed into the Windows Send To menu from Options &gt; Preferences. The Send To shortcut name is <code>File&amp;Dentify</code>, so the menu mnemonic is D.</p>");
             html.AppendLine("<p>Options &gt; Preferences can also create a normal desktop shortcut for opening FileDentify directly.</p>");
         }
@@ -169,12 +192,25 @@ namespace FileDentify
             html.AppendLine("<h2 id=\"keyboard-shortcuts\">Keyboard shortcuts</h2>");
             html.AppendLine("<table><thead><tr><th>Shortcut</th><th>Action</th></tr></thead><tbody>");
             Row(html, "Ctrl+O", "Open files.");
+            Row(html, "Ctrl+Shift+L", "Open a folder and recursively inspect its files.");
+            Row(html, "Ctrl+Shift+O", "Append files to the current report without clearing already loaded files.");
+            Row(html, "Ctrl+R", "Open a saved FileDentify .fdreport file.");
+            Row(html, "Ctrl+Shift+T", "Reopen the automatically saved last report.");
             Row(html, "Ctrl+S", "Save the current report.");
+            Row(html, "F5", "Refresh the report by re-inspecting original files that are available on this machine.");
             Row(html, "Ctrl+C in the tree", "Copy details for the selected tree item.");
             Row(html, "Ctrl+C in details", "Copy selected text, or the current details text when no text is selected.");
             Row(html, "Ctrl+A in read-only edit fields", "Select all text.");
             Row(html, "Ctrl+Shift+Left", "Collapse all items in the report tree.");
             Row(html, "Ctrl+Shift+Right", "Expand all items in the report tree.");
+            Row(html, "Ctrl+Up / Ctrl+Down on a report section", "Move that report section earlier or later in the saved section order. Summary stays pinned first.");
+            Row(html, "Ctrl+0 to Ctrl+9", "Jump through the first ten sections in the current file. When a file root is selected, Ctrl+0 jumps to that file's Summary.");
+            Row(html, "Ctrl+Shift+0 to Ctrl+Shift+9", "Jump through sections 10 to 19 in the current file.");
+            Row(html, "Alt+Up / Alt+Down", "Move through the current review flow. From Report overview, Alt+Down enters the first file overview. From a file overview, Alt+Down enters the first section. From the first section, Alt+Up returns to the file overview. If focus is in details, focus stays there and the details refresh.");
+            Row(html, "Alt+Home / Alt+End", "Jump to the first or last report section in the current file.");
+            Row(html, "Alt+Left / Alt+Right", "Jump to the previous or next file in a multi-file report, keeping the same report section selected where possible.");
+            Row(html, "Alt+PageUp / Alt+PageDown", "Jump to the first or last file in a multi-file report, keeping the same report section selected where possible.");
+            Row(html, "Alt+1 to Alt+0", "Jump directly to files 1 through 10 in a multi-file report. Alt+0 means file 10. The current report section is kept where possible, otherwise FileDentify falls back to Summary.");
             Row(html, "F1", "Open this manual.");
             Row(html, "F4", "Open the advanced file viewer for the selected file.");
             Row(html, "Ctrl+comma", "Open Preferences.");
@@ -193,7 +229,8 @@ namespace FileDentify
             html.AppendLine("<h2 id=\"command-line-options\">Command line options</h2>");
             html.AppendLine("<table><thead><tr><th>Command</th><th>Meaning</th></tr></thead><tbody>");
             Row(html, "FileDentify.exe [files...]", "Open the graphical inspector with the supplied files loaded.");
-            Row(html, "FileDentify.exe --report (-r) report.txt [files...]", "Write a plain text report and exit. Use a .html or .htm output path for HTML. The file list can contain multiple non-contiguous files from different folders or drives.");
+            Row(html, "FileDentify.exe [report.fdreport]", "Open a saved FileDentify report in the main window.");
+            Row(html, "FileDentify.exe --report (-r) report.fdreport [files...]", "Write a native reopenable FileDentify report and exit. Use a .txt output path for plain text or a .html/.htm output path for HTML. The file list can contain multiple non-contiguous files from different folders or drives.");
             Row(html, "FileDentify.exe --html-report (-hr) report.html [files...]", "Explicitly write an HTML report and exit.");
             Row(html, "FileDentify.exe --folder-report (-fr) report.txt [folders-or-files...]", "Recursively scan folders and write one complete report. Use a .html or .htm output path for HTML.");
             Row(html, "FileDentify.exe --advanced-view (-av) file", "Open the graphical advanced file viewer directly on the first supplied readable file.");
@@ -208,6 +245,8 @@ namespace FileDentify
             Row(html, "FileDentify.exe --uninstall-sendto (-us)", "Remove FileDentify from the Windows Send To menu.");
             Row(html, "FileDentify.exe --install-desktop (-id)", "Create a FileDentify shortcut on the desktop.");
             Row(html, "FileDentify.exe --uninstall-desktop (-ud)", "Remove the FileDentify desktop shortcut.");
+            Row(html, "FileDentify.exe --install-report-association (-ir)", "Register .fdreport files with Windows for the current user.");
+            Row(html, "FileDentify.exe --uninstall-report-association (-ur)", "Remove FileDentify's .fdreport file association for the current user.");
             Row(html, "FileDentify.exe --version (-v)", "Show the current FileDentify version.");
             Row(html, "FileDentify.exe --help (-h)", "Show command-line help.");
             html.AppendLine("</tbody></table>");
@@ -219,17 +258,24 @@ namespace FileDentify
             Row(html, "Home", "Jump to the beginning.");
             Row(html, "End", "Jump to the end.");
             Row(html, "F4", "Open the in-terminal advanced file viewer for the file currently shown at the top of the terminal page.");
-            Row(html, "Q or Escape", "Exit terminal mode.");
+            Row(html, "Alt+T or T in terminal advanced viewer", "Switch to Text mode.");
+            Row(html, "Alt+X or X in terminal advanced viewer", "Switch to Hex mode.");
+            Row(html, "Alt+B or B in terminal advanced viewer", "Switch to Binary mode.");
+            Row(html, "Alt+O or O in terminal advanced viewer", "Switch to Octal mode.");
+            Row(html, "L or Ctrl+L in terminal advanced viewer", "Load more source data.");
+            Row(html, "Shift+L in terminal advanced viewer", "Load all source data up to the terminal safety limit.");
+            Row(html, "Escape, Q, Backspace, or Ctrl+C in terminal advanced viewer", "Return to the terminal report pager.");
+            Row(html, "Q or Escape in report pager", "Exit terminal mode.");
             html.AppendLine("</tbody></table>");
-            html.AppendLine("<p class=\"note\">The terminal advanced viewer stays inside the terminal. Its status line lists the available keys: Alt+T or T for Text, Alt+X or X for Hex, Alt+B or B for Binary, Alt+O or O for Octal, L or Ctrl+L to load more, Shift+L to load all up to the safety limit, and Escape, Q, Backspace, or Ctrl+C to return to the report pager.</p>");
             html.AppendLine("<p class=\"note\">When terminal mode output is redirected, FileDentify writes the report and exits instead of waiting for paging keys.</p>");
         }
 
         private static void AdvancedViewer(StringBuilder html)
         {
             html.AppendLine("<h2 id=\"advanced-viewer\">Advanced file viewer</h2>");
-            html.AppendLine("<p>Press <code>F4</code> on a file or one of its report sections to open the advanced file viewer. The viewer opens directly on the read-only output field so review can begin immediately. Press <code>Escape</code> to close it and return to FileDentify.</p>");
+            html.AppendLine("<p>Press <code>F4</code> on a file or one of its report sections to open the advanced file viewer. The viewer opens maximized, directly on the read-only output field, so review can begin immediately. Press <code>Escape</code> to close it and return to FileDentify.</p>");
             html.AppendLine("<p>The viewer status bar is readable with NVDA's status command. It reports the current line first, then loaded-data and mode information, so repeated checks start with the changing information.</p>");
+            html.AppendLine("<p>Search does not silently wrap. If F3 finds no later match, the review position stays where it is and the status explains that there is no further match in loaded content. Use Shift+F3 to search backward, or load more content and press F3 again.</p>");
             html.AppendLine("<table><thead><tr><th>Control or command</th><th>Meaning</th></tr></thead><tbody>");
             Row(html, "Alt+T", "Switch to Text mode.");
             Row(html, "Alt+X", "Switch to Hex mode.");
@@ -245,7 +291,30 @@ namespace FileDentify
             Row(html, "Ctrl+C", "Copy selected output.");
             Row(html, "Escape", "Close the advanced viewer.");
             html.AppendLine("</tbody></table>");
-            html.AppendLine("<p>The viewer loads the file in chunks and opens at the top of the loaded output. It also loads one more chunk when navigation reaches the end of the loaded content. Use <code>Ctrl+L</code> for a deliberate next chunk, or <code>Ctrl+Shift+L</code> to load all remaining content. Command-line equivalents are available with <code>--viewer-output</code>, <code>--viewer</code>, <code>--viewer-mode</code>, and <code>--viewer-bytes</code>.</p>");
+            html.AppendLine("<p>The viewer loads the file in chunks and opens at the top of the loaded output. It also loads one more chunk when navigation reaches the end of the loaded content, placing the review cursor at the start of the newly loaded content rather than jumping to the end of that chunk. Use <code>Ctrl+L</code> for a deliberate next chunk, or <code>Ctrl+Shift+L</code> to load all remaining content. Command-line equivalents are available with <code>--viewer-output</code>, <code>--viewer</code>, <code>--viewer-mode</code>, and <code>--viewer-bytes</code>.</p>");
+        }
+
+        private static void SupportedFileTypes(StringBuilder html)
+        {
+            html.AppendLine("<h2 id=\"supported-file-types\">Supported file types</h2>");
+            html.AppendLine("<p>This table is the maintained list for FileDentify-specific coverage beyond broad file/libmagic identification. New format families are added here instead of making the changelog noisy.</p>");
+            html.AppendLine("<table><thead><tr><th>Family</th><th>Examples</th><th>What FileDentify tries to show</th></tr></thead><tbody>");
+            SupportedRow(html, "Windows and web shortcuts", ".lnk, .url", "Target, flags, timestamps, web URL fields, and shortcut metadata.");
+            SupportedRow(html, "Documents and ebooks", ".pdf, .docx, .xlsx, .pptx, .odt, .ods, .odp, .epub", "Document metadata, ZIP/package structure, creator/date fields, counts, and embedded media/resource clues.");
+            SupportedRow(html, "Audio and media containers", ".flac, .mp3, .ogg, .wav, .aiff, .mid, .au, .m2ts, .ts, .mts, .mov, .mp4", "Header metadata, stream/container clues, transport-stream packet details, and ffprobe summaries when available.");
+            SupportedRow(html, "Sample and instrument banks", ".sf2, .sbk, .sfArk, .dls, .ecw, .sfz, .exs, .ufs, .blob, .jlw, .vop", "Bank metadata, visible preset/instrument/sample names, container hints, legacy sound-bank clues, and proprietary payload notes.");
+            SupportedRow(html, "Native Instruments", ".nki, .nkm, .nkb, .nkr, .nkx, .nkc, .ncw, .nicnt, .nksf, .nksfx, .ens, .kt3, .ksd, .nfm8, .nabs, .nmsv, .mxprj", "Kontakt/NKS/Reaktor/Battery/FM8/Massive/Maschine identity, visible product strings, metadata, and sample references.");
+            SupportedRow(html, "Music projects and presets", ".als, .ablbundle, .abl, .ablpreset, .rpp, .rpp-bak, .cpr, .npr, .all, .arr, .fxp, .fxb, .vstpreset, .wrk, .cwp, .mod, .xm, .s3m, .it, .mogg, .syx", "Project/preset identity, visible names, tracker details, SysEx clues, and DAW-specific markers.");
+            SupportedRow(html, "Music software libraries", "Spitfire, XLN Audio, Spectrasonics, Korg, GForce M-Tron, Toontrack, Decent Sampler, Universal Audio LUNA, AIR Music Technology, Maize Sampler, Applied Acoustics Systems, Audio Modeling, UJAM, UJAM-style vendor blobs such as Crow Hill and Rhodes, Valhalla DSP, Modartt Pianoteq", "Product folder, library role, preset/bank names, visible metadata, package sizes, and clear notes when proprietary payloads are not decoded.");
+            SupportedRow(html, "Mac and Apple packages", ".logicx, .logic, .band, .garageband, .sparsebundle, iPhone/iPad backup folders, extensionless iOS backup payloads, .app, .framework, .bundle, .plugin, .appex, .kext, .prefPane, .component, .vst, .vst3, .clap, .aaxplugin, .ipa, .ipsw, .pkg, .car, .strings, .nib, .mobileconfig", "Package-folder identity, Info.plist fields, project metadata, sparse-bundle details, mobile-backup manifests and hashed stored-file layout, app/archive structure, and Apple resource hints.");
+            SupportedRow(html, "Game, ROM, and game audio", ".nsf, .nes, .fds, .gb, .gbc, .gba, .nds, .sfc, .smc, .gen, .md, .sms, .gg, .n64, .z64, .wad, .chd, .pak, .vpk, .pk3, .pk4, .bsp, .bnk, .wem, .assets, .rpa, .acf, .vdf, .cue, .gdi, .sav, .srm, .ips, .bps, Nintendo Switch content folders, .nca.CONCAT segments", "ROM headers, mapper/platform clues, game package markers, Wwise/Unity/Ren'Py/Steam fields, Nintendo content-folder structure, and save/patch identity.");
+            SupportedRow(html, "Archives, installers, and disk images", ".zip-compatible containers, .rar, .7z, .gz, .bz2, .xz, .lz4, .zst, .lha, .lzh, .cab, .msi, .wim, .esd, .iso, .dmg, .nrg, .vhd, .vhdx, .vmdk, .vdi, .qcow2", "Container signatures, selected header fields, filesystem/image hints, and safety notes for suspicious mismatches.");
+            SupportedRow(html, "Firmware, mobile, and device files", ".sis, .sisx, Symbian .app/.aif/.rsc/.mbm/.mif/.mdl, Java ME .jad/.jar MIDlets, .imy, .mmf, .pmd, .amr, .ota, .rtttl, .rtx, BIOS/UEFI images, Roland SRX/SVD/SVQ/RFWV", "Installer/device headers, Symbian UID/resource clues, MIDlet manifest fields, ringtone fields, firmware markers, Roland identifiers, and visible package strings.");
+            SupportedRow(html, "Programming and app resources", ".apk, .pyc, .wasm, .pak, .msg, .plist, .json, .sqlite, fonts, Piper/Sonata .onnx voice models", "Bytecode/module/resource headers, Android package structure, SQLite/plist details, speech-voice metadata, and font/container signatures.");
+            SupportedRow(html, "Backup and configuration files", "Audio Hijack .ah4session, Outlook Express .iaf, Synology .dss, router .cfg/.conf/.bin/.dat/.xml backups", "Session/config identity, binary-plist or compression markers, selected non-password fields, visible key names, and privacy notes for credential-bearing backups.");
+            SupportedRow(html, "AI model files", "Ollama manifests, Ollama blobs, GGUF", "Model tag, manifest media type, referenced layers, GGUF version, tensor count, metadata count, and visible metadata keys.");
+            SupportedRow(html, "Clipman and FileDentify", ".clipdb, Clipman settings, .fdreport", "Clipman container/settings metadata with protected password blobs redacted, and reopenable FileDentify report structure.");
+            html.AppendLine("</tbody></table>");
         }
 
         private static void ReportSections(StringBuilder html)
@@ -253,24 +322,91 @@ namespace FileDentify
             html.AppendLine("<h2 id=\"report-sections\">Report sections</h2>");
             html.AppendLine("<table><thead><tr><th>Section</th><th>What it contains</th></tr></thead><tbody>");
             Row(html, "Summary", "Likely type, Unix file/libmagic result, path, size, extension, and timestamps.");
+            Row(html, "Readable text", "Plain extracted strings without byte offsets, intended to be comfortable with screen readers. This appears near the top by default, after higher-priority safety or format-specific sections when those are present.");
             Row(html, "Signature matches", "Built-in signature matches from the beginning of the file.");
             Row(html, "Unix file/libmagic", "The embedded file/libmagic description, MIME result, and engine version.");
+            Row(html, "Safety hints", "Warnings for obvious header and extension mismatches, with a cautious recommendation to scan and verify unexpected files before opening them directly.");
             Row(html, "Hashes", "SHA-256 and bounded hash information.");
             Row(html, "Filesystem", "Local file attributes and timestamps.");
             Row(html, "Clipman", "Clipman .clipdb and settings details. Encrypted CLIPDB2 databases are identified by container metadata only; FileDentify does not ask for passwords, decrypt history, or reveal protected remembered-password blobs.");
+            Row(html, "Backup/config data", "Application, network-device, NAS, router, and mail-client backup/configuration files, including Audio Hijack sessions, Outlook Express IAF exports, Synology DSS backups, and router configs. Password-looking values are not shown in this section, and privacy warnings are surfaced when the file type commonly contains credentials.");
+            Row(html, "Legacy sound bank", "Legacy .jlw and .vop sound-bank or voice-data files, including extension clues, size patterns, first big-endian words, readable strings, and notes when generic libmagic evidence appears misleading.");
+            Row(html, "Speech voice", "Piper/Sonata voice files, including ONNX model role, voice folder, JSON voice configuration fields such as sample rate, quality, eSpeak voice, language, and speaker counts where visible.");
             Row(html, "PDF", "PDF version, linearization/encryption hints, and sampled Info/XMP metadata.");
             Row(html, "Windows property metadata", "Useful Explorer property-handler metadata where Windows exposes it, such as title, authors, tags, comments, media fields, image fields, and document fields.");
             Row(html, "Office document metadata", "Word, Excel, and PowerPoint Open XML properties such as title, creator, dates, application, document statistics, embedded/media counts, and custom properties.");
             Row(html, "OpenDocument metadata", "OpenDocument metadata and statistics for formats such as .odt, .ods, and .odp.");
-            Row(html, "FLAC, ID3, Ogg, RIFF, AIFF, MIDI, ISO base media", "Built-in audio/media structure and metadata where available.");
+            Row(html, "EPUB ebook", "EPUB package metadata such as OPF path, title, creator, language, identifier, manifest count, reading-order count, and media/resource counts.");
+            Row(html, "Android APK", "APK container details such as base/split kind, AndroidManifest presence, DEX count, native ABI folders, resource/asset entry counts, and package/split names inferred from backup filenames.");
+            Row(html, "FLAC, ID3, Ogg, RIFF, RIFF MIDI, AIFF, MIDI, Sun/NeXT AU, MPEG transport stream, ISO base media", "Built-in audio/media structure and metadata where available, including AU sample rate/channel/encoding fields, RMID-wrapped MIDI header details, and Blu-ray .m2ts packet-size/sync details.");
+            Row(html, "SoundFont / SBK", "SoundFont and old Sound Blaster / E-mu SBK bank metadata from RIFF INFO chunks, visible preset names, and visible preset/instrument/sample header counts where available.");
+            Row(html, "sfArk SoundFont archive", "Legacy compressed SoundFont archives, including visible sfArk version strings and target .sf2 names where present.");
+            Row(html, "DLS instrument bank", "Downloadable Sounds RIFF bank metadata including collection instrument count, DLS version, and visible instrument/region/wave-sample chunk counts.");
+            Row(html, "Creative ECW waveset", "Creative/E-mu ECW wavetable bank marker, visible name, internal filename, and copyright where present.");
             Row(html, "Media details", "A concise ffprobe summary when ffprobe.exe is beside FileDentify and probing succeeds.");
+            Row(html, "QuickTime metadata", "MOV/QuickTime tags from ffprobe when available, surfaced with friendly labels such as camera make, camera/device model, software, app, device, copyright, location, and creation date.");
             Row(html, "Mobile phone tone", "Old mobile ringtone and phone-audio clues for iMelody .imy, Yamaha SMAF/MMF .mmf, Qualcomm CMX/PMD .pmd, AMR, RTTTL, RTX, and Nokia OTA-style files where the bytes expose useful fields.");
-            Row(html, "Game/ROM data", "Header-level details for game and emulator files such as NSF, iNES/NES, Game Boy, GBA, SNES, Genesis/Mega Drive, Nintendo 64, Doom WAD, CHD, Quake PACK, Wwise BNK/WEM, Unity assets, Ren'Py archives, Steam ACF/VDF, generic .rom files, game saves, disc layout files, and common patch/package extensions.");
+            Row(html, "Game/ROM data", "Header-level details for game and emulator files such as NSF, iNES/NES, Game Boy, GBA, Nintendo DS, SNES, Genesis/Mega Drive, Sega Master System/Game Gear, Nintendo 64, Doom WAD, CHD, Quake PACK, Wwise BNK/WEM, Unity assets, Ren'Py archives, Steam ACF/VDF, generic .rom files, game saves, disc layout files, and common patch/package extensions.");
+            Row(html, "Nintendo Switch content", "Nintendo content folders, including registered .nca.CONCAT package and segment counts, save-file counts, album media counts, largest sampled package folders, and a clear note that FileDentify reports structure and sizes only.");
             Row(html, "Native Instruments", "Kontakt, NKS, Reaktor, Battery, FM8, Absynth, Massive, Maschine, Kontour, and related NI extension hints, visible product strings, header markers, .nicnt metadata, and sampled instrument or sample references.");
-            Row(html, "Steinberg Cubase", "Cubase, Nuendo, and VST-related extension hints plus readable project clues such as ASIO/VST markers, MIDI edit commands, drum-map names, effects, grooves, fonts, and internal markers.");
+            Row(html, "Apple bundle", "macOS application, framework, plug-in, app extension, kernel extension, and preference-pane Info.plist metadata such as display name, identifier, executable, version, package type, minimum macOS, SDK, and principal class.");
+            Row(html, "Apple localization / asset resources", "Apple .strings localization files, compiled .car asset catalogs, Interface Builder .nib resources, configuration profiles, and XAR-based .pkg installer package headers.");
+            Row(html, "Apple firmware package / iOS application archive", "IPSW and IPA ZIP-family packages, including IPSW BuildManifest.plist/Restore.plist presence, disk images, firmware entries, IPA payload Info.plist path, framework counts, and app extension counts.");
+            Row(html, "Logic Pro / GarageBand project package", "Logic and GarageBand package folders such as .logicx, .logic, .band, and .garageband, including package structure, ProjectInformation.plist and MetaData.plist presence, ProjectData size, visible musical fields, and bundled audio-file names where available.");
+            Row(html, "Apple sparse bundle", "Time Machine and other .sparsebundle package folders, including Info.plist sparse-bundle fields, virtual size, band size, sampled band counts, and Time Machine metadata-file presence.");
+            Row(html, "Apple mobile backup", "iPhone and iPad backup folders, including Manifest.db, Manifest.plist, Info.plist, Status.plist, hashed shard-folder counts, sampled stored-file counts, largest sampled payloads, and privacy notes.");
+            Row(html, "Apple mobile backup file", "Extensionless 40-character stored files inside Apple mobile backups, including backup identifier, shard folder, file ID, Manifest.db lookup hint, likely payload type, and privacy note.");
+            Row(html, "Mac audio plug-in", "Audio Unit, VST, VST3, CLAP, AAX, and AU preset bundle hints, including Info.plist display name, bundle identifier, executable, version, minimum macOS, SDK, and Xcode fields where present.");
+            Row(html, "Roland Cloud", "Roland Cloud expansion and preset files such as .exz, VEXP headers, KoaBankFile preset banks, Preset.bin, and InstalledBankNames.dat, including product folder, expansion code/name, visible bank name, and installed bank strings where available.");
+            Row(html, "XLN Audio", "XLN Audio .xpak sample packs and InstalledBankNames.dat files, including product, pack folder, pack code/name, file size, and installed bank names where visible.");
+            Row(html, "Spectrasonics", "Spectrasonics STEAM/SAGE files, including .db sample containers with readable FileSystem indexes, Omnisphere/Keyscape/Trilian/Stylus RMX multi and preset extensions, product/family inference, indexed file names and sizes, and visible XML module types where available.");
+            Row(html, "Korg", "Korg sample-library and wavestate data, including WaveMotion .wmss files, extensionless Korg objects, ADSR, voice amp, pitch, arpeggiator, vector-envelope, database, product folder, role, and visible object markers where available.");
+            Row(html, "GForce M-Tron", "GForce M-Tron .cpt2 tape banks, including product folder, library folder, bank name, size, and a clear note that the sample payload is not unpacked.");
+            Row(html, "Toontrack", "Toontrack .obw sound-library banks and related text metadata, including product folder, role, RIFF/container clues, visible kit, microphone, articulation, preset, or sound-stat entries where available.");
+            Row(html, "Decent Sampler", "Decent Sampler .dspreset files, including library folder, preset name, sample-reference count, sample paths, note ranges, groups, controls, and UI image or size metadata where present.");
+            Row(html, "Universal Audio LUNA", "Universal Audio LUNA .lunacomponent folders and related .cir, .cmr, .rev, .dat, .bin, and .json files, including component name, role, bounded package/file sizes, largest sampled internal files, and visible metadata where present.");
+            Row(html, "AIR Music Technology", "AIR Music Technology Structure and Transfuser files, including .big content archives with visible embedded paths and .patch XML files with visible parts, part types, sample references, and root element.");
+            Row(html, "Maize Sampler", "Maize Sampler .mse exported instruments used by several sample-library developers, including header marker, library folder, instrument name, file size, and visible instrument/vendor text where available.");
+            Row(html, "Applied Acoustics Systems", "Applied Acoustics Systems banks, packs, presets, GUI files, and Lua/resource bundles, including product folder, item name, visible preset metadata, version/engine fields, name-field counts, and resource notes.");
+            Row(html, "Audio Modeling", "Audio Modeling and SWAM NKS presets, preview audio, metadata, and artwork, including product folder, role, file size, and visible metadata where available.");
+            Row(html, "UJAM", "UJAM content blobs, preset patches, NKS files, settings, and metadata, including product folder, role, file size, leading UUID for blob payloads, preset names, build metadata, and DSP setting counts where visible.");
+            Row(html, "UJAM-style blob", "UJAM-style .blob payloads used by other sample-library vendors such as Crow Hill and Rhodes, including vendor folder, product folder, file size, leading UUID where visible, and a proprietary-payload note.");
+            Row(html, "Valhalla DSP", "Valhalla DSP .vpreset files, including product folder, preset folder, preset name, plug-in version, and selected visible parameters.");
+            Row(html, "Modartt Pianoteq", "Modartt/Pianoteq add-on packages, presets, and preferences, including VST chunk marker, plug-in id, preset name, visible instrument/version text, and package notes.");
+            Row(html, "AI model / Ollama", "Ollama manifests and content-addressed blobs plus GGUF model files, including model tag, manifest media type, referenced layers, model family/type, GGUF version, tensor count, metadata key count, and visible metadata keys.");
+            Row(html, "Spitfire Audio", "Spitfire Audio library files such as .spitfire, .zmulti, .zpreset, .zconfig, .lm, .db, and NKS presets, with inferred library name, folder role, version folder, SQLite catalogue hints, header markers, and visible sample/library strings where available.");
+            Row(html, "Steinberg Cubase", "Cubase, Nuendo, and VST-related extension hints plus readable project clues such as ASIO/VST markers, MIDI edit commands, drum-map names, effects, grooves, fonts, internal markers, and VST FXP/FXB header fields where present.");
+            Row(html, "REAPER project", "REAPER .rpp and .rpp-bak text project files, including header/version, timestamp, tempo, sample rate, track/item/take counts, render target, plug-in markers, and sampled media references where present.");
+            Row(html, "Cakewalk project", "Cakewalk WRK and Cakewalk/Sonar CWP project hints, including visible Cakewalk/Sonar markers, version strings, audio-driver clues, and sampled sample/SoundFont references.");
+            Row(html, "Ableton", "Ableton bundle, song, and preset details, including ZIP entry counts, JSON schema/kind fields, song tempo, scale, melodic layout, and track counts where available.");
+            Row(html, "Synth preset", "Helm synthesizer presets with patch name, category, author, synth version, setting count, and selected musical settings.");
+            Row(html, "Surge wavetable", "Surge wavetable files identified by the vawt marker, with header bytes shown for review without pretending to render oscillator frames.");
+            Row(html, "Neural Amp Modeler", "NAM model JSON details such as model format version, architecture, sample rate when present, and layer count where available.");
+            Row(html, "Drum preset", "Microtonic-style drum preset text fields such as oscillator wave/frequency/decay, noise filter mode, level, and parameter count.");
+            Row(html, "Chord preset", "Text chord preset name, chord count, and first chord rows.");
+            Row(html, "MIDI System Exclusive", "SysEx dump summaries including visible message count, manufacturer, Roland device/model/command fields where applicable, and visible text.");
+            Row(html, "Roland sound data", "Roland SVD sound/backup data, including SVD marker and visible chunk table entries when present.");
+            Row(html, "Roland sequencer song", "Roland SVQ sequencer song marker, visible song name, and header size/offset fields.");
+            Row(html, "Roland sample data", "Roland FA sample waveform marker, payload size field, sample rate, channel count, and format-like fields.");
+            Row(html, "LHA archive", "LHA/LZH archive method and first entry name, useful for old Amiga, DOS, and module-collection archives.");
+            Row(html, "Tracker module", "MOD, XM, S3M, and IT tracker module hints such as title, signature, song length, and tracker-specific header fields where available.");
+            Row(html, "MOGG multitrack audio", "MOGG multitrack Ogg hints, including Ogg payload offset and prefix size.");
+            Row(html, "Sampler instrument", "SFZ and Logic EXS sampler instrument hints, including SFZ region counts and visible referenced sample names.");
+            Row(html, "FMOD bank", "FMOD bank hints for RIFF/FEV-style game-audio banks.");
+            Row(html, "Wwise media", "Wwise WEM media hints, including RIFF/WAVE framing, channels, sample rate, and format code where visible.");
+            Row(html, "Python bytecode", "PYC magic number, flags, timestamp/hash invalidation mode, source timestamp, and source size where available.");
+            Row(html, "WebAssembly", "WASM version and visible section names and sizes.");
+            Row(html, "Chromium resource pack", "Chromium/Electron .pak version, text encoding, resource count, and alias count where available.");
+            Row(html, "MSG structured storage", "Outlook or installer/resource message container hints when .msg files use OLE structured storage.");
+            Row(html, "Microsoft Cabinet archive", "CAB and Windows setup-compressed files such as .DL_, .EX_, and .SY_, including cabinet version, file/folder counts, flags, set/index fields, and visible stored file names.");
+            Row(html, "Windows imaging", "WIM and ESD deployment images, including header size, raw version, image count, part count, compression chunk size, decoded compression flags, and common use.");
+            Row(html, "Nero disc image", "Nero Burning ROM .nrg disc images, including footer marker, chunk table offset, and visible trailer chunks where present.");
+            Row(html, "Symbian package", "Symbian SIS/SISX installer headers, including package UID fields, UID checksum, selected header fields, zlib stream hint, and visible package strings.");
+            Row(html, "Symbian app/resource", "Installed Symbian OS application and resource files such as .app, .aif, .rsc, .mbm, .mif, and .mdl, including folder role, UID-like header fields, item name, and visible strings where useful.");
+            Row(html, "Java MIDlet", "Java ME MIDlet .jad descriptors and installed MIDlet JARs, including name, version, vendor, JAR path/size, Java ME profile/configuration, and listed MIDlet entries where present.");
+            Row(html, "Firmware / device image", "PC BIOS/UEFI, MSI-style BIOS filenames, Roland SRX/FA expansion images, and Roland screen-saver/movie data from headers, filenames, and visible strings.");
             Row(html, "UFS sample library container", "UFS marker and extension details for UVI/Falcon-style sample-library containers.");
-            Row(html, "Binary blob", "Generic .blob extension details plus visible family hints when the header contains recognizable product strings.");
-            Row(html, "Readable text", "Plain extracted strings without byte offsets, intended to be comfortable with screen readers.");
+            Row(html, "Binary blob", "Generic .blob extension details without assigning vendor ownership; product-specific sections such as UJAM or UJAM-style blob provide vendor context when the path or metadata supports it.");
             Row(html, "Printable strings", "Offset-based string findings for forensic detail.");
             Row(html, "Companion tools", "Optional output from tools such as metaflac.exe, opusinfo.exe, or vgmstream-cli.exe when present.");
             html.AppendLine("</tbody></table>");
@@ -283,6 +419,7 @@ namespace FileDentify
             html.AppendLine("<ul>");
             html.AppendLine("<li>Automation controls whether FileDentify is installed in the Windows Send To menu and whether a FileDentify shortcut is present on the desktop.</li>");
             html.AppendLine("<li>Updates controls GitHub release checks and quiet update installation. New installs check at startup by default; this can be changed to hourly, daily, weekly, or never.</li>");
+            html.AppendLine("<li>Tree section order is stored in <code>FileDentify.ini</code> after using <code>Ctrl+Up</code> or <code>Ctrl+Down</code> on report sections.</li>");
             html.AppendLine("</ul>");
         }
 
@@ -320,6 +457,7 @@ namespace FileDentify
             Credit(html, "MSYS2", "https://www.msys2.org/", "and MSYS2 Packages", "https://packages.msys2.org/", "for the embedded Windows build of file/libmagic");
             Credit(html, "mingw-w64-x86_64-file", "https://packages.msys2.org/package/mingw-w64-x86_64-file", "", "", "the embedded file/libmagic package");
             Credit(html, "libsystre", "https://packages.msys2.org/package/mingw-w64-x86_64-libsystre", "libtre, gettext runtime/libintl, and libiconv", "https://packages.msys2.org/", "bundled as runtime dependencies for the embedded file/libmagic build");
+            Credit(html, "Tolk screen-reader library", "https://github.com/dkager/tolk", "and NVDA controller client", "https://github.com/nvaccess/nvda", "for optional screen-reader announcements");
             Credit(html, "FFmpeg ffprobe", "https://ffmpeg.org/ffprobe.html", "", "", "used when ffprobe.exe is beside FileDentify for richer media metadata");
             Credit(html, "FLAC/metaflac", "https://xiph.org/flac/", "", "", "used when metaflac.exe is beside FileDentify for FLAC stream information");
             Credit(html, "Opus tools/opusinfo", "https://opus-codec.org/", "", "", "used when opusinfo.exe is beside FileDentify for Opus/Ogg information");
@@ -331,7 +469,7 @@ namespace FileDentify
         private static void License(StringBuilder html)
         {
             html.AppendLine("<h2 id=\"license\">License</h2>");
-            html.AppendLine("<p>The main FileDentify application is intended to be released under the MIT License. Bundled third-party components have their own notices under Help &gt; Third-party notices.</p>");
+            html.AppendLine("<p>The main FileDentify application is released under the MIT License. Bundled third-party components have their own notices under Help &gt; Third-party notices.</p>");
         }
 
         private static void Link(StringBuilder html, string id, string text)
@@ -342,6 +480,11 @@ namespace FileDentify
         private static void Row(StringBuilder html, string left, string right)
         {
             html.AppendLine("<tr><td><code>" + Html(left) + "</code></td><td>" + Html(right) + "</td></tr>");
+        }
+
+        private static void SupportedRow(StringBuilder html, string family, string examples, string details)
+        {
+            html.AppendLine("<tr><td>" + Html(family) + "</td><td><code>" + Html(examples) + "</code></td><td>" + Html(details) + "</td></tr>");
         }
 
         private static void Credit(StringBuilder html, string name, string url, string secondName, string secondUrl, string purpose)

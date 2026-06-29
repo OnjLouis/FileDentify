@@ -47,7 +47,7 @@ When closing or replying to issues after a release:
 - state deliberate scope boundaries honestly when a related idea was deferred;
 - close only after the release or release asset containing the fix is actually live.
 
-For FileDentify 1.1, issue-closing comments should follow the NVDASync style. Issue 2 may also mention the SendTo project when relevant, because FileDentify ships as part of that workflow as well as its own portable app.
+Issue-closing comments should follow the NVDASync style. When relevant, mention the SendTo Project because FileDentify ships as part of that workflow as well as its own portable app.
 
 ## Repository And Project URL
 
@@ -131,9 +131,10 @@ The release ZIP should be clean and portable. It should include only files users
 
 - `FileDentify.exe`
 - `fd.com`
-- `README.md`
 - `LICENSE.txt`, if present
 - third-party notices, if release packaging keeps them as a separate file in addition to the embedded Help menu
+
+Do not ship `README.md` in the portable ZIP. The built-in manual is the user documentation source of truth, and the updater removes an old installed `README.md` so users moving from 1.2 or earlier do not keep stale documentation.
 
 It must not include:
 
@@ -150,6 +151,8 @@ It must not include:
 
 The updater searches the release ZIP for `FileDentify.exe`, so the ZIP can either contain files at the root or inside one top-level folder. Include `fd.com` beside `FileDentify.exe`; terminal mode depends on both files living in the same folder, and the updater rejects ZIP files that do not contain both files together.
 
+After publishing the GitHub release asset, extract the previous public portable build into a temporary folder with update checking enabled, run its updater path, and confirm it updates to the newly published version. This is a release blocker: if the previous build cannot update cleanly, pull or replace the release asset, fix the updater/package, and publish again. Confirm the updated folder contains `FileDentify.exe`, `fd.com`, and `LICENSE.txt`, and does not retain an old `README.md`.
+
 ## Local Backup Copies
 
 After each public release or release-asset refresh, mirror the convention used by Clipman and Sensor Readout:
@@ -163,11 +166,11 @@ After each public release or release-asset refresh, mirror the convention used b
 - Create `Source Snapshots\FileDentify-source-<version>.zip` from the released git tree, normally with `git archive`, not from untracked working files.
 - Source snapshots must not include `.git`, `release`, `FileDentify.ini`, startup error logs, token files, or other runtime/private artifacts.
 
-For version `1.1.1`, the expected backup artifacts are:
+For a released version, the expected backup artifacts are:
 
 ```text
-<backup-root>\FileDentify\Program Builds\FileDentify-1.1.1.zip
-<backup-root>\FileDentify\Source Snapshots\FileDentify-source-1.1.1.zip
+<backup-root>\FileDentify\Program Builds\FileDentify-<version>.zip
+<backup-root>\FileDentify\Source Snapshots\FileDentify-source-<version>.zip
 ```
 
 ## Embedded Third-party Components

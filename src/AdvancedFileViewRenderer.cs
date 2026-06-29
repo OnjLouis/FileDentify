@@ -103,6 +103,10 @@ namespace FileDentify
 
         private static string RenderReadable(byte[] data)
         {
+            var structured = RenderStructuredText(data);
+            if (!string.IsNullOrWhiteSpace(structured))
+                return structured;
+
             var candidates = new List<ReadableCandidate>();
             var seen = new HashSet<string>(StringComparer.Ordinal);
             AddReadable(candidates, seen, ExtractAsciiStrings(data, 4), false, 10000);
@@ -116,6 +120,117 @@ namespace FileDentify
                 .ThenBy(candidate => candidate.Order)
                 .Select(candidate => candidate.Value)
                 .ToArray());
+        }
+
+        private static string RenderStructuredText(byte[] data)
+        {
+            var text = DecodeLikelyUtf8Text(data);
+            if (string.IsNullOrWhiteSpace(text))
+                return string.Empty;
+
+            var trimmed = text.Trim();
+            if (trimmed.Length < 2)
+                return string.Empty;
+
+            if ((trimmed[0] == '{' && trimmed[trimmed.Length - 1] == '}') ||
+                (trimmed[0] == '[' && trimmed[trimmed.Length - 1] == ']'))
+                return PrettyPrintJsonLikeText(trimmed);
+
+            return string.Empty;
+        }
+
+        private static string DecodeLikelyUtf8Text(byte[] data)
+        {
+            if (data == null || data.Length == 0)
+                return string.Empty;
+
+            var offset = data.Length >= 3 && data[0] == 0xEF && data[1] == 0xBB && data[2] == 0xBF ? 3 : 0;
+            var suspicious = 0;
+            for (var i = offset; i < data.Length; i++)
+            {
+                var b = data[i];
+                if (b == 0 || (b < 9) || (b > 13 && b < 32))
+                    suspicious++;
+            }
+            if (suspicious > Math.Max(8, data.Length / 20))
+                return string.Empty;
+
+            try
+            {
+                var utf8 = new UTF8Encoding(false, true);
+                return utf8.GetString(data, offset, data.Length - offset);
+            }
+            catch (DecoderFallbackException)
+            {
+                return string.Empty;
+            }
+        }
+
+        private static string PrettyPrintJsonLikeText(string text)
+        {
+            var sb = new StringBuilder();
+            var indent = 0;
+            var inString = false;
+            var escaped = false;
+
+            for (var i = 0; i < text.Length; i++)
+            {
+                var ch = text[i];
+                if (inString)
+                {
+                    sb.Append(ch);
+                    if (escaped)
+                    {
+                        escaped = false;
+                    }
+                    else if (ch == '\\')
+                    {
+                        escaped = true;
+                    }
+                    else if (ch == '"')
+                    {
+                        inString = false;
+                    }
+                    continue;
+                }
+
+                switch (ch)
+                {
+                    case '"':
+                        inString = true;
+                        sb.Append(ch);
+                        break;
+                    case '{':
+                    case '[':
+                        sb.Append(ch);
+                        AppendNewJsonLine(sb, ++indent);
+                        break;
+                    case '}':
+                    case ']':
+                        AppendNewJsonLine(sb, Math.Max(0, --indent));
+                        sb.Append(ch);
+                        break;
+                    case ',':
+                        sb.Append(ch);
+                        AppendNewJsonLine(sb, indent);
+                        break;
+                    case ':':
+                        sb.Append(": ");
+                        break;
+                    default:
+                        if (!char.IsWhiteSpace(ch))
+                            sb.Append(ch);
+                        break;
+                }
+            }
+
+            return sb.ToString().TrimEnd();
+        }
+
+        private static void AppendNewJsonLine(StringBuilder sb, int indent)
+        {
+            sb.AppendLine();
+            sb.Append(new string(' ', Math.Max(0, indent) * 2));
         }
 
         private static void AddReadable(List<ReadableCandidate> candidates, HashSet<string> seen, IEnumerable<string> values, bool preferStructuredText, int max)

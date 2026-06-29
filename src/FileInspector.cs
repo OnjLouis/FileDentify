@@ -23,9 +23,13 @@ namespace FileDentify
 
         public static FileReport Inspect(string path)
         {
+            if (Directory.Exists(path) && IsReportableDirectoryPackage(path))
+                return InspectDirectoryPackage(path);
+
             var file = new FileInfo(path);
             var report = new FileReport();
             report.DisplayName = file.Name;
+            report.OriginalPath = file.FullName;
 
             byte[] header = ReadPrefix(path, HeaderReadSize);
             byte[] stringSample = header.Length >= StringReadSize ? header : ReadPrefix(path, StringReadSize);
@@ -43,6 +47,7 @@ namespace FileDentify
             Add(summary, "Extension", string.IsNullOrEmpty(file.Extension) ? "(none)" : file.Extension);
             Add(summary, "Modified", file.LastWriteTime.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture));
             Add(summary, "Created", file.CreationTime.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture));
+            AddReadableTextInfo(sections, displayStringSample);
             AddFilesystemInfo(sections, file);
             AddWindowsPropertyMetadata(sections, path);
             AddDmgInfo(sections, path, file.Length);
@@ -53,6 +58,7 @@ namespace FileDentify
             if (signatures.Items.Count == 0)
                 Add(signatures, "No common signature match", "The first bytes do not match the built-in signature list.");
             AddLibmagicInfo(sections, libmagic);
+            AddSafetyHintInfo(sections, path, header);
 
             var hashes = AddSection(sections, "Hashes");
             AddHashInfo(hashes, path, file.Length);
@@ -73,27 +79,42 @@ namespace FileDentify
             AddFontInfo(sections, header);
             AddOleCompoundInfo(sections, path, header);
             AddCompressedStreamInfo(sections, header);
+            AddCabinetInfo(sections, path, header);
+            AddWindowsImageInfo(sections, path, header);
             AddIso9660Info(sections, path, header);
+            AddNeroImageInfo(sections, path, file.Length);
             AddVirtualDiskInfo(sections, path, header, file.Length);
             AddMozillaLz4Info(sections, header);
             AddUfsInfo(sections, path, header);
             AddBlobInfo(sections, path, header);
             AddClipmanInfo(sections, path, stringSample, file.Length);
+            AddSavedReportInfo(sections, path, header);
+            AddDeveloperFormatInfo(sections, path, header);
+            AddBackupConfigInfo(sections, path, header, stringSample, file.Length);
+            AddLegacySoundBankInfo(sections, path, header, stringSample, file.Length);
+            AddSymbianPackageInfo(sections, path, header);
+            AddSymbianAppResourceInfo(sections, path, header, stringSample, file.Length);
+            AddJavaMidletInfo(sections, path, header, file.Length);
+            AddFirmwareInfo(sections, path, header, file.Length);
             AddNativeInstrumentsInfo(sections, path, stringSample);
             AddSteinbergCubaseInfo(sections, path, stringSample);
+            AddAppleFormatInfo(sections, path, header);
+            AddMacAudioPluginInfo(sections, path, header);
+            AddRolandCloudInfo(sections, path, header, stringSample, file.Length);
+            AddSampleLibraryInfo(sections, path, header, stringSample, file.Length);
+            AddMusicProjectFormatInfo(sections, path, header, stringSample, file.Length);
             AddGameFileInfo(sections, path, header);
             AddPropertyListInfo(sections, header);
             AddSqliteInfo(sections, header);
             AddRarInfo(sections, header);
             AddIsoBmffInfo(sections, header);
-            AddRiffInfo(sections, header);
+            AddRiffInfo(sections, path, header, file.Length);
             AddIffInfo(sections, header);
             AddMidiInfo(sections, header);
             AddAudioHeaderInfo(sections, path, header, file.Length);
             AddMobilePhoneToneInfo(sections, path, header);
 
             var foundStrings = FindAsciiStrings(displayStringSample, 4, 40);
-            AddReadableTextInfo(sections, displayStringSample);
 
             var strings = AddSection(sections, "Printable strings");
             if (foundStrings.Count == 0)

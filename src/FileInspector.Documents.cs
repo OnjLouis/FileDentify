@@ -190,7 +190,6 @@ namespace FileDentify
                 case "opus":
                 case "mid":
                 case "midi":
-                case "epub":
                     return true;
                 default:
                     return false;
@@ -716,12 +715,18 @@ namespace FileDentify
                 case ".ott": return "OpenDocument text template";
                 case ".ots": return "OpenDocument spreadsheet template";
                 case ".otp": return "OpenDocument presentation template";
+                case ".epub": return "EPUB ebook";
+                case ".apk": return "Android application package";
+                case ".ipa": return "iOS application archive";
+                case ".ipsw": return "Apple device firmware restore package";
             }
 
             try
             {
                 using (var archive = ZipFile.OpenRead(path))
                 {
+                    if (IsEpubArchive(archive))
+                        return "EPUB ebook";
                     if (archive.GetEntry("[Content_Types].xml") != null)
                         return OfficeOpenXmlTypeName(archive) ?? "Office Open XML package";
                     if (archive.GetEntry("META-INF/manifest.xml") != null && archive.GetEntry("meta.xml") != null)
@@ -748,6 +753,10 @@ namespace FileDentify
                         AddOfficeOpenXmlMetadata(sections, archive);
                     if (archive.GetEntry("META-INF/manifest.xml") != null || archive.GetEntry("meta.xml") != null)
                         AddOpenDocumentMetadata(sections, archive);
+                    if (IsEpubArchive(archive))
+                        AddEpubMetadata(sections, archive);
+                    if (string.Equals(Path.GetExtension(path), ".apk", StringComparison.OrdinalIgnoreCase))
+                        AddAndroidApkMetadata(sections, path, archive);
                 }
             }
             catch (Exception ex)
@@ -808,6 +817,172 @@ namespace FileDentify
 
             if (section.Items.Count == 2)
                 Add(section, "Metadata", "No core, application, or custom document property values were found.");
+        }
+
+        private static bool IsEpubArchive(ZipArchive archive)
+        {
+            var mimetype = archive.GetEntry("mimetype");
+            if (mimetype == null || mimetype.Length > 200)
+                return false;
+            return string.Equals(ReadZipEntryText(mimetype, 512).Trim(), "application/epub+zip", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static void AddEpubMetadata(List<ReportSection> sections, ZipArchive archive)
+        {
+            var section = AddSection(sections, "EPUB ebook");
+            Add(section, "Container", "EPUB / Open Container Format ZIP package");
+            Add(section, "MIME type", "application/epub+zip");
+
+            var container = ReadZipXml(archive, "META-INF/container.xml");
+            var opfPath = FindEpubOpfPath(container);
+            if (!string.IsNullOrWhiteSpace(opfPath))
+                Add(section, "OPF package path", opfPath);
+
+            var opf = string.IsNullOrWhiteSpace(opfPath) ? null : ReadZipXml(archive, opfPath);
+            if (opf != null)
+            {
+                AddFirstXmlText(section, opf, "Title", "title");
+                AddFirstXmlText(section, opf, "Creator", "creator");
+                AddFirstXmlText(section, opf, "Language", "language");
+                AddFirstXmlText(section, opf, "Identifier", "identifier");
+                AddFirstXmlText(section, opf, "Publisher", "publisher");
+                AddFirstXmlText(section, opf, "Date", "date");
+                AddFirstXmlText(section, opf, "Description", "description");
+
+                var manifestItems = CountXmlElements(opf, "item");
+                var spineItems = CountXmlElements(opf, "itemref");
+                if (manifestItems > 0)
+                    Add(section, "Manifest items", manifestItems.ToString(CultureInfo.InvariantCulture));
+                if (spineItems > 0)
+                    Add(section, "Reading-order items", spineItems.ToString(CultureInfo.InvariantCulture));
+            }
+
+            var htmlEntries = archive.Entries.Count(e => HasAnyExtension(e.FullName, ".xhtml", ".html", ".htm"));
+            var imageEntries = archive.Entries.Count(e => HasAnyExtension(e.FullName, ".jpg", ".jpeg", ".png", ".gif", ".svg", ".webp"));
+            var audioEntries = archive.Entries.Count(e => HasAnyExtension(e.FullName, ".mp3", ".m4a", ".ogg", ".oga", ".wav"));
+            var fontEntries = archive.Entries.Count(e => HasAnyExtension(e.FullName, ".ttf", ".otf", ".woff", ".woff2"));
+            Add(section, "ZIP entries", archive.Entries.Count.ToString(CultureInfo.InvariantCulture));
+            if (htmlEntries > 0)
+                Add(section, "HTML/XHTML entries", htmlEntries.ToString(CultureInfo.InvariantCulture));
+            if (imageEntries > 0)
+                Add(section, "Image entries", imageEntries.ToString(CultureInfo.InvariantCulture));
+            if (audioEntries > 0)
+                Add(section, "Audio entries", audioEntries.ToString(CultureInfo.InvariantCulture));
+            if (fontEntries > 0)
+                Add(section, "Font entries", fontEntries.ToString(CultureInfo.InvariantCulture));
+        }
+
+        private static string FindEpubOpfPath(XmlDocument container)
+        {
+            if (container == null)
+                return string.Empty;
+            foreach (XmlElement element in container.GetElementsByTagName("*"))
+            {
+                if (!string.Equals(element.LocalName, "rootfile", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                var value = element.GetAttribute("full-path");
+                if (!string.IsNullOrWhiteSpace(value))
+                    return value.Replace('\\', '/');
+            }
+            return string.Empty;
+        }
+
+        private static int CountXmlElements(XmlDocument document, string localName)
+        {
+            var count = 0;
+            foreach (XmlElement element in document.GetElementsByTagName("*"))
+                if (string.Equals(element.LocalName, localName, StringComparison.OrdinalIgnoreCase))
+                    count++;
+            return count;
+        }
+
+        private static bool HasAnyExtension(string path, params string[] extensions)
+        {
+            foreach (var extension in extensions)
+                if (path.EndsWith(extension, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            return false;
+        }
+
+        private static void AddAndroidApkMetadata(List<ReportSection> sections, string path, ZipArchive archive)
+        {
+            var section = AddSection(sections, "Android APK");
+            Add(section, "Container", "Android application package / ZIP-compatible container");
+            Add(section, "APK kind", AndroidApkKind(Path.GetFileNameWithoutExtension(path) ?? string.Empty, archive));
+            Add(section, "ZIP entries", archive.Entries.Count.ToString(CultureInfo.InvariantCulture));
+
+            var hasManifest = archive.GetEntry("AndroidManifest.xml") != null;
+            Add(section, "AndroidManifest.xml", hasManifest ? "Present" : "Not found");
+
+            var dexCount = archive.Entries.Count(e => e.FullName.EndsWith(".dex", StringComparison.OrdinalIgnoreCase));
+            var nativeAbiNames = archive.Entries
+                .Where(e => e.FullName.StartsWith("lib/", StringComparison.OrdinalIgnoreCase))
+                .Select(e => FirstPathPartAfter(e.FullName, "lib/"))
+                .Where(v => !string.IsNullOrWhiteSpace(v))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(v => v, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            var assetPackCount = archive.Entries.Count(e => e.FullName.StartsWith("assets/", StringComparison.OrdinalIgnoreCase));
+            var resourceCount = archive.Entries.Count(e => e.FullName.StartsWith("res/", StringComparison.OrdinalIgnoreCase));
+
+            if (dexCount > 0)
+                Add(section, "DEX files", dexCount.ToString(CultureInfo.InvariantCulture));
+            if (nativeAbiNames.Length > 0)
+                Add(section, "Native ABI folders", string.Join("\r\n", nativeAbiNames));
+            if (resourceCount > 0)
+                Add(section, "Resource entries", resourceCount.ToString(CultureInfo.InvariantCulture));
+            if (assetPackCount > 0)
+                Add(section, "Asset entries", assetPackCount.ToString(CultureInfo.InvariantCulture));
+
+            var name = Path.GetFileNameWithoutExtension(path) ?? string.Empty;
+            var packageGuess = GuessAndroidPackageName(name);
+            if (!string.IsNullOrWhiteSpace(packageGuess))
+                Add(section, "Package name from filename", packageGuess);
+            var splitGuess = GuessAndroidSplitName(name);
+            if (!string.IsNullOrWhiteSpace(splitGuess))
+                Add(section, "Split name from filename", splitGuess);
+
+            Add(section, "Parsing note", "AndroidManifest.xml is usually binary XML. FileDentify reports safe container-level APK evidence without decoding private app contents.");
+        }
+
+        private static string AndroidApkKind(string baseName, ZipArchive archive)
+        {
+            if (baseName.IndexOf("_split_", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                baseName.IndexOf("_split_config.", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                archive.GetEntry("classes.dex") == null)
+                return "Split APK or configuration APK";
+            return "Base APK";
+        }
+
+        private static string FirstPathPartAfter(string value, string prefix)
+        {
+            if (string.IsNullOrEmpty(value) || !value.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                return string.Empty;
+            var rest = value.Substring(prefix.Length);
+            var slash = rest.IndexOf('/');
+            return slash <= 0 ? string.Empty : rest.Substring(0, slash);
+        }
+
+        private static string GuessAndroidPackageName(string baseName)
+        {
+            var splitIndex = baseName.IndexOf("_split_", StringComparison.OrdinalIgnoreCase);
+            if (splitIndex > 0)
+                return baseName.Substring(0, splitIndex);
+            var configIndex = baseName.IndexOf("_split_config.", StringComparison.OrdinalIgnoreCase);
+            if (configIndex > 0)
+                return baseName.Substring(0, configIndex);
+            return baseName.IndexOf('.') > 0 ? baseName : string.Empty;
+        }
+
+        private static string GuessAndroidSplitName(string baseName)
+        {
+            var splitIndex = baseName.IndexOf("_split_", StringComparison.OrdinalIgnoreCase);
+            if (splitIndex >= 0)
+                return baseName.Substring(splitIndex + "_split_".Length);
+            var configIndex = baseName.IndexOf("_split_config.", StringComparison.OrdinalIgnoreCase);
+            if (configIndex >= 0)
+                return "config." + baseName.Substring(configIndex + "_split_config.".Length);
+            return string.Empty;
         }
 
         private static void AddOpenDocumentMetadata(List<ReportSection> sections, ZipArchive archive)

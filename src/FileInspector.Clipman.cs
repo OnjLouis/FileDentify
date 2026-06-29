@@ -304,6 +304,7 @@ namespace FileDentify
 
         private static string TryReadClipmanCompressedJson(string path)
         {
+            const int MaxDecompressedChars = 32 * 1024 * 1024;
             try
             {
                 using (var file = File.Open(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
@@ -319,13 +320,28 @@ namespace FileDentify
 
                     using (var gzip = new GZipStream(file, CompressionMode.Decompress))
                     using (var reader = new StreamReader(gzip, Encoding.UTF8))
-                        return reader.ReadToEnd();
+                        return ReadTextWithLimit(reader, MaxDecompressedChars);
                 }
             }
             catch
             {
                 return null;
             }
+        }
+
+        private static string ReadTextWithLimit(TextReader reader, int maxChars)
+        {
+            var buffer = new char[8192];
+            var builder = new StringBuilder();
+            while (builder.Length < maxChars)
+            {
+                var wanted = Math.Min(buffer.Length, maxChars - builder.Length);
+                var read = reader.Read(buffer, 0, wanted);
+                if (read <= 0)
+                    break;
+                builder.Append(buffer, 0, read);
+            }
+            return builder.ToString();
         }
 
         private static bool IsClipmanJsonFile(string path, byte[] header)

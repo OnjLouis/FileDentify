@@ -39,8 +39,20 @@ namespace FileDentify
 
         private static void AddSteinbergCubaseInfo(List<ReportSection> sections, string path, byte[] data)
         {
+            var ext = Path.GetExtension(path).ToLowerInvariant();
+            if (ext == ".wrk" || ext == ".cwp" || ext == ".rpp" || ext == ".rpp-bak")
+                return;
+
             var type = SteinbergCubaseTypeName(path);
             var strings = FindReadableTextLines(data, 3, 500);
+            if (type == null && BackupConfigTypeName(path, data) != null)
+                return;
+            if (strings.Any(s =>
+                s.IndexOf("CAKEWALK", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                s.IndexOf("Cakewalk", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                s.IndexOf("SONAR", StringComparison.OrdinalIgnoreCase) >= 0))
+                return;
+
             var hasSteinbergText = strings.Any(s =>
                 s.IndexOf("Cubase", StringComparison.OrdinalIgnoreCase) >= 0 ||
                 s.IndexOf("Nuendo", StringComparison.OrdinalIgnoreCase) >= 0 ||
@@ -56,6 +68,8 @@ namespace FileDentify
             Add(section, "Detection basis", type != null ? "Known Steinberg/Cubase-related extension, plus sampled readable strings where available." : "Steinberg/Cubase-related readable strings found in sampled data.");
             Add(section, "Compatibility note", ".all and .arr are classic Cubase song/arrangement formats. They usually need an old Cubase conversion path before modern Cubase project formats can use them.");
 
+            AddVstPresetHeaderInfo(section, path, data);
+
             AddCategory(section, "Driver or audio system strings", strings, "ASIO", "DirectX", "MME", "MIDI", "VST");
             AddCategory(section, "Cubase or Steinberg markers", strings, "Cubase", "Nuendo", "Steinberg", "VST", "ASIO");
             AddCategory(section, "MIDI edit commands", strings, "Delete Notes", "DelShrtNotes", "Random Notes", "Fix Velocity", "Random Velo", "FadeOutVelo", "Push Forward", "Push Back", "Double Tempo", "Half Tempo");
@@ -70,6 +84,27 @@ namespace FileDentify
                 Add(section, "Internal marker preview", string.Join("\r\n", markers));
 
             Add(section, "Notes", "Steinberg project formats are proprietary. FileDentify reports extension-level identity and readable project clues from sampled strings, not a full project parse.");
+        }
+
+        private static void AddVstPresetHeaderInfo(ReportSection section, string path, byte[] data)
+        {
+            var ext = Path.GetExtension(path).ToLowerInvariant();
+            if (ext != ".fxp" && ext != ".fxb")
+                return;
+            if (data.Length < 60 || Encoding.ASCII.GetString(data, 0, 4) != "CcnK")
+                return;
+
+            Add(section, "VST chunk marker", "CcnK");
+            var chunkSize = ReadUInt32BigEndian(data, 4);
+            if (chunkSize > 0)
+                Add(section, "VST chunk size", FormatBytes(chunkSize));
+            Add(section, "VST preset kind", Encoding.ASCII.GetString(data, 8, 4));
+            Add(section, "VST version", ReadUInt32BigEndian(data, 12).ToString(CultureInfo.InvariantCulture));
+            Add(section, "Plugin id", Encoding.ASCII.GetString(data, 16, 4));
+            Add(section, "Plugin version", ReadUInt32BigEndian(data, 20).ToString(CultureInfo.InvariantCulture));
+            var programName = ReadFixedAscii(data, 28, 28);
+            if (!string.IsNullOrWhiteSpace(programName))
+                Add(section, "Program name", programName);
         }
 
         private static void AddCategory(ReportSection section, string title, List<string> strings, params string[] needles)

@@ -23,16 +23,16 @@ using System.Windows.Forms;
 [assembly: AssemblyProduct("FileDentify")]
 [assembly: AssemblyCopyright("Copyright (c) Andre Louis")]
 [assembly: AssemblyTrademark("")]
-[assembly: AssemblyVersion("1.2.0.0")]
-[assembly: AssemblyFileVersion("1.2.0.0")]
-[assembly: AssemblyInformationalVersion("1.2")]
+[assembly: AssemblyVersion("1.3.0.0")]
+[assembly: AssemblyFileVersion("1.3.0.0")]
+[assembly: AssemblyInformationalVersion("1.3")]
 
 namespace FileDentify
 {
     internal static class Program
     {
         private const string ConsoleStubEnvironmentVariable = "FILEDENTIFY_CONSOLE_STUB";
-        public const string Version = "1.2";
+        public const string Version = "1.3";
         public const string ProjectUrl = "https://github.com/OnjLouis/FileDentify";
 
         [STAThread]
@@ -45,13 +45,22 @@ namespace FileDentify
 
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
+                Application.ApplicationExit += delegate { ScreenReaderOutput.Shutdown(); };
                 Application.Run(new MainForm(args));
             }
             catch (Exception ex)
             {
-                try { File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "FileDentify-startup-error.txt"), ex.ToString(), Encoding.UTF8); }
-                catch { }
-                MessageBox.Show(ex.Message, "FileDentify startup error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                if (IsConsoleCompanionExecutable() || IsLaunchedByConsoleStub() || Console.IsOutputRedirected || Console.IsErrorRedirected)
+                {
+                    Console.Error.WriteLine("FileDentify error: " + ex.Message);
+                    Environment.ExitCode = 1;
+                }
+                else
+                {
+                    try { File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "FileDentify-startup-error.txt"), ex.ToString(), Encoding.UTF8); }
+                    catch { }
+                    MessageBox.Show(ex.Message, "FileDentify startup error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
             }
         }
 
@@ -121,6 +130,22 @@ namespace FileDentify
                     DesktopShortcutInstaller.SetInstalled(false);
                     var settings = AppSettings.Load();
                     settings.DesktopShortcutEnabled = false;
+                    settings.Save();
+                    return true;
+                }
+                else if (IsSwitch(arg, "--install-report-association", "-ir"))
+                {
+                    FileAssociationInstaller.SetInstalled(true);
+                    var settings = AppSettings.Load();
+                    settings.FileAssociationEnabled = true;
+                    settings.Save();
+                    return true;
+                }
+                else if (IsSwitch(arg, "--uninstall-report-association", "-ur"))
+                {
+                    FileAssociationInstaller.SetInstalled(false);
+                    var settings = AppSettings.Load();
+                    settings.FileAssociationEnabled = false;
                     settings.Save();
                     return true;
                 }
@@ -212,6 +237,7 @@ namespace FileDentify
                 var existing = files.Where(File.Exists).ToArray();
                 if (existing.Length == 0)
                     throw new InvalidOperationException("No readable files were supplied for the advanced viewer output.");
+                EnsureOutputDoesNotOverwriteInput(viewerOutputPath, existing);
                 var output = BuildAdvancedViewerOutput(existing, viewerMode, viewerBytes);
                 if (viewerStdout)
                     Console.WriteLine(output);
@@ -223,9 +249,10 @@ namespace FileDentify
 
             if (!string.IsNullOrWhiteSpace(reportPath))
             {
-                var existing = files.Where(File.Exists).ToArray();
+                var existing = files.Where(path => File.Exists(path) || FileInspector.IsReportableDirectoryPackage(path)).ToArray();
                 if (existing.Length == 0)
                     throw new InvalidOperationException("No readable files were supplied for the report.");
+                EnsureOutputDoesNotOverwriteInput(reportPath, existing);
                 WriteReport(reportPath, existing, forceHtmlReport);
                 Environment.Exit(0);
                 return true;
@@ -235,10 +262,10 @@ namespace FileDentify
             {
                 var targets = CollectFolderReportTargets(files)
                     .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .OrderBy(path => path, NaturalPathComparer.Instance)
                     .ToArray();
                 if (targets.Length == 0)
                     throw new InvalidOperationException("No readable files were found for the folder report.");
+                EnsureOutputDoesNotOverwriteInput(folderReportPath, targets);
                 WriteReport(folderReportPath, targets, false);
                 Environment.Exit(0);
                 return true;
@@ -258,7 +285,10 @@ namespace FileDentify
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
             using (var dialog = new AdvancedFileViewerForm(path))
+            {
+                dialog.ShowInTaskbar = true;
                 dialog.ShowDialog();
+            }
         }
 
         private static IEnumerable<string> CollectFolderReportTargets(IEnumerable<string> inputs)
@@ -273,6 +303,12 @@ namespace FileDentify
 
                 if (!Directory.Exists(input))
                     continue;
+
+                if (FileInspector.IsReportableDirectoryPackage(input))
+                {
+                    yield return Path.GetFullPath(input);
+                    continue;
+                }
 
                 foreach (var file in SafeEnumerateFiles(input))
                     yield return file;
@@ -309,7 +345,7 @@ namespace FileDentify
                 string[] files;
                 try
                 {
-                    files = Directory.GetFiles(directory);
+                    files = Directory.GetFiles(directory).OrderBy(path => path, NaturalPathComparer.Instance).ToArray();
                 }
                 catch
                 {
@@ -322,15 +358,20 @@ namespace FileDentify
                 string[] children;
                 try
                 {
-                    children = Directory.GetDirectories(directory);
+                    children = Directory.GetDirectories(directory).OrderBy(path => path, NaturalPathComparer.Instance).ToArray();
                 }
                 catch
                 {
                     children = new string[0];
                 }
 
-                foreach (var child in children)
-                    pending.Push(child);
+                foreach (var child in children.Reverse())
+                {
+                    if (FileInspector.IsReportableDirectoryPackage(child))
+                        yield return child;
+                    else
+                        pending.Push(child);
+                }
             }
         }
 
@@ -350,11 +391,32 @@ namespace FileDentify
                 }
             }
             stopwatch.Stop();
+            ReportSectionOrdering.Apply(reports, AppSettings.Load().SectionOrder);
 
-            var content = forceHtml || IsHtmlReportPath(reportPath)
-                ? FileInspector.BuildCombinedHtml(reports, "FileDentify report", stopwatch.Elapsed)
-                : FileInspector.BuildCombinedText(reports, stopwatch.Elapsed);
-            File.WriteAllText(reportPath, content, Encoding.UTF8);
+            if (SavedReportStore.IsSavedReportPath(reportPath))
+                SavedReportStore.Save(reportPath, reports, stopwatch.Elapsed);
+            else
+            {
+                var content = forceHtml || IsHtmlReportPath(reportPath)
+                    ? FileInspector.BuildCombinedHtml(reports, "FileDentify report", stopwatch.Elapsed)
+                    : FileInspector.BuildCombinedText(reports, stopwatch.Elapsed);
+                File.WriteAllText(reportPath, content, Encoding.UTF8);
+            }
+        }
+
+        private static void EnsureOutputDoesNotOverwriteInput(string outputPath, IEnumerable<string> inputFiles)
+        {
+            if (string.IsNullOrWhiteSpace(outputPath))
+                return;
+
+            var fullOutputPath = Path.GetFullPath(outputPath);
+            foreach (var input in inputFiles)
+            {
+                if (string.IsNullOrWhiteSpace(input))
+                    continue;
+                if (string.Equals(fullOutputPath, Path.GetFullPath(input), StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidOperationException("Refusing to write output over an input file: " + fullOutputPath);
+            }
         }
 
         private static string BuildAdvancedViewerOutput(IEnumerable<string> files, AdvancedViewMode mode, long maxBytes)
@@ -534,9 +596,11 @@ namespace FileDentify
                 "  FileDentify.exe --uninstall-sendto (-us)" + Environment.NewLine +
                 "  FileDentify.exe --install-desktop (-id)" + Environment.NewLine +
                 "  FileDentify.exe --uninstall-desktop (-ud)" + Environment.NewLine +
+                "  FileDentify.exe --install-report-association (-ir)" + Environment.NewLine +
+                "  FileDentify.exe --uninstall-report-association (-ur)" + Environment.NewLine +
                 "  FileDentify.exe --version (-v)" + Environment.NewLine +
                 "  FileDentify.exe --help (-h)" + Environment.NewLine + Environment.NewLine +
-                "Opening FileDentify.exe with file paths shows the inspection window. --report writes a report without opening the UI. Use .html or --html-report for HTML. --folder-report recursively scans folders into one report. --advanced-view opens the GUI advanced viewer directly. --viewer-output writes advanced viewer output. Use fd.com for interactive terminal paging mode. fd.com and FileDentify.exe must be in the same folder. --close asks other FileDentify windows from the same executable to close.";
+                "Opening FileDentify.exe with file paths shows the inspection window. Opening a .fdreport file reloads a saved FileDentify report. --report writes a report without opening the UI; use .fdreport for a reopenable FileDentify report, or .html/--html-report for HTML. --folder-report recursively scans folders into one report. --advanced-view opens the GUI advanced viewer directly. --viewer-output writes advanced viewer output. Use fd.com for interactive terminal paging mode. fd.com and FileDentify.exe must be in the same folder. --close asks other FileDentify windows from the same executable to close.";
         }
     }
 

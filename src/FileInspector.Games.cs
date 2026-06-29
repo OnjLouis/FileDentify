@@ -33,8 +33,13 @@ namespace FileDentify
             if (header.Length >= 0x104 && Encoding.ASCII.GetString(header, 0x100, 4) == "SEGA") return "Sega Mega Drive/Genesis ROM";
             if (IsNintendo64Rom(header)) return "Nintendo 64 ROM image";
             if (IsGameBoyRom(header)) return ext == ".gba" ? "Game Boy Advance ROM" : "Game Boy/Game Boy Color ROM";
+            if (IsNintendoDsRom(path, header)) return "Nintendo DS ROM image";
+            if (IsSegaMasterSystemOrGameGearRom(header)) return ext == ".gg" ? "Sega Game Gear ROM" : "Sega Master System ROM";
+            if (IsNintendoSwitchNcaConcatSegment(path)) return "Nintendo Switch NCA split content segment";
+            if (IsNintendoSwitchSaveFile(path)) return "Nintendo Switch save data";
             if (LooksLikeUnityAsset(path, header)) return "Unity asset data file";
             if (LooksLikeSteamVdf(path, header)) return ext == ".acf" ? "Steam app manifest" : "Valve Data Format text";
+            if (LooksLikeRolandMt32Rom(path)) return "Roland MT-32/CM-32L ROM image";
 
             switch (ext)
             {
@@ -44,6 +49,7 @@ namespace FileDentify
                 case ".gb": return "Nintendo Game Boy ROM";
                 case ".gbc": return "Nintendo Game Boy Color ROM";
                 case ".gba": return "Nintendo Game Boy Advance ROM";
+                case ".nds": return "Nintendo DS ROM";
                 case ".sfc":
                 case ".smc": return "Super Nintendo / Super Famicom ROM";
                 case ".gen":
@@ -90,6 +96,7 @@ namespace FileDentify
             var section = AddSection(sections, "Game/ROM data");
             Add(section, "Format hint", type);
             Add(section, "Detection basis", GameDetectionBasis(path, header));
+            var hasSpecificSafetyNote = IsNintendoSwitchNcaConcatSegment(path) || IsNintendoSwitchSaveFile(path);
 
             if (StartsWith(header, Encoding.ASCII.GetBytes("NESM\x1A")))
                 AddNsfInfo(section, header);
@@ -97,8 +104,12 @@ namespace FileDentify
                 AddINesInfo(section, header);
             else if (IsGameBoyRom(header))
                 AddGameBoyInfo(section, header);
+            else if (IsNintendoDsRom(path, header))
+                AddNintendoDsInfo(section, header);
             else if (header.Length >= 0x104 && Encoding.ASCII.GetString(header, 0x100, 4) == "SEGA")
                 AddSegaRomInfo(section, header);
+            else if (IsSegaMasterSystemOrGameGearRom(header))
+                AddSegaMasterSystemOrGameGearInfo(section, header);
             else if (IsNintendo64Rom(header))
                 AddNintendo64Info(section, header);
             else if (LooksLikeSnesRom(path, header))
@@ -119,10 +130,17 @@ namespace FileDentify
                 Add(section, "Archive version", ReadAsciiUntil(header, 0, 32).Trim());
             else if (LooksLikeSteamVdf(path, header))
                 AddSteamVdfInfo(section, header);
+            else if (LooksLikeRolandMt32Rom(path))
+                AddRolandMt32RomInfo(section, path);
+            else if (IsNintendoSwitchNcaConcatSegment(path))
+                AddNintendoSwitchNcaSegmentInfo(section, path);
+            else if (IsNintendoSwitchSaveFile(path))
+                AddNintendoSwitchSaveInfo(section, path);
             else if (Path.GetExtension(path).Equals(".ips", StringComparison.OrdinalIgnoreCase))
                 AddIpsInfo(section, header);
 
-            Add(section, "Notes", "FileDentify reports header-level evidence for game files. It does not validate ROM dumps, decrypt game archives, or emulate content.");
+            if (!hasSpecificSafetyNote)
+                Add(section, "Notes", "FileDentify reports header-level evidence for game files. It does not validate ROM dumps, decrypt game archives, or emulate content.");
         }
 
         private static string GameDetectionBasis(string path, byte[] header)
@@ -140,8 +158,86 @@ namespace FileDentify
             if (StartsWith(header, Encoding.ASCII.GetBytes("RPA-"))) parts.Add("RPA marker");
             if (header.Length >= 0x104 && Encoding.ASCII.GetString(header, 0x100, 4) == "SEGA") parts.Add("SEGA header at 0x100");
             if (IsNintendo64Rom(header)) parts.Add("Nintendo 64 boot-code byte order marker");
+            if (IsNintendoDsRom(path, header)) parts.Add("Nintendo DS secure-area/header fields");
+            if (IsSegaMasterSystemOrGameGearRom(header)) parts.Add("TMR SEGA marker");
+            if (IsNintendoSwitchNcaConcatSegment(path)) parts.Add("Nintendo Contents registered .nca.CONCAT segment path");
+            if (IsNintendoSwitchSaveFile(path)) parts.Add("Nintendo save folder path");
             if (LooksLikeUnityAsset(path, header)) parts.Add("Unity version string");
+            if (LooksLikeRolandMt32Rom(path)) parts.Add("Roland MT-32/CM-32L filename");
             return string.Join(", ", parts.ToArray());
+        }
+
+        private static bool LooksLikeRolandMt32Rom(string path)
+        {
+            if (!string.Equals(Path.GetExtension(path), ".rom", StringComparison.OrdinalIgnoreCase))
+                return false;
+            var name = Path.GetFileNameWithoutExtension(path) ?? string.Empty;
+            return name.IndexOf("MT32", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                name.IndexOf("MT-32", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                name.IndexOf("CM32", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                name.IndexOf("CM-32", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static bool IsNintendoSwitchNcaConcatSegment(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+                return false;
+            var parent = Path.GetDirectoryName(path);
+            if (string.IsNullOrWhiteSpace(parent) || !parent.EndsWith(".nca.CONCAT", StringComparison.OrdinalIgnoreCase))
+                return false;
+            var fileName = Path.GetFileName(path);
+            return Regex.IsMatch(fileName ?? string.Empty, "^[0-9]{2}$", RegexOptions.IgnoreCase) &&
+                path.IndexOf("\\Nintendo\\Contents\\registered\\", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static bool IsNintendoSwitchSaveFile(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+                return false;
+            var fileName = Path.GetFileName(path);
+            return Regex.IsMatch(fileName ?? string.Empty, "^[0-9a-f]{16}$", RegexOptions.IgnoreCase) &&
+                path.IndexOf("\\Nintendo\\save\\", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static void AddNintendoSwitchNcaSegmentInfo(ReportSection section, string path)
+        {
+            var packageDir = Path.GetDirectoryName(path);
+            var shardDir = Path.GetFileName(Path.GetDirectoryName(packageDir ?? string.Empty));
+            Add(section, "Container family", "Nintendo Switch registered content");
+            Add(section, "Package folder", Path.GetFileName(packageDir));
+            Add(section, "Shard folder", shardDir);
+            Add(section, "Segment number", Path.GetFileName(path));
+            Add(section, "Segment size", FormatBytes(SafeLength(path)));
+
+            if (!string.IsNullOrWhiteSpace(packageDir) && Directory.Exists(packageDir))
+            {
+                var segments = Directory.GetFiles(packageDir)
+                    .OrderBy(file => Path.GetFileName(file), StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
+                Add(section, "Segments in package", segments.Length.ToString(CultureInfo.InvariantCulture));
+                Add(section, "Package sampled size", FormatBytes(segments.Sum(segment => SafeLength(segment))));
+            }
+
+            Add(section, "Notes", "NCA content is normally encrypted and may be split into numbered .nca.CONCAT segments on console storage. FileDentify reports path and size evidence only; it does not decrypt, join, validate, or extract the content.");
+        }
+
+        private static void AddNintendoSwitchSaveInfo(ReportSection section, string path)
+        {
+            Add(section, "Container family", "Nintendo Switch save data");
+            Add(section, "Save file ID", Path.GetFileName(path));
+            Add(section, "File size", FormatBytes(SafeLength(path)));
+            Add(section, "Notes", "Nintendo Switch save data can be encrypted or console/account-specific. FileDentify reports container context and size only.");
+        }
+
+        private static void AddRolandMt32RomInfo(ReportSection section, string path)
+        {
+            var name = Path.GetFileNameWithoutExtension(path) ?? string.Empty;
+            Add(section, "Synth family", "Roland MT-32 / CM-32L LA synthesis ROM");
+            if (name.IndexOf("CONTROL", StringComparison.OrdinalIgnoreCase) >= 0)
+                Add(section, "ROM role", "Control ROM");
+            else if (name.IndexOf("PCM", StringComparison.OrdinalIgnoreCase) >= 0)
+                Add(section, "ROM role", "PCM sample ROM");
+            Add(section, "Common use", "Used by MT-32/CM-32L compatible emulation and restoration workflows.");
         }
 
         private static void AddNsfInfo(ReportSection section, byte[] h)
@@ -202,6 +298,47 @@ namespace FileDentify
             {
                 AddFixed(section, "GBA game code", h, 0xAC, 4);
                 AddFixed(section, "GBA maker code", h, 0xB0, 2);
+            }
+        }
+
+        private static void AddNintendoDsInfo(ReportSection section, byte[] h)
+        {
+            if (h.Length < 0x160)
+                return;
+            AddFixed(section, "Title", h, 0x00, 12);
+            AddFixed(section, "Game code", h, 0x0C, 4);
+            AddFixed(section, "Maker code", h, 0x10, 2);
+            Add(section, "Unit code", NintendoDsUnitCode(h[0x12]) + " (0x" + h[0x12].ToString("X2", CultureInfo.InvariantCulture) + ")");
+            Add(section, "Device capacity byte", "0x" + h[0x14].ToString("X2", CultureInfo.InvariantCulture) + " (" + NintendoDsCapacity(h[0x14]) + ")");
+            Add(section, "ARM9 ROM offset", "0x" + ReadUInt32LittleEndian(h, 0x20).ToString("X8", CultureInfo.InvariantCulture));
+            Add(section, "ARM9 load address", "0x" + ReadUInt32LittleEndian(h, 0x28).ToString("X8", CultureInfo.InvariantCulture));
+            Add(section, "ARM9 size", FormatBytes(ReadUInt32LittleEndian(h, 0x2C)));
+            Add(section, "ARM7 ROM offset", "0x" + ReadUInt32LittleEndian(h, 0x30).ToString("X8", CultureInfo.InvariantCulture));
+            Add(section, "ARM7 load address", "0x" + ReadUInt32LittleEndian(h, 0x38).ToString("X8", CultureInfo.InvariantCulture));
+            Add(section, "ARM7 size", FormatBytes(ReadUInt32LittleEndian(h, 0x3C)));
+            Add(section, "File name table offset", "0x" + ReadUInt32LittleEndian(h, 0x40).ToString("X8", CultureInfo.InvariantCulture));
+            Add(section, "File name table size", FormatBytes(ReadUInt32LittleEndian(h, 0x44)));
+            Add(section, "Header CRC", "0x" + ReadUInt16LittleEndian(h, 0x15E).ToString("X4", CultureInfo.InvariantCulture));
+        }
+
+        private static void AddSegaMasterSystemOrGameGearInfo(ReportSection section, byte[] h)
+        {
+            var offset = SegaHeaderOffset(h);
+            if (offset < 0)
+            {
+                Add(section, "Sega 8-bit header", "Known extension, but no TMR SEGA marker was found in the sampled header.");
+                return;
+            }
+            Add(section, "Header marker", "TMR SEGA at 0x" + offset.ToString("X", CultureInfo.InvariantCulture));
+            if (offset + 16 <= h.Length)
+            {
+                var checksum = ReadUInt16LittleEndian(h, offset + 10);
+                var productCode = h[offset + 12].ToString("X2", CultureInfo.InvariantCulture) + h[offset + 13].ToString("X2", CultureInfo.InvariantCulture) + ((h[offset + 14] >> 4) & 0x0F).ToString("X1", CultureInfo.InvariantCulture);
+                Add(section, "Checksum", "0x" + checksum.ToString("X4", CultureInfo.InvariantCulture));
+                Add(section, "Product code", productCode);
+                Add(section, "Version", (h[offset + 14] & 0x0F).ToString(CultureInfo.InvariantCulture));
+                Add(section, "Region/system", SegaRegionSystemName((byte)(h[offset + 15] >> 4)));
+                Add(section, "ROM size code", "0x" + (h[offset + 15] & 0x0F).ToString("X1", CultureInfo.InvariantCulture) + " (" + SegaRomSizeName((byte)(h[offset + 15] & 0x0F)) + ")");
             }
         }
 
@@ -364,6 +501,36 @@ namespace FileDentify
             if (h.Length < 0x150)
                 return false;
             return PathLooksGbaHeader(h) || (h[0x104] == 0xCE && h[0x105] == 0xED && h[0x106] == 0x66 && h[0x107] == 0x66);
+        }
+
+        private static bool IsNintendoDsRom(string path, byte[] h)
+        {
+            if (h.Length < 0x160)
+                return false;
+            if (!string.Equals(Path.GetExtension(path), ".nds", StringComparison.OrdinalIgnoreCase))
+                return false;
+            if (StartsWith(h, Encoding.ASCII.GetBytes("RIFF")))
+                return false;
+            if (!IsPrintableAscii(ReadFixedAscii(h, 0x0C, 4)) || !IsPrintableAscii(ReadFixedAscii(h, 0x10, 2)))
+                return false;
+            var arm9Offset = ReadUInt32LittleEndian(h, 0x20);
+            var arm7Offset = ReadUInt32LittleEndian(h, 0x30);
+            return arm9Offset > 0 && arm7Offset > arm9Offset && h[0x12] <= 3;
+        }
+
+        private static bool IsSegaMasterSystemOrGameGearRom(byte[] h)
+        {
+            return SegaHeaderOffset(h) >= 0;
+        }
+
+        private static int SegaHeaderOffset(byte[] h)
+        {
+            foreach (var offset in new[] { 0x7FF0, 0x3FF0, 0x1FF0 })
+            {
+                if (offset + 8 <= h.Length && Encoding.ASCII.GetString(h, offset, 8) == "TMR SEGA")
+                    return offset;
+            }
+            return -1;
         }
 
         private static bool PathLooksGbaHeader(byte[] h)
@@ -549,6 +716,54 @@ namespace FileDentify
             if (h[0] == 0x40) return "Byte-swapped .v64 style";
             if (h[0] == 0x37) return "Little-endian .n64 style";
             return "Unknown";
+        }
+
+        private static string NintendoDsUnitCode(byte value)
+        {
+            switch (value)
+            {
+                case 0: return "Nintendo DS";
+                case 2: return "Nintendo DS and DSi";
+                case 3: return "Nintendo DSi";
+                default: return "Unknown";
+            }
+        }
+
+        private static string NintendoDsCapacity(byte value)
+        {
+            if (value <= 0x0D)
+                return FormatBytes(128L * 1024L << value);
+            return "unknown capacity code";
+        }
+
+        private static string SegaRegionSystemName(byte value)
+        {
+            switch (value)
+            {
+                case 3: return "Master System Japan";
+                case 4: return "Master System export";
+                case 5: return "Game Gear Japan";
+                case 6: return "Game Gear export";
+                case 7: return "Game Gear international";
+                default: return "Unknown system code 0x" + value.ToString("X1", CultureInfo.InvariantCulture);
+            }
+        }
+
+        private static string SegaRomSizeName(byte value)
+        {
+            switch (value)
+            {
+                case 0xA: return "8 KiB";
+                case 0xB: return "16 KiB";
+                case 0xC: return "32 KiB";
+                case 0xD: return "48 KiB";
+                case 0xE: return "64 KiB";
+                case 0xF: return "128 KiB";
+                case 0x0: return "256 KiB";
+                case 0x1: return "512 KiB";
+                case 0x2: return "1 MiB";
+                default: return "unknown";
+            }
         }
     }
 }

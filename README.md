@@ -55,11 +55,13 @@ FileDentify.exe --install-sendto
 FileDentify.exe --uninstall-sendto
 FileDentify.exe --install-desktop
 FileDentify.exe --uninstall-desktop
+FileDentify.exe --install-report-association
+FileDentify.exe --uninstall-report-association
 FileDentify.exe --version
 FileDentify.exe --help
 ```
 
-The `--report` / `-r` mode writes one combined report without opening the UI. Use a `.html` or `.htm` output path, or `--html-report` / `-hr`, to write an HTML report with per-file headings and section tables. `--folder-report` / `-fr` recursively scans folders into one combined report. `--advanced-view` / `-av` opens the graphical advanced viewer directly on a file. Terminal mode uses `fd.com`, which pages through the report with Up, Down, PageUp, PageDown, Home, End, Q, and Escape. `fd.com` and `FileDentify.exe` must live in the same folder. `-u` and `--update` check GitHub Releases. `--close` / `-c` asks other FileDentify windows from the same executable to close gracefully. The SendTo and desktop shortcut install switches are non-interactive, have short forms, and update `FileDentify.ini` beside the executable.
+The `--report` / `-r` mode writes one combined report without opening the UI. Use a `.fdreport` output path for a reopenable native report, a `.html` or `.htm` output path, or `--html-report` / `-hr`, to write an HTML report with per-file headings and section tables. `--folder-report` / `-fr` recursively scans folders into one combined report. `--advanced-view` / `-av` opens the graphical advanced viewer directly on a file. Terminal mode uses `fd.com`, which pages through the report with Up, Down, PageUp, PageDown, Home, End, Q, and Escape. `fd.com` and `FileDentify.exe` must live in the same folder. `-u` and `--update` check GitHub Releases. `--close` / `-c` asks other FileDentify windows from the same executable to close gracefully. The SendTo, desktop shortcut, and `.fdreport` association install switches are non-interactive, have short forms, and update `FileDentify.ini` beside the executable where applicable.
 
 ## Credits
 
@@ -77,6 +79,7 @@ FileDentify uses or can use components from these projects:
 - [MSYS2](https://www.msys2.org/) and [MSYS2 Packages](https://packages.msys2.org/), for the embedded Windows build of file/libmagic.
 - [mingw-w64-x86_64-file](https://packages.msys2.org/package/mingw-w64-x86_64-file), the embedded file/libmagic package.
 - [libsystre](https://packages.msys2.org/package/mingw-w64-x86_64-libsystre), [libtre](https://packages.msys2.org/package/mingw-w64-x86_64-libtre), [gettext runtime/libintl](https://packages.msys2.org/package/mingw-w64-x86_64-gettext-runtime), and [libiconv](https://packages.msys2.org/package/mingw-w64-x86_64-libiconv), bundled as runtime dependencies for the embedded file/libmagic build.
+- [Tolk screen-reader library](https://github.com/dkager/tolk) and [NVDA controller client](https://github.com/nvaccess/nvda), for optional screen-reader announcements.
 - [FFmpeg ffprobe](https://ffmpeg.org/ffprobe.html), used when `ffprobe.exe` is beside FileDentify for richer media metadata.
 - [FLAC/metaflac](https://xiph.org/flac/), used when `metaflac.exe` is beside FileDentify for FLAC stream information.
 - [Opus tools/opusinfo](https://opus-codec.org/), used when `opusinfo.exe` is beside FileDentify for Opus/Ogg information.

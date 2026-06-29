@@ -26,6 +26,171 @@ namespace FileDentify
                 AddOggHeaderInfo(sections, header);
             if (header.Length >= 10 && StartsWith(header, Encoding.ASCII.GetBytes("ID3")))
                 AddId3HeaderInfo(sections, path, header, fileLength);
+            AddSunAuInfo(sections, path, header, fileLength);
+            AddMpegTransportStreamInfo(sections, path, header, fileLength);
+        }
+
+        private static string MpegTransportStreamTypeName(string path, byte[] header)
+        {
+            var packet = DetectTransportStreamPacketSize(header);
+            if (packet > 0)
+                return packet == 192 ? "Blu-ray MPEG-2 transport stream" : "MPEG-2 transport stream";
+            var ext = Path.GetExtension(path);
+            if (string.Equals(ext, ".m2ts", StringComparison.OrdinalIgnoreCase))
+                return "Blu-ray MPEG-2 transport stream";
+            if (string.Equals(ext, ".ts", StringComparison.OrdinalIgnoreCase) || string.Equals(ext, ".mts", StringComparison.OrdinalIgnoreCase))
+                return "MPEG-2 transport stream";
+            return null;
+        }
+
+        private static void AddMpegTransportStreamInfo(List<ReportSection> sections, string path, byte[] header, long fileLength)
+        {
+            var type = MpegTransportStreamTypeName(path, header);
+            if (type == null)
+                return;
+
+            var section = AddSection(sections, "MPEG transport stream");
+            Add(section, "Format hint", type);
+            Add(section, "File size", FormatBytes(fileLength));
+
+            var packetSize = DetectTransportStreamPacketSize(header);
+            if (packetSize > 0)
+            {
+                Add(section, "Detected packet size", packetSize.ToString(CultureInfo.InvariantCulture) + " bytes");
+                Add(section, "Sync byte offset", packetSize == 192 ? "4 bytes into each Blu-ray source packet" : "0 bytes");
+                Add(section, "Sync confidence", TransportStreamSyncCount(header, packetSize).ToString(CultureInfo.InvariantCulture) + " consecutive packet sync byte(s) in sample");
+            }
+            else
+            {
+                Add(section, "Header marker", "No repeated sync byte found in the sampled header; reported from extension only.");
+            }
+
+            Add(section, "Container use", "Blu-ray .m2ts and broadcast .ts/.mts files store video, audio, subtitles, and timing in MPEG transport-stream packets.");
+            Add(section, "Tip", "Place ffprobe.exe beside FileDentify for stream codec, duration, chapter, and audio-language details when probing large media files.");
+        }
+
+        private static int DetectTransportStreamPacketSize(byte[] data)
+        {
+            foreach (var packetSize in new[] { 188, 192, 204 })
+            {
+                if (TransportStreamSyncCount(data, packetSize) >= 4)
+                    return packetSize;
+            }
+            return 0;
+        }
+
+        private static int TransportStreamSyncCount(byte[] data, int packetSize)
+        {
+            if (data.Length < packetSize * 4)
+                return 0;
+            var offset = packetSize == 192 ? 4 : 0;
+            var count = 0;
+            while (offset < data.Length && data[offset] == 0x47)
+            {
+                count++;
+                offset += packetSize;
+            }
+            return count;
+        }
+
+        private static string SunAuTypeName(string path, byte[] header)
+        {
+            if (IsSunAuHeader(path, header))
+                return "Sun/NeXT AU audio";
+            return null;
+        }
+
+        private static bool IsSunAuHeader(string path, byte[] header)
+        {
+            if (header.Length >= 24 && StartsWith(header, Encoding.ASCII.GetBytes(".snd")))
+                return true;
+            var ext = Path.GetExtension(path);
+            return string.Equals(ext, ".au", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(ext, ".snd", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static void AddSunAuInfo(List<ReportSection> sections, string path, byte[] header, long fileLength)
+        {
+            if (!IsSunAuHeader(path, header))
+                return;
+
+            var section = AddSection(sections, "Sun/NeXT audio");
+            Add(section, "Format hint", "Sun/NeXT AU audio");
+            if (header.Length < 24 || !StartsWith(header, Encoding.ASCII.GetBytes(".snd")))
+            {
+                Add(section, "Header marker", "Not found in sampled header; reported from extension only.");
+                return;
+            }
+
+            var dataOffset = ReadUInt32BigEndian(header, 4);
+            var dataSize = ReadUInt32BigEndian(header, 8);
+            var encoding = ReadUInt32BigEndian(header, 12);
+            var sampleRate = ReadUInt32BigEndian(header, 16);
+            var channels = ReadUInt32BigEndian(header, 20);
+
+            Add(section, "Header marker", ".snd");
+            Add(section, "Data offset", FormatBytes(dataOffset) + " (" + dataOffset.ToString(CultureInfo.InvariantCulture) + " bytes)");
+            Add(section, "Declared data size", dataSize == 0xFFFFFFFF
+                ? "Unknown or streaming length"
+                : FormatBytes(dataSize) + " (" + dataSize.ToString(CultureInfo.InvariantCulture) + " bytes)");
+            Add(section, "Encoding", SunAuEncodingName(encoding) + " (" + encoding.ToString(CultureInfo.InvariantCulture) + ")");
+            Add(section, "Sample rate", sampleRate.ToString(CultureInfo.InvariantCulture) + " Hz");
+            Add(section, "Channels", channels.ToString(CultureInfo.InvariantCulture));
+
+            var annotationLength = dataOffset >= 24 ? dataOffset - 24 : 0;
+            if (annotationLength > 0 && 24 + annotationLength <= header.Length)
+            {
+                var annotation = CleanMetadataText(Encoding.GetEncoding(28591).GetString(header, 24, (int)Math.Min(annotationLength, 512)));
+                if (!string.IsNullOrWhiteSpace(annotation))
+                    Add(section, "Annotation", annotation);
+            }
+
+            var bytesPerSample = SunAuBytesPerSample(encoding);
+            var payloadBytes = dataSize == 0xFFFFFFFF ? Math.Max(0, fileLength - dataOffset) : dataSize;
+            if (bytesPerSample > 0 && channels > 0 && sampleRate > 0 && payloadBytes > 0)
+                Add(section, "Estimated duration", FormatDuration(payloadBytes / (double)(bytesPerSample * channels * sampleRate)));
+        }
+
+        private static string SunAuEncodingName(uint encoding)
+        {
+            switch (encoding)
+            {
+                case 1: return "8-bit mu-law";
+                case 2: return "8-bit linear PCM";
+                case 3: return "16-bit linear PCM";
+                case 4: return "24-bit linear PCM";
+                case 5: return "32-bit linear PCM";
+                case 6: return "32-bit floating point";
+                case 7: return "64-bit floating point";
+                case 23: return "G.721 ADPCM";
+                case 24: return "G.722 ADPCM";
+                case 25: return "G.723 3-bit ADPCM";
+                case 26: return "G.723 5-bit ADPCM";
+                case 27: return "8-bit A-law";
+                default: return "Unknown";
+            }
+        }
+
+        private static int SunAuBytesPerSample(uint encoding)
+        {
+            switch (encoding)
+            {
+                case 1:
+                case 2:
+                case 27:
+                    return 1;
+                case 3:
+                    return 2;
+                case 4:
+                    return 3;
+                case 5:
+                case 6:
+                    return 4;
+                case 7:
+                    return 8;
+                default:
+                    return 0;
+            }
         }
 
         private static void AddFlacHeaderInfo(List<ReportSection> sections, byte[] header)

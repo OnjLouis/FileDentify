@@ -13,7 +13,6 @@ namespace FileDentify
         {
             ".nki", ".nkm", ".nkb", ".nkr", ".nkx", ".nkc", ".ncw", ".nicnt",
             ".nksf", ".nksfx", ".nksn",
-            ".blob",
             ".ens", ".ism", ".mdl", ".rcc",
             ".kt3", ".nbkt",
             ".ksd", ".nfm8", ".nabs", ".nmsv", ".nrkt",
@@ -23,17 +22,21 @@ namespace FileDentify
         private static void AddNativeInstrumentsInfo(List<ReportSection> sections, string path, byte[] sample)
         {
             var ext = Path.GetExtension(path).ToLowerInvariant();
+            if (ext == ".rpp" || ext == ".rpp-bak")
+                return;
             var extensionHint = NativeInstrumentsTypeName(path);
             var readable = FindReadableTextLines(sample, 4, 2000);
             var evidence = FindNativeInstrumentsEvidence(readable).ToArray();
+            var headerMarker = NativeHeaderMarker(sample);
 
-            if (extensionHint == null && evidence.Length == 0)
+            if (extensionHint == null && string.IsNullOrWhiteSpace(headerMarker) && BackupConfigTypeName(path, sample) != null)
+                return;
+            if (extensionHint == null && string.IsNullOrWhiteSpace(headerMarker) && !HasStrongNativeInstrumentsEvidence(path, evidence))
                 return;
 
             var section = AddSection(sections, "Native Instruments");
             if (extensionHint != null)
                 Add(section, "Format hint", extensionHint);
-            var headerMarker = NativeHeaderMarker(sample);
             if (!string.IsNullOrWhiteSpace(headerMarker))
                 Add(section, "Header marker", headerMarker);
             Add(section, "Detection basis", extensionHint != null
@@ -75,6 +78,8 @@ namespace FileDentify
 
         private static string NativeInstrumentsTypeName(string path)
         {
+            if (PathLooksSymbian(path))
+                return null;
             switch (Path.GetExtension(path).ToLowerInvariant())
             {
                 case ".nki": return "Native Instruments Kontakt instrument";
@@ -88,7 +93,6 @@ namespace FileDentify
                 case ".nksf": return "Native Instruments Native Kontrol Standard preset";
                 case ".nksfx": return "Native Instruments Native Kontrol Standard effect preset";
                 case ".nksn": return "Native Instruments Native Kontrol Standard snapshot";
-                case ".blob": return "Native Instruments binary metadata/blob asset";
                 case ".ens": return "Native Instruments Reaktor ensemble";
                 case ".ism": return "Native Instruments Reaktor instrument or structure";
                 case ".mdl": return "Native Instruments Reaktor module";
@@ -127,6 +131,23 @@ namespace FileDentify
                     yield return needle;
                 }
             }
+        }
+
+        private static bool HasStrongNativeInstrumentsEvidence(string path, IEnumerable<string> evidence)
+        {
+            if (PathContainsNativeInstrumentsContext(path))
+                return true;
+            return evidence.Any(item => string.Equals(item, "Native Instruments", StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static bool PathContainsNativeInstrumentsContext(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+                return false;
+            return path.IndexOf("\\Native Instruments\\", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                path.IndexOf("/Native Instruments/", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                path.IndexOf("\\Komplete\\NativeInstruments\\", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                path.IndexOf("/Komplete/NativeInstruments/", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         private static Regex NativeSampleReferencePattern()
@@ -176,13 +197,17 @@ namespace FileDentify
 
         private static bool AddNicntMetadata(ReportSection section, string path, string extension, byte[] sample)
         {
+            const int MaxNicntTextBytes = 2 * 1024 * 1024;
             if (!string.Equals(extension, ".nicnt", StringComparison.OrdinalIgnoreCase))
                 return false;
 
             string text;
             try
             {
-                text = File.ReadAllText(path);
+                var info = new FileInfo(path);
+                text = info.Length <= MaxNicntTextBytes
+                    ? File.ReadAllText(path)
+                    : System.Text.Encoding.UTF8.GetString(ReadPrefix(path, MaxNicntTextBytes));
             }
             catch
             {

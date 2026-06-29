@@ -30,14 +30,15 @@ namespace FileDentify
                 sb.AppendLine(new string('-', section.Title.Length));
                 foreach (var item in section.Items)
                 {
-                    if (string.Equals((item.Title ?? string.Empty).Trim(), (item.Detail ?? string.Empty).Trim(), StringComparison.Ordinal))
+                    var detail = ReportSection.NormalizeDetailText(item.Detail);
+                    if (string.Equals((item.Title ?? string.Empty).Trim(), detail.Trim(), StringComparison.Ordinal))
                     {
                         sb.AppendLine(item.Title);
                     }
                     else
                     {
                         sb.AppendLine(item.Title + ":");
-                        sb.AppendLine(item.Detail);
+                        sb.AppendLine(detail);
                     }
                 }
             }
@@ -131,10 +132,11 @@ namespace FileDentify
                     sb.AppendLine("<tbody>");
                     foreach (var item in section.Items)
                     {
-                        if (string.Equals((item.Title ?? string.Empty).Trim(), (item.Detail ?? string.Empty).Trim(), StringComparison.Ordinal))
-                            sb.AppendLine("<tr><td colspan=\"2\"><pre>" + Html(item.Detail) + "</pre></td></tr>");
+                        var detail = ReportSection.NormalizeDetailText(item.Detail);
+                        if (string.Equals((item.Title ?? string.Empty).Trim(), detail.Trim(), StringComparison.Ordinal))
+                            sb.AppendLine("<tr><td colspan=\"2\"><pre>" + Html(detail) + "</pre></td></tr>");
                         else
-                            sb.AppendLine("<tr><td>" + Html(item.Title) + "</td><td><pre>" + Html(item.Detail) + "</pre></td></tr>");
+                            sb.AppendLine("<tr><td>" + Html(item.Title) + "</td><td><pre>" + Html(detail) + "</pre></td></tr>");
                     }
                     sb.AppendLine("</tbody>");
                     sb.AppendLine("</table>");
@@ -436,6 +438,7 @@ namespace FileDentify
         {
             var report = new FileReport();
             report.DisplayName = Path.GetFileName(path);
+            report.OriginalPath = path;
             var section = AddSection(report.Sections, "Inspection error");
             Add(section, "Path", path);
             Add(section, "Error", ex.Message);
