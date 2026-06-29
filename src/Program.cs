@@ -40,6 +40,7 @@ namespace FileDentify
         {
             try
             {
+                RemoveStalePortableReadme();
                 if (TryHandleCommandLine(args))
                     return;
 
@@ -61,6 +62,20 @@ namespace FileDentify
                     catch { }
                     MessageBox.Show(ex.Message, "FileDentify startup error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
+            }
+        }
+
+        private static void RemoveStalePortableReadme()
+        {
+            try
+            {
+                var readmePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "README.md");
+                if (File.Exists(readmePath))
+                    File.Delete(readmePath);
+            }
+            catch
+            {
+                // Stale documentation cleanup should never block startup.
             }
         }
 
