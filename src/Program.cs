@@ -32,6 +32,8 @@ namespace FileDentify
     internal static class Program
     {
         private const string ConsoleStubEnvironmentVariable = "FILEDENTIFY_CONSOLE_STUB";
+        private const long LegacyPortableReadmeLength = 6432;
+        private static readonly DateTime LegacyPortableReadmeLastWriteUtc = new DateTime(2026, 6, 28, 19, 6, 24, DateTimeKind.Utc);
         public const string Version = "1.3";
         public const string ProjectUrl = "https://github.com/OnjLouis/FileDentify";
 
@@ -70,7 +72,8 @@ namespace FileDentify
             try
             {
                 var readmePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "README.md");
-                if (File.Exists(readmePath))
+                var readme = new FileInfo(readmePath);
+                if (readme.Exists && readme.Length == LegacyPortableReadmeLength && readme.LastWriteTimeUtc == LegacyPortableReadmeLastWriteUtc)
                     File.Delete(readmePath);
             }
             catch

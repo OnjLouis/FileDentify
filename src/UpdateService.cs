@@ -163,7 +163,9 @@ namespace FileDentify
                 "  if (-not (Test-Path -LiteralPath (Join-Path $source 'FileDentify.exe'))) { throw 'The downloaded ZIP does not contain FileDentify.exe.' }\r\n" +
                 "  if (-not (Test-Path -LiteralPath (Join-Path $source 'fd.com'))) { throw 'The downloaded ZIP does not contain fd.com beside FileDentify.exe.' }\r\n" +
                 "  Get-Process -Id $pidToWait -ErrorAction SilentlyContinue | Wait-Process\r\n" +
-                "  Remove-Item -LiteralPath (Join-Path $target 'README.md') -Force -ErrorAction SilentlyContinue\r\n" +
+                "  $legacyReadme = Join-Path $target 'README.md'\r\n" +
+                "  $legacyReadmeItem = Get-Item -LiteralPath $legacyReadme -ErrorAction SilentlyContinue\r\n" +
+                "  if ($legacyReadmeItem -and $legacyReadmeItem.Length -eq 6432 -and $legacyReadmeItem.LastWriteTimeUtc -eq ([datetime]'2026-06-28T19:06:24Z')) { Remove-Item -LiteralPath $legacyReadme -Force -ErrorAction SilentlyContinue }\r\n" +
                 "  Get-ChildItem -LiteralPath $source -Force | ForEach-Object {\r\n" +
                 "    if ($_.name -ieq 'FileDentify.ini' -or $_.name -ieq 'Update Temp') { return }\r\n" +
                 "    Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $target $_.name) -Recurse -Force\r\n" +
