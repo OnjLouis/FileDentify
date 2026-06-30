@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -14,6 +15,8 @@ namespace FileDentify
         {
             if (StartsWith(header, Encoding.ASCII.GetBytes("GGUF")))
                 return "GGUF machine-learning model";
+            if (IsPyTorchCheckpoint(path, header))
+                return "PyTorch model checkpoint";
             if (IsOllamaManifest(path, header))
                 return "Ollama model manifest";
             if (IsOllamaBlobPath(path))
@@ -34,10 +37,88 @@ namespace FileDentify
 
             if (StartsWith(header, Encoding.ASCII.GetBytes("GGUF")))
                 AddGgufInfo(section, header);
+            else if (IsPyTorchCheckpoint(path, header))
+                AddPyTorchCheckpointInfo(section, path, header);
             else if (LooksLikeText(header))
                 AddOllamaJsonInfo(section, Encoding.UTF8.GetString(header.Take(Math.Min(header.Length, 1024 * 1024)).ToArray()), path);
 
-            Add(section, "Notes", "Ollama stores manifests and content-addressed blobs under .ollama. GGUF files are large local model weights; FileDentify reports header and visible metadata without reading the whole model.");
+            Add(section, "Notes", "Ollama stores manifests and content-addressed blobs under .ollama. GGUF and PyTorch checkpoint files are large local model weights; FileDentify reports header and visible metadata without loading the model.");
+        }
+
+        private static bool IsPyTorchCheckpoint(string path, byte[] header)
+        {
+            var ext = Path.GetExtension(path).ToLowerInvariant();
+            if (ext != ".ckpt" && ext != ".pt" && ext != ".pth" && ext != ".safetensors")
+                return false;
+            if (ext == ".safetensors")
+                return header.Length >= 8;
+            return IsZipHeader(header) || (header.Length > 0 && header[0] == 0x80);
+        }
+
+        private static void AddPyTorchCheckpointInfo(ReportSection section, string path, byte[] header)
+        {
+            var ext = Path.GetExtension(path).ToLowerInvariant();
+            Add(section, "Model file", Path.GetFileName(path));
+            if (ext == ".safetensors")
+            {
+                Add(section, "Container", "SafeTensors tensor file");
+                if (header.Length >= 8)
+                    Add(section, "Declared JSON header size", FormatUnsignedBytes(ReadUInt64LittleEndian(header, 0)));
+                return;
+            }
+
+            if (IsZipHeader(header))
+            {
+                Add(section, "Container", "ZIP-based PyTorch checkpoint");
+                try
+                {
+                    using (var archive = ZipFile.OpenRead(path))
+                    {
+                        Add(section, "Archive entries", archive.Entries.Count.ToString(CultureInfo.InvariantCulture));
+                        var entries = archive.Entries
+                            .Select(e => e.FullName)
+                            .Where(name => !string.IsNullOrWhiteSpace(name))
+                            .Take(20)
+                            .ToArray();
+                        if (entries.Length > 0)
+                            Add(section, "First entries", string.Join(Environment.NewLine, entries));
+
+                        var dataPickle = archive.Entries.FirstOrDefault(e => e.FullName.EndsWith("/data.pkl", StringComparison.OrdinalIgnoreCase) || e.FullName.Equals("data.pkl", StringComparison.OrdinalIgnoreCase));
+                        if (dataPickle != null)
+                            Add(section, "Pickle metadata entry", dataPickle.FullName + " (" + FormatUnsignedBytes((ulong)dataPickle.Length) + ")");
+                        if (archive.GetEntry("version") != null || archive.Entries.Any(e => e.FullName.EndsWith("/version", StringComparison.OrdinalIgnoreCase)))
+                            Add(section, "Checkpoint version marker", "present");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Add(section, "Archive read note", ex.Message);
+                }
+            }
+            else if (header.Length > 0 && header[0] == 0x80)
+            {
+                Add(section, "Container", "Python pickle-based checkpoint");
+                Add(section, "Pickle protocol", header.Length > 1 ? header[1].ToString(CultureInfo.InvariantCulture) : "unknown");
+                var keys = FindReadableTextLines(header, 4, 80)
+                    .Where(IsUsefulCheckpointString)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .Take(20)
+                    .ToArray();
+                if (keys.Length > 0)
+                    Add(section, "Visible tensor or module names", string.Join(Environment.NewLine, keys));
+            }
+        }
+
+        private static bool IsUsefulCheckpointString(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value) || value.Length > 160)
+                return false;
+            return value.IndexOf("weight", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                value.IndexOf("bias", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                value.IndexOf("layer", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                value.IndexOf("model", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                value.IndexOf("torch", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                value.IndexOf("state_dict", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         private static bool IsOllamaManifest(string path, byte[] header)

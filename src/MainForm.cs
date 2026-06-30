@@ -16,10 +16,12 @@ using System.Web.Script.Serialization;
 using System.Windows.Forms;
 
 namespace FileDentify
-{    internal sealed class MainForm : Form
+{    internal sealed class MainForm : Form, IMessageFilter
     {
         private readonly TreeView resultsTree;
         private readonly TextBox detailsBox;
+        private readonly WebBrowser detailsBrowser;
+        private readonly Button enterReportButton;
         private readonly Button copyButton;
         private readonly Button saveButton;
         private readonly Button viewHtmlButton;
@@ -29,6 +31,7 @@ namespace FileDentify
         private readonly Label statusLabel;
         private readonly ToolTip toolTip;
         private readonly ToolStripMenuItem recentReportsMenu;
+        private readonly ToolStripMenuItem htmlDetailsMenuItem;
         private readonly System.Windows.Forms.Timer updateCheckTimer;
         private readonly System.Windows.Forms.Timer treeShortcutAnnouncementTimer;
         private AppSettings settings;
@@ -41,6 +44,7 @@ namespace FileDentify
         private string currentSavedReportPath = string.Empty;
         private string pendingTreeShortcutAnnouncementKey = string.Empty;
         private string pendingTreeShortcutAnnouncementText = string.Empty;
+        private bool htmlDetailsWantsFocus;
 
         public MainForm(string[] args)
         {
@@ -77,6 +81,7 @@ namespace FileDentify
             editMenu.DropDownItems.Add(CreateShortcutMenuItem("&Expand all", "Ctrl+Shift+Right", delegate { ExpandAllResults(); }));
             editMenu.DropDownItems.Add(CreateShortcutMenuItem("Move section &up", "Ctrl+Up", delegate { MoveSelectedSection(-1); }));
             editMenu.DropDownItems.Add(CreateShortcutMenuItem("Move section &down", "Ctrl+Down", delegate { MoveSelectedSection(1); }));
+            editMenu.DropDownItems.Add(CreateShortcutMenuItem("Report overvie&w", "Alt+Backspace", delegate { SelectReportOverview(); }));
             editMenu.DropDownItems.Add(CreateShortcutMenuItem("&Previous file", "Alt+Left", delegate { SelectAdjacentFile(-1); }));
             editMenu.DropDownItems.Add(CreateShortcutMenuItem("&Next file", "Alt+Right", delegate { SelectAdjacentFile(1); }));
             editMenu.DropDownItems.Add(CreateShortcutMenuItem("F&irst file", "Alt+PageUp", delegate { SelectFileByPosition(false); }));
@@ -85,6 +90,11 @@ namespace FileDentify
             editMenu.DropDownItems.Add(CreateShortcutMenuItem("Ne&xt section", "Alt+Down", delegate { SelectAdjacentSection(1); }));
             editMenu.DropDownItems.Add(CreateShortcutMenuItem("Fi&rst section", "Alt+Home", delegate { SelectSectionByPosition(false); }));
             editMenu.DropDownItems.Add(CreateShortcutMenuItem("Las&t section", "Alt+End", delegate { SelectSectionByPosition(true); }));
+            var viewMenu = new ToolStripMenuItem("&View");
+            htmlDetailsMenuItem = CreateShortcutMenuItem("&HTML details view", "F7", delegate { ToggleHtmlDetailsView(); });
+            htmlDetailsMenuItem.CheckOnClick = false;
+            htmlDetailsMenuItem.Checked = settings.HtmlDetailsView;
+            viewMenu.DropDownItems.Add(htmlDetailsMenuItem);
             var optionsMenu = new ToolStripMenuItem("&Options");
             optionsMenu.DropDownItems.Add(CreateShortcutMenuItem("&Preferences...", "Ctrl+,", delegate { ShowPreferences(); }));
             var helpMenu = new ToolStripMenuItem("&Help");
@@ -100,6 +110,7 @@ namespace FileDentify
             helpMenu.DropDownItems.Add("&About FileDentify", null, delegate { ShowAbout(); });
             menu.Items.Add(fileMenu);
             menu.Items.Add(editMenu);
+            menu.Items.Add(viewMenu);
             menu.Items.Add(optionsMenu);
             menu.Items.Add(helpMenu);
             MainMenuStrip = menu;
@@ -150,6 +161,27 @@ namespace FileDentify
             detailsBox.KeyDown += TextBoxSelectAll_KeyDown;
             split.Panel2.Controls.Add(detailsBox);
 
+            detailsBrowser = new WebBrowser();
+            detailsBrowser.Dock = DockStyle.Fill;
+            detailsBrowser.AllowWebBrowserDrop = false;
+            detailsBrowser.IsWebBrowserContextMenuEnabled = true;
+            detailsBrowser.WebBrowserShortcutsEnabled = true;
+            detailsBrowser.ScriptErrorsSuppressed = true;
+            detailsBrowser.AccessibleName = "Selected item HTML details";
+            detailsBrowser.TabStop = false;
+            detailsBrowser.PreviewKeyDown += DetailsBrowser_PreviewKeyDown;
+            detailsBrowser.DocumentCompleted += delegate
+            {
+                if (CanRestoreHtmlDetailsFocus())
+                    BeginInvoke((MethodInvoker)FocusHtmlDetailsDocument);
+            };
+            detailsBrowser.Visible = settings.HtmlDetailsView;
+            split.Panel2.Controls.Add(detailsBrowser);
+            detailsBrowser.BringToFront();
+            detailsBox.Visible = !settings.HtmlDetailsView;
+            if (!settings.HtmlDetailsView)
+                detailsBox.BringToFront();
+
             var buttons = new FlowLayoutPanel();
             buttons.Dock = DockStyle.Fill;
             buttons.AutoSize = true;
@@ -160,10 +192,13 @@ namespace FileDentify
 
             addFilesButton = CreateButton("Open files...", delegate { AddFiles(false); }, "Open files", "Ctrl+O", "Choose one or more files to inspect.");
             var openInputFolderButton = CreateButton("Open folder...", delegate { OpenFolder(false); }, "Open folder", "Ctrl+Shift+L", "Choose a folder and recursively inspect its files.");
+            enterReportButton = CreateButton("&Enter report", delegate { ToggleHtmlDetailsFocus(); }, "Enter report", "F6", "Enter the HTML details view. Press F6 again to return to the tree.");
+            enterReportButton.Visible = settings.HtmlDetailsView;
             copyButton = CreateButton("&Copy report", delegate { CopyReport(); }, "Copy report", "Alt+C", "Copy the current report text.");
             saveButton = CreateButton("Save report...", delegate { SaveReport(); }, "Save report", "Ctrl+S", "Save the current report as text or HTML.");
             viewHtmlButton = CreateButton("&View HTML report", delegate { ViewHtmlReport(); }, "View HTML report", "Alt+V", "Open a temporary HTML version of the current report in the default browser.");
             openFolderButton = CreateButton("Open containing fo&lder", delegate { OpenContainingFolder(); }, "Open containing folder", "Alt+L", "Open the selected file's folder in File Explorer.");
+            buttons.Controls.Add(enterReportButton);
             buttons.Controls.Add(addFilesButton);
             buttons.Controls.Add(openInputFolderButton);
             buttons.Controls.Add(copyButton);
@@ -213,7 +248,17 @@ namespace FileDentify
                 addFilesButton.Focus();
             }
             Shown += delegate { ScheduleStartupUpdateCheck(); };
-            FormClosed += delegate { DeleteTemporaryHtmlReports(); };
+            FormClosing += delegate
+            {
+                if (settings.AutoSaveLastReport && currentReports.Count > 0)
+                    AutoSaveCurrentReport();
+            };
+            Application.AddMessageFilter(this);
+            FormClosed += delegate
+            {
+                Application.RemoveMessageFilter(this);
+                DeleteTemporaryHtmlReports();
+            };
         }
 
         private Button CreateButton(string text, EventHandler handler, string accessibleName, string shortcutText, string accessibleDescription)
@@ -241,6 +286,7 @@ namespace FileDentify
             menu.Items.Add(CreateShortcutMenuItem("&Expand all", "Ctrl+Shift+Right", delegate { ExpandAllResults(); }));
             menu.Items.Add(CreateShortcutMenuItem("Move section &up", "Ctrl+Up", delegate { MoveSelectedSection(-1); }));
             menu.Items.Add(CreateShortcutMenuItem("Move section &down", "Ctrl+Down", delegate { MoveSelectedSection(1); }));
+            menu.Items.Add(CreateShortcutMenuItem("Report overvie&w", "Alt+Backspace", delegate { SelectReportOverview(); }));
             menu.Items.Add(CreateShortcutMenuItem("Pre&vious file", "Alt+Left", delegate { SelectAdjacentFile(-1); }));
             menu.Items.Add(CreateShortcutMenuItem("Next f&ile", "Alt+Right", delegate { SelectAdjacentFile(1); }));
             menu.Items.Add(CreateShortcutMenuItem("First file", "Alt+PageUp", delegate { SelectFileByPosition(false); }));
@@ -287,6 +333,16 @@ namespace FileDentify
             if (e.KeyCode == Keys.F1)
             {
                 ShowHelp();
+                e.Handled = true;
+            }
+            else if (!e.Control && !e.Alt && !e.Shift && e.KeyCode == Keys.F7)
+            {
+                ToggleHtmlDetailsView();
+                e.Handled = true;
+            }
+            else if (!e.Control && !e.Alt && !e.Shift && e.KeyCode == Keys.F6 && settings.HtmlDetailsView)
+            {
+                ToggleHtmlDetailsFocus();
                 e.Handled = true;
             }
             else if (e.Control && e.Shift && e.KeyCode == Keys.O)
@@ -428,6 +484,12 @@ namespace FileDentify
             }
             else if (e.KeyCode == Keys.Escape)
             {
+                if (ReturnToHtmlDetailsAfterMenuEscape())
+                {
+                    e.SuppressKeyPress = true;
+                    e.Handled = true;
+                    return;
+                }
                 Close();
                 e.Handled = true;
             }
@@ -460,6 +522,21 @@ namespace FileDentify
                 RefreshOriginalFiles();
                 return true;
             }
+            if (keyData == Keys.F7)
+            {
+                ToggleHtmlDetailsView();
+                return true;
+            }
+            if (keyData == Keys.F6 && settings.HtmlDetailsView)
+            {
+                ToggleHtmlDetailsFocus();
+                return true;
+            }
+            if (keyData == Keys.F4)
+            {
+                OpenAdvancedFileViewer();
+                return true;
+            }
             if (keyData == (Keys.Control | Keys.Shift | Keys.Left))
             {
                 CollapseAllResults();
@@ -483,6 +560,11 @@ namespace FileDentify
             if (keyData == (Keys.Alt | Keys.Left))
             {
                 SelectAdjacentFile(-1);
+                return true;
+            }
+            if (keyData == (Keys.Alt | Keys.Back))
+            {
+                SelectReportOverview();
                 return true;
             }
             if (keyData == (Keys.Alt | Keys.Right))
@@ -531,6 +613,209 @@ namespace FileDentify
             return base.ProcessCmdKey(ref msg, keyData);
         }
 
+        public bool PreFilterMessage(ref Message m)
+        {
+            const int wmKeyDown = 0x0100;
+            const int wmSysKeyDown = 0x0104;
+
+            if (!settings.HtmlDetailsView || detailsBrowser == null || !detailsBrowser.ContainsFocus)
+                return false;
+            if (m.Msg != wmKeyDown && m.Msg != wmSysKeyDown)
+                return false;
+
+            var keyCode = (Keys)((int)m.WParam & 0xffff);
+            var modifiers = Control.ModifierKeys;
+            if (keyCode == Keys.F6 && modifiers == Keys.None)
+            {
+                ToggleHtmlDetailsFocus();
+                return true;
+            }
+            if (keyCode == Keys.Escape && modifiers == Keys.None)
+            {
+                htmlDetailsWantsFocus = false;
+                resultsTree.Focus();
+                statusLabel.Text = "Tree focused.";
+                return true;
+            }
+            if (keyCode == Keys.F4 && modifiers == Keys.None)
+            {
+                OpenAdvancedFileViewer();
+                return true;
+            }
+            if (keyCode == Keys.F5 && modifiers == Keys.None)
+            {
+                RefreshOriginalFiles();
+                return true;
+            }
+            if (keyCode == Keys.Tab && (modifiers == Keys.None || modifiers == Keys.Shift))
+            {
+                FocusHtmlDetailsDocument();
+                return true;
+            }
+
+            if (modifiers == Keys.Control && keyCode == Keys.C)
+            {
+                CopyCurrentSelection();
+                return true;
+            }
+            if (modifiers == Keys.Control && SelectTreeNodeByShortcut(keyCode, 0))
+                return true;
+            if (modifiers == (Keys.Control | Keys.Shift) && SelectTreeNodeByShortcut(keyCode, 10))
+                return true;
+            if (modifiers == (Keys.Control | Keys.Shift) && keyCode == Keys.Left)
+            {
+                CollapseAllResults();
+                return true;
+            }
+            if (modifiers == (Keys.Control | Keys.Shift) && keyCode == Keys.Right)
+            {
+                ExpandAllResults();
+                return true;
+            }
+            if (modifiers == Keys.Control && keyCode == Keys.Up)
+            {
+                MoveSelectedSection(-1);
+                return true;
+            }
+            if (modifiers == Keys.Control && keyCode == Keys.Down)
+            {
+                MoveSelectedSection(1);
+                return true;
+            }
+
+            if (modifiers != Keys.Alt)
+                return false;
+
+            if (keyCode == Keys.C)
+            {
+                CopyReport();
+                return true;
+            }
+            if (keyCode == Keys.L)
+            {
+                OpenContainingFolder();
+                return true;
+            }
+            if (keyCode == Keys.V)
+            {
+                ViewHtmlReport();
+                return true;
+            }
+
+            if (keyCode == Keys.Back)
+            {
+                PrepareHtmlBrowserKeyboardNavigation();
+                SelectReportOverview();
+                return true;
+            }
+            if (keyCode == Keys.Left)
+            {
+                PrepareHtmlBrowserKeyboardNavigation();
+                SelectAdjacentFile(-1);
+                return true;
+            }
+            if (keyCode == Keys.Right)
+            {
+                PrepareHtmlBrowserKeyboardNavigation();
+                SelectAdjacentFile(1);
+                return true;
+            }
+            if (keyCode == Keys.PageUp)
+            {
+                PrepareHtmlBrowserKeyboardNavigation();
+                SelectFileByPosition(false);
+                return true;
+            }
+            if (keyCode == Keys.PageDown)
+            {
+                PrepareHtmlBrowserKeyboardNavigation();
+                SelectFileByPosition(true);
+                return true;
+            }
+            if (keyCode == Keys.Up)
+            {
+                PrepareHtmlBrowserKeyboardNavigation();
+                SelectAdjacentSection(-1);
+                return true;
+            }
+            if (keyCode == Keys.Down)
+            {
+                PrepareHtmlBrowserKeyboardNavigation();
+                SelectAdjacentSection(1);
+                return true;
+            }
+            if (keyCode == Keys.Home)
+            {
+                PrepareHtmlBrowserKeyboardNavigation();
+                SelectSectionByPosition(false);
+                return true;
+            }
+            if (keyCode == Keys.End)
+            {
+                PrepareHtmlBrowserKeyboardNavigation();
+                SelectSectionByPosition(true);
+                return true;
+            }
+            if (FileIndexFromShortcutKey(keyCode) >= 0)
+            {
+                PrepareHtmlBrowserKeyboardNavigation();
+                if (SelectFileByShortcut(keyCode))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private bool ReturnToHtmlDetailsAfterMenuEscape()
+        {
+            if (!settings.HtmlDetailsView || detailsBrowser == null || !htmlDetailsWantsFocus)
+                return false;
+            if (detailsBrowser.ContainsFocus)
+                return false;
+            BeginInvoke((MethodInvoker)FocusHtmlDetailsDocument);
+            statusLabel.Text = "HTML details focused.";
+            return true;
+        }
+
+        private void PrepareHtmlBrowserKeyboardNavigation()
+        {
+            if (settings.HtmlDetailsView && detailsBrowser != null && detailsBrowser.ContainsFocus)
+            {
+                htmlDetailsWantsFocus = true;
+                resultsTree.Focus();
+            }
+        }
+
+        private void FocusHtmlDetailsDocument()
+        {
+            if (!settings.HtmlDetailsView || detailsBrowser == null)
+                return;
+            if (WindowState == FormWindowState.Minimized || !Visible)
+                return;
+            if (!ContainsFocus && Form.ActiveForm != this)
+                return;
+
+            detailsBrowser.Focus();
+            try
+            {
+                if (detailsBrowser.Document != null && detailsBrowser.Document.Body != null)
+                    detailsBrowser.Document.Body.Focus();
+            }
+            catch
+            {
+            }
+        }
+
+        private bool CanRestoreHtmlDetailsFocus()
+        {
+            return settings.HtmlDetailsView &&
+                htmlDetailsWantsFocus &&
+                detailsBrowser != null &&
+                WindowState != FormWindowState.Minimized &&
+                Visible &&
+                (ContainsFocus || Form.ActiveForm == this);
+        }
+
         private void ResultsTree_KeyDown(object sender, KeyEventArgs e)
         {
             if (e.Control && e.Shift && e.KeyCode == Keys.Left)
@@ -560,6 +845,12 @@ namespace FileDentify
             else if (e.Alt && e.KeyCode == Keys.Left)
             {
                 SelectAdjacentFile(-1);
+                e.SuppressKeyPress = true;
+                e.Handled = true;
+            }
+            else if (e.Alt && e.KeyCode == Keys.Back)
+            {
+                SelectReportOverview();
                 e.SuppressKeyPress = true;
                 e.Handled = true;
             }
@@ -661,7 +952,7 @@ namespace FileDentify
             if (index < 0 || index >= nodes.Count)
             {
                 statusLabel.Text = "No file section for " + ShortcutText(index) + ".";
-                if (detailsBox != null && detailsBox.ContainsFocus)
+                if (DetailsPaneContainsFocus())
                 {
                     string error;
                     ScreenReaderOutput.TrySpeakForActiveScreenReader(statusLabel.Text, false, out error);
@@ -670,11 +961,11 @@ namespace FileDentify
             }
 
             var node = nodes[index];
-            var keepDetailsFocus = detailsBox != null && detailsBox.ContainsFocus;
+            var keepDetailsFocus = DetailsPaneContainsFocus();
             resultsTree.SelectedNode = node;
             node.EnsureVisible();
             if (keepDetailsFocus)
-                detailsBox.Focus();
+                FocusDetailsPane();
             else
                 resultsTree.Focus();
             var message = node.Text;
@@ -796,11 +1087,11 @@ namespace FileDentify
             if (node == null)
                 return;
 
-            var keepDetailsFocus = detailsBox != null && detailsBox.ContainsFocus;
+            var keepDetailsFocus = DetailsPaneContainsFocus();
             resultsTree.SelectedNode = node;
             node.EnsureVisible();
             if (keepDetailsFocus)
-                detailsBox.Focus();
+                FocusDetailsPane();
             else
                 resultsTree.Focus();
 
@@ -827,11 +1118,11 @@ namespace FileDentify
             if (node == null)
                 return;
 
-            var keepDetailsFocus = detailsBox != null && detailsBox.ContainsFocus;
+            var keepDetailsFocus = DetailsPaneContainsFocus();
             resultsTree.SelectedNode = node;
             node.EnsureVisible();
             if (keepDetailsFocus)
-                detailsBox.Focus();
+                FocusDetailsPane();
             else
                 resultsTree.Focus();
 
@@ -1005,6 +1296,26 @@ namespace FileDentify
             SelectFileByIndex(last ? fileNodes.Count - 1 : 0, last ? "End of file list" : "Start of file list", fileNodes);
         }
 
+        private void SelectReportOverview()
+        {
+            var target = ReportOverviewNode() ?? resultsTree.Nodes.Cast<TreeNode>().FirstOrDefault();
+            if (target == null)
+            {
+                statusLabel.Text = "No report is loaded.";
+                return;
+            }
+
+            var keepDetailsFocus = DetailsPaneContainsFocus();
+            resultsTree.SelectedNode = target;
+            target.EnsureVisible();
+            if (keepDetailsFocus)
+                FocusDetailsPane();
+            else
+                resultsTree.Focus();
+
+            statusLabel.Text = target.Text;
+        }
+
         private bool SelectFileByIndex(int targetIndex, string unavailableMessage)
         {
             return SelectFileByIndex(targetIndex, unavailableMessage, FileRootNodes());
@@ -1032,11 +1343,11 @@ namespace FileDentify
                 ? target
                 : (FindDirectChildSection(target, preferredSection) ?? FindDirectChildSection(target, "Summary") ?? target);
 
-            var keepDetailsFocus = detailsBox != null && detailsBox.ContainsFocus;
+            var keepDetailsFocus = DetailsPaneContainsFocus();
             resultsTree.SelectedNode = nodeToSelect;
             nodeToSelect.EnsureVisible();
             if (keepDetailsFocus)
-                detailsBox.Focus();
+                FocusDetailsPane();
             else
                 resultsTree.Focus();
 
@@ -1058,6 +1369,16 @@ namespace FileDentify
             while (section.Parent != null && section.Parent != fileNode)
                 section = section.Parent;
             return section.Parent == fileNode ? section.Text : string.Empty;
+        }
+
+        private string CurrentFileItemName()
+        {
+            var selected = resultsTree.SelectedNode;
+            if (selected == null || selected.Parent == null)
+                return string.Empty;
+
+            var fileNode = TopLevelNode(selected);
+            return selected.Parent != null && selected.Parent.Parent == fileNode ? selected.Text : string.Empty;
         }
 
         private static TreeNode FindDirectChildSection(TreeNode fileNode, string sectionName)
@@ -1264,7 +1585,9 @@ namespace FileDentify
                     MessageBoxIcon.Information);
             }
 
-            LoadFiles(existing, false);
+            var restoreSelection = CurrentSavedReportSelection();
+            var restoreDetailsFocus = DetailsPaneContainsFocus();
+            LoadFiles(existing, false, restoreSelection, restoreDetailsFocus);
         }
 
         private bool ConfirmReplaceCurrentReport()
@@ -1286,6 +1609,11 @@ namespace FileDentify
         }
 
         private void LoadFiles(IEnumerable<string> paths, bool append)
+        {
+            LoadFiles(paths, append, null, false);
+        }
+
+        private void LoadFiles(IEnumerable<string> paths, bool append, SavedReportSelection restoreSelection, bool restoreDetailsFocus)
         {
             var inputs = paths.Where(p => !string.IsNullOrWhiteSpace(p)).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
             if (inputs.Length == 0)
@@ -1368,14 +1696,23 @@ namespace FileDentify
                             statusLabel.Text = "Generating report. " + (index + 1).ToString(CultureInfo.InvariantCulture) + " of " + files.Length.ToString(CultureInfo.InvariantCulture) + " file(s)...";
                         });
                     }
-                    reports.Add(FileInspector.Inspect(files[i]));
+                    try
+                    {
+                        reports.Add(FileInspector.Inspect(files[i]));
+                    }
+                    catch (Exception ex)
+                    {
+                        reports.Add(FileInspector.BuildErrorReport(files[i], ex));
+                    }
                 }
                 stopwatch.Stop();
                 BeginInvoke((MethodInvoker)delegate
                 {
                     var combinedReports = append ? existingReports.Concat(reports).ToList() : reports;
                     var combinedElapsed = append && existingElapsed.HasValue ? existingElapsed.Value + stopwatch.Elapsed : stopwatch.Elapsed;
-                    ShowReports(combinedReports, combinedElapsed, append ? Path.GetFileName(files[0]) : null);
+                    ShowReports(combinedReports, combinedElapsed, append ? Path.GetFileName(files[0]) : null, append ? null : restoreSelection);
+                    if (restoreDetailsFocus)
+                        FocusDetailsPane();
                 });
             });
             worker.IsBackground = true;
@@ -1446,6 +1783,7 @@ namespace FileDentify
             resultsTree.SelectedNode = node;
             resultsTree.EndUpdate();
             detailsBox.Text = EnsureTrailingBlankLine(detail);
+            UpdateDetailsBrowser("No files loaded", TextDetailsToHtml("No files loaded", detail));
             ResetTextBoxToTop(detailsBox);
             statusLabel.Text = status;
         }
@@ -1484,7 +1822,7 @@ namespace FileDentify
             TreeNode preferredNode = null;
             if (currentReports.Count > 1)
             {
-                var overviewText = FileInspector.BuildOverviewText(currentReports, currentReportElapsed);
+                var overviewText = AddCurrentReportPathToOverview(FileInspector.BuildOverviewText(currentReports, currentReportElapsed));
                 var overviewNode = new TreeNode("Report overview");
                 overviewNode.Tag = overviewText;
                 resultsTree.Nodes.Add(overviewNode);
@@ -1506,15 +1844,23 @@ namespace FileDentify
                     var sectionNode = new TreeNode(section.Title);
                     sectionNode.Tag = section.DetailText();
                     if (ReportMatchesSelection(report, selection) &&
-                        string.Equals(section.Title, selection.SectionTitle, StringComparison.OrdinalIgnoreCase))
+                        string.Equals(section.Title, selection.SectionTitle, StringComparison.OrdinalIgnoreCase) &&
+                        string.IsNullOrWhiteSpace(selection.ItemTitle))
                         preferredNode = sectionNode;
                     if (string.Equals(report.DisplayName, preferredFileName, StringComparison.OrdinalIgnoreCase) &&
                         string.Equals(section.Title, preferredSectionTitle, StringComparison.OrdinalIgnoreCase))
                         preferredNode = sectionNode;
                     foreach (var item in section.Items)
                     {
+                        if (IsPlainReadableTextTreeItem(section, item))
+                            continue;
+
                         var itemNode = new TreeNode(item.Title);
                         itemNode.Tag = item.Detail;
+                        if (ReportMatchesSelection(report, selection) &&
+                            string.Equals(section.Title, selection.SectionTitle, StringComparison.OrdinalIgnoreCase) &&
+                            string.Equals(item.Title, selection.ItemTitle, StringComparison.OrdinalIgnoreCase))
+                            preferredNode = itemNode;
                         sectionNode.Nodes.Add(itemNode);
                     }
                     root.Nodes.Add(sectionNode);
@@ -1529,6 +1875,54 @@ namespace FileDentify
                 resultsTree.SelectedNode = preferredNode;
             else if (resultsTree.Nodes.Count > 0)
                 resultsTree.SelectedNode = resultsTree.Nodes[0];
+        }
+
+        private static bool IsPlainReadableTextTreeItem(ReportSection section, ReportItem item)
+        {
+            if (section == null || item == null)
+                return false;
+            if (!string.Equals(section.Title, "Readable text", StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            var title = (item.Title ?? string.Empty).Trim();
+            if (string.Equals(title, "No readable text found", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(title, "Limit", StringComparison.OrdinalIgnoreCase) ||
+                IsHtmlNavigationHeadingItem(title))
+                return false;
+
+            var detail = ReportSection.NormalizeDetailText(item.Detail).Trim();
+            return string.Equals(title, detail, StringComparison.Ordinal);
+        }
+
+        private string AddCurrentReportPathToOverview(string overviewText)
+        {
+            if (string.IsNullOrWhiteSpace(overviewText))
+                return overviewText;
+
+            var path = !string.IsNullOrWhiteSpace(currentSavedReportPath) ? currentSavedReportPath : SavedReportStore.AutoSavePath;
+            if (string.IsNullOrWhiteSpace(path))
+                return overviewText;
+
+            var normalized = overviewText.TrimEnd();
+            var heading = "Report overview" + Environment.NewLine + "===============";
+            if (normalized.StartsWith(heading, StringComparison.Ordinal))
+            {
+                return heading +
+                    Environment.NewLine +
+                    "Current FileDentify report path:" +
+                    Environment.NewLine +
+                    path +
+                    normalized.Substring(heading.Length);
+            }
+
+            return normalized +
+                Environment.NewLine +
+                Environment.NewLine +
+                "Current FileDentify report path" +
+                Environment.NewLine +
+                "-------------------------------" +
+                Environment.NewLine +
+                path;
         }
 
         private static bool ReportMatchesSelection(FileReport report, SavedReportSelection selection)
@@ -1628,6 +2022,8 @@ namespace FileDentify
 
         private void ShowProgressState(string title, string detail)
         {
+            if (WindowState == FormWindowState.Minimized || !ContainsFocus)
+                htmlDetailsWantsFocus = false;
             resultsTree.BeginUpdate();
             resultsTree.Nodes.Clear();
             var node = new TreeNode(title) { Tag = detail };
@@ -1635,6 +2031,7 @@ namespace FileDentify
             resultsTree.SelectedNode = node;
             resultsTree.EndUpdate();
             detailsBox.Text = EnsureTrailingBlankLine(detail);
+            UpdateDetailsBrowser(title, TextDetailsToHtml(title, detail));
             ResetTextBoxToTop(detailsBox);
         }
 
@@ -1642,7 +2039,336 @@ namespace FileDentify
         {
             var node = resultsTree.SelectedNode;
             detailsBox.Text = EnsureTrailingBlankLine(node == null || node.Tag == null ? string.Empty : node.Tag.ToString());
+            UpdateDetailsBrowser(node == null ? "Details" : node.Text, BuildSelectedNodeHtml(node));
             ResetTextBoxToTop(detailsBox);
+        }
+
+        private void ToggleHtmlDetailsView()
+        {
+            var focusDetails = detailsBox.ContainsFocus || detailsBrowser.ContainsFocus;
+            settings.HtmlDetailsView = !settings.HtmlDetailsView;
+            settings.Save();
+            ApplyDetailsViewMode(focusDetails);
+            statusLabel.Text = settings.HtmlDetailsView ? "HTML details view enabled." : "Text details view enabled.";
+        }
+
+        private void ToggleHtmlDetailsFocus()
+        {
+            if (!settings.HtmlDetailsView)
+                return;
+
+            if (detailsBrowser.ContainsFocus)
+            {
+                htmlDetailsWantsFocus = false;
+                resultsTree.Focus();
+                statusLabel.Text = "Tree focused.";
+            }
+            else
+            {
+                htmlDetailsWantsFocus = true;
+                BeginInvoke((MethodInvoker)FocusHtmlDetailsDocument);
+                statusLabel.Text = "HTML details focused. Press F6 to return to the tree.";
+            }
+        }
+
+        private void DetailsBrowser_PreviewKeyDown(object sender, PreviewKeyDownEventArgs e)
+        {
+            if (e.KeyCode == Keys.F4 || e.KeyCode == Keys.F5 || e.KeyCode == Keys.F6 || e.KeyCode == Keys.Escape || e.KeyCode == Keys.Tab ||
+                (e.Control && (e.KeyCode == Keys.C || e.KeyCode == Keys.Up || e.KeyCode == Keys.Down || e.KeyCode == Keys.Left || e.KeyCode == Keys.Right || DigitFromShortcutKey(e.KeyCode) >= 0)) ||
+                (e.Alt && (e.KeyCode == Keys.Left || e.KeyCode == Keys.Right || e.KeyCode == Keys.Up || e.KeyCode == Keys.Down || e.KeyCode == Keys.Home || e.KeyCode == Keys.End || e.KeyCode == Keys.PageUp || e.KeyCode == Keys.PageDown || e.KeyCode == Keys.Back || e.KeyCode == Keys.C || e.KeyCode == Keys.L || e.KeyCode == Keys.V || FileIndexFromShortcutKey(e.KeyCode) >= 0)))
+                e.IsInputKey = true;
+        }
+
+        private void ApplyDetailsViewMode(bool focusDetails)
+        {
+            htmlDetailsMenuItem.Checked = settings.HtmlDetailsView;
+            enterReportButton.Visible = settings.HtmlDetailsView;
+            detailsBrowser.Visible = settings.HtmlDetailsView;
+            detailsBox.Visible = !settings.HtmlDetailsView;
+            if (settings.HtmlDetailsView)
+            {
+                detailsBrowser.BringToFront();
+                UpdateDetailsBrowser(resultsTree.SelectedNode == null ? "Details" : resultsTree.SelectedNode.Text, BuildSelectedNodeHtml(resultsTree.SelectedNode));
+                if (focusDetails)
+                {
+                    htmlDetailsWantsFocus = true;
+                    BeginInvoke((MethodInvoker)FocusHtmlDetailsDocument);
+                }
+            }
+            else
+            {
+                htmlDetailsWantsFocus = false;
+                detailsBox.BringToFront();
+                if (focusDetails)
+                    detailsBox.Focus();
+            }
+        }
+
+        private void UpdateDetailsBrowser(string title, string html)
+        {
+            if (detailsBrowser == null)
+                return;
+            detailsBrowser.DocumentText = WrapDetailsHtml(title, html);
+        }
+
+        private bool DetailsPaneContainsFocus()
+        {
+            return (detailsBox != null && detailsBox.ContainsFocus) || (detailsBrowser != null && detailsBrowser.ContainsFocus);
+        }
+
+        private void FocusDetailsPane()
+        {
+            if (settings.HtmlDetailsView && detailsBrowser != null)
+            {
+                htmlDetailsWantsFocus = true;
+                BeginInvoke((MethodInvoker)FocusHtmlDetailsDocument);
+            }
+            else if (detailsBox != null)
+                detailsBox.Focus();
+        }
+
+        private string BuildSelectedNodeHtml(TreeNode node)
+        {
+            if (node == null)
+                return "<h1>Details</h1>";
+
+            if (IsReportOverviewNode(node))
+                return TextDetailsToHtml("Report overview", node.Tag == null ? string.Empty : node.Tag.ToString());
+
+            var report = ReportForNode(node);
+            if (report == null)
+                return TextDetailsToHtml(node.Text, node.Tag == null ? string.Empty : node.Tag.ToString());
+
+            if (node.Parent == null)
+                return ReportToDetailsHtml(report);
+
+            if (node.Parent.Parent == null)
+            {
+                var section = report.Sections.FirstOrDefault(s => string.Equals(s.Title, node.Text, StringComparison.OrdinalIgnoreCase));
+                return section == null ? TextDetailsToHtml(node.Text, node.Tag == null ? string.Empty : node.Tag.ToString()) : SectionToDetailsHtml(section, report.DisplayName);
+            }
+
+            var parentSection = report.Sections.FirstOrDefault(s => string.Equals(s.Title, node.Parent.Text, StringComparison.OrdinalIgnoreCase));
+            if (parentSection != null)
+            {
+                var item = parentSection.Items.FirstOrDefault(i => string.Equals(i.Title, node.Text, StringComparison.OrdinalIgnoreCase));
+                if (item != null)
+                    return ItemToDetailsHtml(item, parentSection.Title, report.DisplayName);
+            }
+
+            return TextDetailsToHtml(node.Text, node.Tag == null ? string.Empty : node.Tag.ToString());
+        }
+
+        private FileReport ReportForNode(TreeNode node)
+        {
+            var root = TopLevelNode(node);
+            if (root == null || IsReportOverviewNode(root))
+                return null;
+            return currentReports.FirstOrDefault(report =>
+                string.Equals(report.OriginalPath, root.Name, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(report.DisplayName, root.Text, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static string ReportToDetailsHtml(FileReport report)
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine("<h1>" + Html(report.DisplayName) + "</h1>");
+            foreach (var section in report.Sections)
+                AppendSectionHtml(sb, section, 2);
+            return sb.ToString();
+        }
+
+        private static string SectionToDetailsHtml(ReportSection section, string fileName)
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine("<h1>" + Html(fileName) + "</h1>");
+            AppendSectionHtml(sb, section, 2);
+            return sb.ToString();
+        }
+
+        private static string ItemToDetailsHtml(ReportItem item, string sectionTitle, string fileName)
+        {
+            var detail = ReportSection.NormalizeDetailText(item.Detail);
+            var sb = new StringBuilder();
+            sb.AppendLine("<h1>" + Html(fileName) + "</h1>");
+            sb.AppendLine("<h2>" + Html(sectionTitle) + "</h2>");
+            sb.AppendLine("<h3>" + Html(item.Title) + "</h3>");
+            sb.AppendLine("<pre>" + Html(detail) + "</pre>");
+            return sb.ToString();
+        }
+
+        private static void AppendSectionHtml(StringBuilder sb, ReportSection section, int headingLevel)
+        {
+            var h = Math.Max(1, Math.Min(6, headingLevel));
+            sb.AppendLine("<section>");
+            sb.AppendLine("<h" + h.ToString(CultureInfo.InvariantCulture) + ">" + Html(section.Title) + "</h" + h.ToString(CultureInfo.InvariantCulture) + ">");
+            if (string.Equals(section.Title, "Readable text", StringComparison.OrdinalIgnoreCase))
+            {
+                var readableText = new List<string>();
+                foreach (var item in section.Items)
+                {
+                    var detail = ReportSection.NormalizeDetailText(item.Detail);
+                    if (string.IsNullOrWhiteSpace(detail))
+                        continue;
+
+                    if (IsHtmlNavigationHeadingItem(item.Title))
+                    {
+                        FlushReadableTextHtml(sb, readableText);
+                        sb.AppendLine("<h3>" + Html((item.Title ?? string.Empty).Trim()) + "</h3>");
+                        sb.AppendLine("<pre>" + Html(detail) + "</pre>");
+                    }
+                    else
+                    {
+                        readableText.Add(detail);
+                    }
+                }
+                FlushReadableTextHtml(sb, readableText);
+                sb.AppendLine("</section>");
+                return;
+            }
+            var tableOpen = false;
+            foreach (var item in section.Items)
+            {
+                var detail = ReportSection.NormalizeDetailText(item.Detail);
+                if (IsHtmlNavigationHeadingItem(item.Title))
+                {
+                    if (tableOpen)
+                    {
+                        EndDetailsTable(sb);
+                        tableOpen = false;
+                    }
+                    sb.AppendLine("<h3>" + Html((item.Title ?? string.Empty).Trim()) + "</h3>");
+                    sb.AppendLine("<pre>" + Html(detail) + "</pre>");
+                    continue;
+                }
+
+                if (!tableOpen)
+                {
+                    StartDetailsTable(sb);
+                    tableOpen = true;
+                }
+
+                if (string.Equals((item.Title ?? string.Empty).Trim(), detail.Trim(), StringComparison.Ordinal))
+                    sb.AppendLine("<tr><td colspan=\"2\"><pre>" + Html(detail) + "</pre></td></tr>");
+                else
+                    sb.AppendLine("<tr><td>" + Html(item.Title) + "</td><td><pre>" + Html(detail) + "</pre></td></tr>");
+            }
+            if (tableOpen)
+                EndDetailsTable(sb);
+            sb.AppendLine("</section>");
+        }
+
+        private static void StartDetailsTable(StringBuilder sb)
+        {
+            sb.AppendLine("<table>");
+            sb.AppendLine("<thead><tr><th scope=\"col\">Item</th><th scope=\"col\">Details</th></tr></thead>");
+            sb.AppendLine("<tbody>");
+        }
+
+        private static void EndDetailsTable(StringBuilder sb)
+        {
+            sb.AppendLine("</tbody>");
+            sb.AppendLine("</table>");
+        }
+
+        private static bool IsHtmlNavigationHeadingItem(string title)
+        {
+            var text = (title ?? string.Empty).Trim();
+            return string.Equals(text, "Notes", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(text, "Scan note", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(text, "Section end", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(text, "End of section", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(text, "Information", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(text, "Info", StringComparison.OrdinalIgnoreCase) ||
+                text.EndsWith(" note", StringComparison.OrdinalIgnoreCase) ||
+                text.EndsWith(" notes", StringComparison.OrdinalIgnoreCase) ||
+                text.EndsWith(" information", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static void FlushReadableTextHtml(StringBuilder sb, List<string> readableText)
+        {
+            if (readableText == null || readableText.Count == 0)
+                return;
+
+            sb.AppendLine("<pre>" + Html(string.Join(Environment.NewLine, readableText)) + "</pre>");
+            readableText.Clear();
+        }
+
+        private static string TextDetailsToHtml(string title, string text)
+        {
+            var sb = new StringBuilder();
+            var safeTitle = title ?? "Details";
+            sb.AppendLine("<h1>" + Html(safeTitle) + "</h1>");
+            var lines = NormalizeLineEndings(text ?? string.Empty).Split(new[] { Environment.NewLine }, StringSplitOptions.None);
+            var paragraph = new StringBuilder();
+            for (var i = 0; i < lines.Length; i++)
+            {
+                var line = lines[i] ?? string.Empty;
+                var next = i + 1 < lines.Length ? lines[i + 1] ?? string.Empty : string.Empty;
+                if (IsUnderline(next, line.Length))
+                {
+                    if (i == 0 && string.Equals(line.Trim(), safeTitle, StringComparison.OrdinalIgnoreCase))
+                    {
+                        i++;
+                        continue;
+                    }
+                    FlushParagraph(sb, paragraph);
+                    var level = next.StartsWith("=", StringComparison.Ordinal) ? 2 : 3;
+                    sb.AppendLine("<h" + level.ToString(CultureInfo.InvariantCulture) + ">" + Html(line.Trim()) + "</h" + level.ToString(CultureInfo.InvariantCulture) + ">");
+                    i++;
+                    continue;
+                }
+
+                if (line.EndsWith(":", StringComparison.Ordinal) && line.Length < 80)
+                {
+                    FlushParagraph(sb, paragraph);
+                    sb.AppendLine("<h3>" + Html(line.TrimEnd(':')) + "</h3>");
+                    continue;
+                }
+
+                if (IsHtmlNavigationHeadingItem(line))
+                {
+                    FlushParagraph(sb, paragraph);
+                    sb.AppendLine("<h3>" + Html(line.Trim()) + "</h3>");
+                    continue;
+                }
+
+                paragraph.AppendLine(line);
+            }
+            FlushParagraph(sb, paragraph);
+            return sb.ToString();
+        }
+
+        private static bool IsUnderline(string line, int headingLength)
+        {
+            if (string.IsNullOrWhiteSpace(line) || headingLength <= 0)
+                return false;
+            var trimmed = line.Trim();
+            if (trimmed.Length < Math.Min(3, headingLength))
+                return false;
+            return trimmed.All(ch => ch == '=') || trimmed.All(ch => ch == '-');
+        }
+
+        private static void FlushParagraph(StringBuilder sb, StringBuilder paragraph)
+        {
+            var text = paragraph.ToString().TrimEnd();
+            paragraph.Length = 0;
+            if (!string.IsNullOrWhiteSpace(text))
+                sb.AppendLine("<pre>" + Html(text) + "</pre>");
+        }
+
+        private static string WrapDetailsHtml(string title, string body)
+        {
+            return "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta http-equiv=\"X-UA-Compatible\" content=\"IE=edge\"><title>" +
+                Html(title) +
+                "</title><style>body{font-family:Segoe UI,Arial,sans-serif;font-size:10pt;line-height:1.45;color:#111;background:#fff;margin:.75rem}h1{font-size:1.25rem;margin:0 0 .75rem}h2{font-size:1.1rem;margin:1rem 0 .35rem}h3{font-size:1rem;margin:.85rem 0 .25rem}table{border-collapse:collapse;width:100%;margin:.25rem 0 1rem}th,td{border:1px solid #aaa;padding:.35rem .5rem;text-align:left;vertical-align:top}th{background:#f2f2f2}td:first-child{width:15rem;font-weight:600}pre{white-space:pre-wrap;font-family:Consolas,monospace;margin:0}</style></head><body>" +
+                (body ?? string.Empty) +
+                "</body></html>";
+        }
+
+        private static string Html(string value)
+        {
+            return WebUtility.HtmlEncode(value ?? string.Empty);
         }
 
         private void OpenAdvancedFileViewer()
@@ -1743,6 +2469,12 @@ namespace FileDentify
             }
             else if (detailsBox.Focused)
                 text = detailsBox.Text.TrimEnd('\r', '\n');
+            else if (detailsBrowser.ContainsFocus)
+            {
+                var node = resultsTree.SelectedNode;
+                if (node != null && node.Tag != null)
+                    text = node.Tag.ToString();
+            }
 
             if (string.IsNullOrEmpty(text))
             {
@@ -1826,7 +2558,8 @@ namespace FileDentify
             {
                 OriginalPath = report == null ? fileNode.Name : report.OriginalPath,
                 DisplayName = report == null ? fileNode.Text : report.DisplayName,
-                SectionTitle = CurrentFileSectionName()
+                SectionTitle = CurrentFileSectionName(),
+                ItemTitle = CurrentFileItemName()
             };
         }
 

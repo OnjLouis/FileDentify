@@ -22,6 +22,7 @@ namespace FileDentify
         public bool DesktopShortcutEnabled;
         public bool FileAssociationEnabled;
         public bool AutoSaveLastReport = true;
+        public bool HtmlDetailsView;
         public string UpdateCheckFrequency = "Startup";
         public bool InstallUpdatesQuietly;
         public DateTime? LastAutomaticUpdateCheckUtc;
@@ -56,6 +57,8 @@ namespace FileDentify
                     settings.FileAssociationEnabled = ParseBool(value, settings.FileAssociationEnabled);
                 else if (key.Equals("AutoSaveLastReport", StringComparison.OrdinalIgnoreCase))
                     settings.AutoSaveLastReport = ParseBool(value, settings.AutoSaveLastReport);
+                else if (key.Equals("HtmlDetailsView", StringComparison.OrdinalIgnoreCase))
+                    settings.HtmlDetailsView = ParseBool(value, settings.HtmlDetailsView);
                 else if (key.Equals("UpdateCheckFrequency", StringComparison.OrdinalIgnoreCase))
                     settings.UpdateCheckFrequency = UpdateService.NormalizeUpdateCheckFrequency(value);
                 else if (key.Equals("InstallUpdatesQuietly", StringComparison.OrdinalIgnoreCase))
@@ -83,6 +86,7 @@ namespace FileDentify
                 "DesktopShortcutEnabled=" + DesktopShortcutEnabled,
                 "FileAssociationEnabled=" + FileAssociationEnabled,
                 "AutoSaveLastReport=" + AutoSaveLastReport,
+                "HtmlDetailsView=" + HtmlDetailsView,
                 "UpdateCheckFrequency=" + UpdateService.NormalizeUpdateCheckFrequency(UpdateCheckFrequency),
                 "InstallUpdatesQuietly=" + InstallUpdatesQuietly,
                 "SectionOrder=" + FormatList(SectionOrder),

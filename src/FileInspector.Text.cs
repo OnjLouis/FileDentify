@@ -114,11 +114,90 @@ namespace FileDentify
                 var cleaned = CleanReadableText(value);
                 if (!IsUsefulReadableLine(cleaned) || seen.Contains(cleaned))
                     continue;
+
+                if (IsReadableFragmentOfExistingLine(lines, cleaned))
+                    continue;
+
+                RemoveExistingReadableFragments(lines, seen, cleaned);
+
                 seen.Add(cleaned);
                 lines.Add(cleaned);
                 if (lines.Count >= maxResults)
                     break;
             }
+        }
+
+        private static bool IsReadableFragmentOfExistingLine(List<string> lines, string candidate)
+        {
+            var normalizedCandidate = NormalizeReadableLineForFragmentMatch(candidate);
+            if (normalizedCandidate.Length < 8)
+                return false;
+
+            foreach (var existing in lines)
+            {
+                var normalizedExisting = NormalizeReadableLineForFragmentMatch(existing);
+                if (string.Equals(normalizedCandidate, normalizedExisting, StringComparison.Ordinal))
+                    return true;
+                if (IsReadableFragment(normalizedCandidate, normalizedExisting))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static void RemoveExistingReadableFragments(List<string> lines, HashSet<string> seen, string candidate)
+        {
+            var normalizedCandidate = NormalizeReadableLineForFragmentMatch(candidate);
+            if (normalizedCandidate.Length < 8)
+                return;
+
+            for (var i = lines.Count - 1; i >= 0; i--)
+            {
+                var normalizedExisting = NormalizeReadableLineForFragmentMatch(lines[i]);
+                if (string.Equals(normalizedExisting, normalizedCandidate, StringComparison.Ordinal))
+                {
+                    seen.Remove(lines[i]);
+                    lines.RemoveAt(i);
+                    continue;
+                }
+                if (!IsReadableFragment(normalizedExisting, normalizedCandidate))
+                    continue;
+                seen.Remove(lines[i]);
+                lines.RemoveAt(i);
+            }
+        }
+
+        private static bool IsReadableFragment(string possibleFragment, string possibleFullLine)
+        {
+            if (string.IsNullOrEmpty(possibleFragment) || string.IsNullOrEmpty(possibleFullLine))
+                return false;
+            if (possibleFragment.Length >= possibleFullLine.Length)
+                return false;
+            if (possibleFragment.Length < 8)
+                return false;
+            if (possibleFullLine.Length - possibleFragment.Length < 1)
+                return false;
+            if (possibleFullLine.IndexOf(possibleFragment, StringComparison.Ordinal) < 0)
+                return false;
+
+            var ratio = (double)possibleFragment.Length / possibleFullLine.Length;
+            return ratio >= 0.55;
+        }
+
+        private static string NormalizeReadableLineForFragmentMatch(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return string.Empty;
+
+            var sb = new StringBuilder(value.Length);
+            foreach (var ch in value.Trim())
+            {
+                if (ch > 127)
+                    continue;
+                if (char.IsLetterOrDigit(ch))
+                    sb.Append(char.ToLowerInvariant(ch));
+            }
+            return sb.ToString();
         }
 
         private static string CleanReadableText(string value)
@@ -164,6 +243,19 @@ namespace FileDentify
             if (symbols > lettersOrDigits)
                 return false;
 
+            var extendedChars = value.Count(ch => ch > 127);
+            if (!value.Any(char.IsWhiteSpace) && (extendedChars >= 2 || (extendedChars > 0 && value.Length > 10)))
+                return false;
+
+            if (!value.Any(char.IsWhiteSpace) && symbols >= 4)
+                return false;
+
+            if (!value.Any(char.IsWhiteSpace) && value.Length >= 10 && symbols >= 2 && NaturalWordCount(value) <= 1)
+                return false;
+
+            if (HasLongAscendingAsciiLetterRun(value, 5))
+                return false;
+
             if (value.Length > 30)
             {
                 var dominant = value.Where(char.IsLetterOrDigit).GroupBy(ch => ch).Select(g => g.Count()).DefaultIfEmpty(0).Max();
@@ -184,6 +276,33 @@ namespace FileDentify
             var vowels = value.Count(ch => "aeiouAEIOU".IndexOf(ch) >= 0);
             if (value.Length >= 12 && vowels >= 2 && symbols <= lettersOrDigits / 4)
                 return true;
+
+            return false;
+        }
+
+        private static bool HasLongAscendingAsciiLetterRun(string value, int minRunLength)
+        {
+            var runLength = 1;
+            var previous = '\0';
+            foreach (var raw in value)
+            {
+                var ch = char.ToLowerInvariant(raw);
+                if (ch < 'a' || ch > 'z')
+                {
+                    runLength = 1;
+                    previous = '\0';
+                    continue;
+                }
+
+                if (previous != '\0' && ch == previous + 1)
+                    runLength++;
+                else
+                    runLength = 1;
+
+                if (runLength >= minRunLength)
+                    return true;
+                previous = ch;
+            }
 
             return false;
         }

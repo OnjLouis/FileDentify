@@ -17,6 +17,8 @@ namespace FileDentify
             var ext = Path.GetExtension(path).ToLowerInvariant();
             if (expectation.AcceptedExtensions.Contains(ext))
                 return;
+            if (SpeechVoiceTypeName(path, header) != null)
+                return;
 
             var section = AddSection(sections, "Safety hints");
             Add(section, "Header and extension mismatch", "The first bytes look like " + expectation.Description + ", but the filename extension is " + (string.IsNullOrEmpty(ext) ? "(none)" : ext) + ".");
@@ -33,7 +35,7 @@ namespace FileDentify
             if (StartsWith(header, Encoding.ASCII.GetBytes("MZ")))
                 return HeaderExpectation.For("a Windows executable or DLL", ".exe", ".dll", ".scr", ".sys", ".ocx", ".cpl", ".drv");
             if (StartsWith(header, Encoding.ASCII.GetBytes("PK\x03\x04")) || StartsWith(header, Encoding.ASCII.GetBytes("PK\x05\x06")) || StartsWith(header, Encoding.ASCII.GetBytes("PK\x07\x08")))
-                return HeaderExpectation.For("a ZIP-compatible container", ".zip", ".docx", ".xlsx", ".pptx", ".jar", ".apk", ".ipa", ".ipsw", ".epub", ".ablbundle");
+                return HeaderExpectation.For("a ZIP-compatible container", ".zip", ".docx", ".xlsx", ".pptx", ".jar", ".apk", ".ipa", ".ipsw", ".epub", ".ablbundle", ".nvda-addon", ".nupkg", ".ckpt", ".pt", ".pth", ".appx", ".appxbundle", ".msix", ".msixbundle");
             if (StartsWith(header, Encoding.ASCII.GetBytes("Rar!\x1A\x07\x00")) || StartsWith(header, Encoding.ASCII.GetBytes("Rar!\x1A\x07\x01\x00")))
                 return HeaderExpectation.For("a RAR archive", ".rar");
             if (StartsWith(header, Encoding.GetEncoding(28591).GetBytes("7z\xBC\xAF\x27\x1C")))

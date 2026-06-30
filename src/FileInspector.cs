@@ -34,7 +34,10 @@ namespace FileDentify
             byte[] header = ReadPrefix(path, HeaderReadSize);
             byte[] stringSample = header.Length >= StringReadSize ? header : ReadPrefix(path, StringReadSize);
             byte[] displayHeader = RedactSensitiveClipmanSample(path, header);
+            displayHeader = RedactSensitiveQwsSample(path, displayHeader);
             byte[] displayStringSample = ReferenceEquals(stringSample, header) ? displayHeader : RedactSensitiveClipmanSample(path, stringSample);
+            if (!ReferenceEquals(displayStringSample, displayHeader))
+                displayStringSample = RedactSensitiveQwsSample(path, displayStringSample);
             var libmagic = LibmagicProbe.Identify(path);
             var sections = report.Sections;
 
@@ -76,6 +79,8 @@ namespace FileDentify
             AddImageInfo(sections, header);
             AddPdfInfo(sections, path, header, file.Length);
             AddZipDocumentMetadata(sections, path, header);
+            AddEbookInfo(sections, path, header, file.Length);
+            AddNvdaAddonInfo(sections, path, header);
             AddFontInfo(sections, header);
             AddOleCompoundInfo(sections, path, header);
             AddCompressedStreamInfo(sections, header);
@@ -90,12 +95,22 @@ namespace FileDentify
             AddClipmanInfo(sections, path, stringSample, file.Length);
             AddSavedReportInfo(sections, path, header);
             AddDeveloperFormatInfo(sections, path, header);
+            AddDeveloperAppResourceInfo(sections, path, header);
             AddBackupConfigInfo(sections, path, header, stringSample, file.Length);
             AddLegacySoundBankInfo(sections, path, header, stringSample, file.Length);
+            AddEnsoniqInfo(sections, path, header, stringSample, file.Length);
+            AddQwsInfo(sections, path, stringSample);
             AddSymbianPackageInfo(sections, path, header);
             AddSymbianAppResourceInfo(sections, path, header, stringSample, file.Length);
             AddJavaMidletInfo(sections, path, header, file.Length);
             AddFirmwareInfo(sections, path, header, file.Length);
+            AddHardwareIdDatabaseInfo(sections, path, header);
+            AddAccessibilityDataInfo(sections, path, header);
+            AddLegacyAppResourceInfo(sections, path, header, stringSample, file.Length);
+            AddPersonalDataInfo(sections, path, stringSample);
+            AddWindowsSystemInfo(sections, path, header, file.Length);
+            AddInstallerDataInfo(sections, path, header, file.Length);
+            AddVirtualMachineMetadataInfo(sections, path, header, file.Length);
             AddNativeInstrumentsInfo(sections, path, stringSample);
             AddSteinbergCubaseInfo(sections, path, stringSample);
             AddAppleFormatInfo(sections, path, header);
@@ -103,7 +118,9 @@ namespace FileDentify
             AddRolandCloudInfo(sections, path, header, stringSample, file.Length);
             AddSampleLibraryInfo(sections, path, header, stringSample, file.Length);
             AddMusicProjectFormatInfo(sections, path, header, stringSample, file.Length);
+            AddProjectSidecarInfo(sections, path, header, stringSample, file.Length);
             AddGameFileInfo(sections, path, header);
+            AddLegacyMusicInfo(sections, path, header, stringSample, file.Length);
             AddPropertyListInfo(sections, header);
             AddSqliteInfo(sections, header);
             AddRarInfo(sections, header);

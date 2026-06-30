@@ -103,6 +103,32 @@ function Test-Directory([string]$root, [string]$label) {
     }
 }
 
+function Test-ManualChangelog {
+    $manualPath = Join-Path $repoRoot 'src\ManualService.cs'
+    if (-not (Test-Path -LiteralPath $manualPath)) {
+        Fail "ManualService.cs does not exist."
+    }
+
+    $text = Get-Content -LiteralPath $manualPath -Raw
+    $matches = [regex]::Matches($text, 'AppendLine\("<h3>([0-9]+(?:\.[0-9]+)*)</h3>"\)')
+    $versions = @($matches | ForEach-Object { $_.Groups[1].Value })
+    $requiredVersions = @('1.4', '1.3', '1.2', '1.1.1', '1.1', '1.0')
+
+    foreach ($version in $requiredVersions) {
+        $count = @($versions | Where-Object { $_ -eq $version }).Count
+        if ($count -ne 1) {
+            Fail "Manual changelog must contain exactly one $version section; found $count."
+        }
+    }
+
+    for ($i = 0; $i -lt $requiredVersions.Count; $i++) {
+        $actual = $versions[$i]
+        if ($actual -ne $requiredVersions[$i]) {
+            Fail "Manual changelog section order is wrong. Expected $($requiredVersions -join ', '); found $($versions -join ', ')."
+        }
+    }
+}
+
 function Test-Zip([string]$zipPath) {
     if (-not (Test-Path -LiteralPath $zipPath)) {
         Fail "Release ZIP does not exist: $zipPath"
@@ -148,6 +174,7 @@ function Test-AllHistory {
 }
 
 Test-Directory $repoRoot 'working tree'
+Test-ManualChangelog
 
 if (-not [string]::IsNullOrWhiteSpace($ReleaseZip)) {
     Test-Zip $ReleaseZip

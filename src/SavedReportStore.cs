@@ -12,7 +12,7 @@ namespace FileDentify
     internal static class SavedReportStore
     {
         public const string Extension = ".fdreport";
-        private const int FormatVersion = 2;
+        private const int FormatVersion = 3;
         private const long MaxLoadBytes = 128L * 1024L * 1024L;
 
         public static string AutoSavePath
@@ -93,13 +93,51 @@ namespace FileDentify
                     if (sourceSection.Items != null)
                     {
                         foreach (var item in sourceSection.Items)
-                            section.Items.Add(new ReportItem { Title = item.Title ?? string.Empty, Detail = item.Detail ?? string.Empty });
+                            AddLoadedReportItem(section, item.Title ?? string.Empty, item.Detail ?? string.Empty);
                     }
                     report.Sections.Add(section);
                 }
             }
             report.FullText = FileInspector.BuildReportText(report);
             return report;
+        }
+
+        private static void AddLoadedReportItem(ReportSection section, string title, string detail)
+        {
+            if (IsMergeableReportNoteTitle(title))
+            {
+                var newDetail = FormatMergedReportNote(title, detail);
+                var existing = section.Items.FirstOrDefault(item => IsMergeableReportNoteTitle(item.Title));
+                if (existing != null)
+                {
+                    existing.Title = "Notes";
+                    if (!string.IsNullOrWhiteSpace(newDetail) && (existing.Detail ?? string.Empty).IndexOf(newDetail, StringComparison.OrdinalIgnoreCase) < 0)
+                        existing.Detail = string.IsNullOrWhiteSpace(existing.Detail)
+                            ? newDetail
+                            : existing.Detail.TrimEnd() + Environment.NewLine + Environment.NewLine + newDetail;
+                    return;
+                }
+                section.Items.Add(new ReportItem { Title = "Notes", Detail = newDetail });
+                return;
+            }
+            section.Items.Add(new ReportItem { Title = title, Detail = detail });
+        }
+
+        private static bool IsMergeableReportNoteTitle(string title)
+        {
+            var text = (title ?? string.Empty).Trim();
+            return string.Equals(text, "Notes", StringComparison.OrdinalIgnoreCase) ||
+                text.EndsWith(" note", StringComparison.OrdinalIgnoreCase) ||
+                text.EndsWith(" notes", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string FormatMergedReportNote(string title, string detail)
+        {
+            var text = detail ?? string.Empty;
+            var label = (title ?? string.Empty).Trim();
+            if (string.Equals(label, "Notes", StringComparison.OrdinalIgnoreCase) || string.IsNullOrWhiteSpace(label))
+                return text;
+            return label + ": " + text;
         }
     }
 
@@ -127,6 +165,7 @@ namespace FileDentify
         public string OriginalPath { get; set; }
         public string DisplayName { get; set; }
         public string SectionTitle { get; set; }
+        public string ItemTitle { get; set; }
     }
 
     internal sealed class SavedFileReport

@@ -36,6 +36,32 @@ namespace FileDentify
                 yield return new ReportItem { Title = "Symbian SIS", Detail = "Symbian installation package UID" };
             if (StartsWith(data, Encoding.ASCII.GetBytes("_PT_")))
                 yield return new ReportItem { Title = "Firmware marker", Detail = "PC BIOS/UEFI firmware image marker" };
+            if (StartsWith(data, Encoding.ASCII.GetBytes("ANDROID!")))
+                yield return new ReportItem { Title = "Android boot image", Detail = "Android boot/recovery image header" };
+            if (data.Length >= 4 && data[0] == 0x27 && data[1] == 0x05 && data[2] == 0x19 && data[3] == 0x56)
+                yield return new ReportItem { Title = "U-Boot uImage", Detail = "U-Boot legacy image header" };
+            if (data.Length >= 512 && data[0] == 0x55 && data[1] == 0x46 && data[2] == 0x32 && data[3] == 0x0A)
+                yield return new ReportItem { Title = "UF2 firmware", Detail = "UF2 microcontroller firmware block" };
+            if (StartsWith(data, Encoding.ASCII.GetBytes("HDR0")))
+                yield return new ReportItem { Title = "TRX firmware", Detail = "Broadcom/OpenWrt TRX firmware image" };
+            if (data.Length >= 4 && data[0] == 0xD0 && data[1] == 0x0D && data[2] == 0xFE && data[3] == 0xED)
+                yield return new ReportItem { Title = "Device Tree Blob", Detail = "Flattened Device Tree binary" };
+            if (StartsWith(data, Encoding.ASCII.GetBytes("ElfFile\0")))
+                yield return new ReportItem { Title = "Windows Event Log", Detail = "EVTX event log" };
+            if (StartsWith(data, Encoding.ASCII.GetBytes("SZDD")))
+                yield return new ReportItem { Title = "Windows compressed setup file", Detail = "SZDD single-file setup compression" };
+            if (StartsWith(data, Encoding.ASCII.GetBytes("$SDI0001")))
+                yield return new ReportItem { Title = "Windows SDI", Detail = "Windows boot SDI ramdisk image" };
+            if (StartsWith(data, Encoding.ASCII.GetBytes("aLuZ")))
+                yield return new ReportItem { Title = "InstallShield script", Detail = "InstallShield compiled setup script" };
+            if (StartsWith(data, Encoding.ASCII.GetBytes("ISc(")))
+                yield return new ReportItem { Title = "InstallShield header", Detail = "InstallShield setup data/header file" };
+            if (data.Length >= 12 && Encoding.ASCII.GetString(data, 8, 4) == "zdbf")
+                yield return new ReportItem { Title = "Windows SDB", Detail = "Windows application compatibility database" };
+            if (data.Length >= 4 &&
+                ((data[0] == 0xDE && data[1] == 0x12 && data[2] == 0x04 && data[3] == 0x95) ||
+                 (data[0] == 0x95 && data[1] == 0x04 && data[2] == 0x12 && data[3] == 0xDE)))
+                yield return new ReportItem { Title = "gettext MO", Detail = "GNU gettext compiled message catalog" };
             if (StartsWith(data, Encoding.ASCII.GetBytes("RSVQ")))
                 yield return new ReportItem { Title = "Roland SVQ", Detail = "Roland sequencer song" };
             if (data.Length >= 6 && data[2] == (byte)'S' && data[3] == (byte)'V' && data[4] == (byte)'D' && data[5] == (byte)'1')
@@ -48,10 +74,42 @@ namespace FileDentify
                 yield return new ReportItem { Title = "VST preset chunk", Detail = "VST FXP/FXB preset or bank" };
             if (Ascii(data, 0, Math.Min(4096, data.Length)).IndexOf("\"Format\":\"FileDentify report\"", StringComparison.OrdinalIgnoreCase) >= 0)
                 yield return new ReportItem { Title = "FileDentify report", Detail = "Native FileDentify saved report" };
+            if (StartsWith(data, Encoding.ASCII.GetBytes("ITOLITLS")))
+                yield return new ReportItem { Title = "Microsoft Reader LIT", Detail = "Legacy Microsoft Reader ebook" };
+            if (StartsWith(data, Encoding.ASCII.GetBytes("ITSF")))
+                yield return new ReportItem { Title = "CHM help", Detail = "Compiled HTML Help file" };
             if (data.Length > 0 && data[0] == 0xF0)
                 yield return new ReportItem { Title = "MIDI SysEx", Detail = "MIDI System Exclusive data" };
             if (StartsWith(data, Encoding.ASCII.GetBytes("NESM\x1A")))
                 yield return new ReportItem { Title = "NES Sound Format", Detail = "Nintendo Entertainment System music file" };
+            if (StartsWith(data, Encoding.ASCII.GetBytes("Vgm ")))
+                yield return new ReportItem { Title = "VGM", Detail = "Video Game Music chiptune log" };
+            if (StartsWith(data, Encoding.ASCII.GetBytes("PSID")))
+                yield return new ReportItem { Title = "PSID", Detail = "PlaySID Commodore 64 SID music" };
+            if (StartsWith(data, Encoding.ASCII.GetBytes("RSID")))
+                yield return new ReportItem { Title = "RSID", Detail = "Real C64 SID music" };
+            if (StartsWith(data, Encoding.ASCII.GetBytes("S98")))
+                yield return new ReportItem { Title = "S98", Detail = "S98 chiptune sound log" };
+            if (StartsWith(data, Encoding.ASCII.GetBytes("XMF_")))
+                yield return new ReportItem { Title = "XMF", Detail = "Extensible Music Format container" };
+            if (StartsWith(data, Encoding.ASCII.GetBytes("melo")))
+                yield return new ReportItem { Title = "MFi/MLD", Detail = "MFi mobile melody container" };
+            if (data.Length >= 12 && StartsWith(data, Encoding.ASCII.GetBytes("RIFF")) && Encoding.ASCII.GetString(data, 8, 4) == "QLCM")
+                yield return new ReportItem { Title = "QCP", Detail = "Qualcomm PureVoice / QCELP audio" };
+            if (StartsWith(data, Encoding.ASCII.GetBytes("PSF$")))
+                yield return new ReportItem { Title = "mini2SF", Detail = "Nintendo DS 2SF music stub" };
+            if (StartsWith(data, Encoding.ASCII.GetBytes("IREZ")))
+                yield return new ReportItem { Title = "Beatnik RMF", Detail = "Beatnik Rich Music Format" };
+            if (StartsWith(data, Encoding.ASCII.GetBytes("QSEQ")))
+                yield return new ReportItem { Title = "QSEQ", Detail = "Korg i-series sequencer song" };
+            if (StartsWith(data, Encoding.ASCII.GetBytes("RCM-PC98")))
+                yield return new ReportItem { Title = "Recomposer RCP", Detail = "COME ON MUSIC Recomposer sequence" };
+            if (StartsWith(data, Encoding.ASCII.GetBytes("COME ON MUSIC RECOMPOSER")))
+                yield return new ReportItem { Title = "Recomposer", Detail = "COME ON MUSIC Recomposer sequence/support file" };
+            if (StartsWith(data, Encoding.ASCII.GetBytes("MAKI")))
+                yield return new ReportItem { Title = "MAG graphics", Detail = "Maki-chan / MAG graphics file used by old MIDI collections" };
+            if (data.Length >= 12 && StartsWith(data, Encoding.ASCII.GetBytes("RIFF")) && Encoding.ASCII.GetString(data, 8, 4) == "SFIP")
+                yield return new ReportItem { Title = "SFI/SFIP", Detail = "RIFF SFIP sampler or impulse-response data" };
             if (StartsWith(data, Encoding.ASCII.GetBytes("NES\x1A")))
                 yield return new ReportItem { Title = "iNES ROM", Detail = "Nintendo Entertainment System ROM image" };
             if (StartsWith(data, Encoding.ASCII.GetBytes("PACK")))
@@ -82,6 +140,14 @@ namespace FileDentify
                 yield return new ReportItem { Title = "WebAssembly", Detail = "WebAssembly binary module" };
 
             var headText = Ascii(data, 0, Math.Min(512, data.Length)).TrimStart('\uFEFF', '.', ' ', '\t', '\r', '\n');
+            if (headText.IndexOf("BEGIN:VCARD", StringComparison.OrdinalIgnoreCase) >= 0)
+                yield return new ReportItem { Title = "vCard", Detail = "vCard contact data" };
+            if (headText.IndexOf("BEGIN:VCALENDAR", StringComparison.OrdinalIgnoreCase) >= 0)
+                yield return new ReportItem { Title = "iCalendar", Detail = "iCalendar calendar/reminder data" };
+            if (headText.IndexOf("<opml", StringComparison.OrdinalIgnoreCase) >= 0)
+                yield return new ReportItem { Title = "OPML", Detail = "OPML outline/subscription list" };
+            if (headText.IndexOf("<WMEncoder", StringComparison.OrdinalIgnoreCase) >= 0)
+                yield return new ReportItem { Title = "Windows Media Encoder", Detail = "Windows Media Encoder session XML" };
             if (data.Length >= 18 && headText.StartsWith("[InternetShortcut]", StringComparison.OrdinalIgnoreCase))
                 yield return new ReportItem { Title = "Internet Shortcut", Detail = "Windows Internet shortcut (.url)" };
             else if (string.Equals(Path.GetExtension(path), ".url", StringComparison.OrdinalIgnoreCase) &&
@@ -112,6 +178,8 @@ namespace FileDentify
                 yield return new ReportItem { Title = "Java MIDlet extension", Detail = midlet };
             if (string.Equals(Path.GetExtension(path), ".fdreport", StringComparison.OrdinalIgnoreCase))
                 yield return new ReportItem { Title = "FileDentify report extension", Detail = "Native FileDentify saved report" };
+            if (string.Equals(Path.GetExtension(path), ".vmg", StringComparison.OrdinalIgnoreCase))
+                yield return new ReportItem { Title = "VMG extension", Detail = "Nokia/Symbian saved message" };
             if (StartsWith(data, Encoding.ASCII.GetBytes("Spitfire")))
                 yield return new ReportItem { Title = "Spitfire marker", Detail = "Spitfire Audio sample container or metadata" };
             if (StartsWith(data, Encoding.ASCII.GetBytes("BOMStore")))
@@ -136,6 +204,24 @@ namespace FileDentify
                 yield return new ReportItem { Title = "Lua bytecode", Detail = "Lua bytecode or Lua-based resource bundle" };
             if (StartsWith(data, Encoding.ASCII.GetBytes("GGUF")))
                 yield return new ReportItem { Title = "GGUF model", Detail = "GGUF machine-learning model" };
+            if (string.Equals(Path.GetExtension(path), ".asar", StringComparison.OrdinalIgnoreCase) && data.Length >= 24)
+                yield return new ReportItem { Title = "Electron ASAR extension", Detail = "Electron application resource archive" };
+            if (string.Equals(Path.GetExtension(path), ".nupkg", StringComparison.OrdinalIgnoreCase))
+                yield return new ReportItem { Title = "NuGet extension", Detail = "NuGet package archive" };
+            if (string.Equals(Path.GetExtension(path), ".ckpt", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(Path.GetExtension(path), ".pt", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(Path.GetExtension(path), ".pth", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(Path.GetExtension(path), ".safetensors", StringComparison.OrdinalIgnoreCase))
+                yield return new ReportItem { Title = "AI model extension", Detail = "Machine-learning model checkpoint or tensor file" };
+            var vmware = VmwareMetadataExtensionDescription(path);
+            if (vmware != null)
+                yield return new ReportItem { Title = "VMware metadata extension", Detail = vmware };
+            if (string.Equals(Path.GetExtension(path), ".qvcu", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(Path.GetExtension(path), ".nuul216", StringComparison.OrdinalIgnoreCase))
+                yield return new ReportItem { Title = "Acapela voice extension", Detail = "Acapela speech voice data" };
+            var speechVoice = SpeechVoiceExtensionDescription(path, data);
+            if (speechVoice != null)
+                yield return new ReportItem { Title = "Speech voice extension", Detail = speechVoice };
             if (data.Length > 196 && data[4] == 0x47 && data[196] == 0x47)
                 yield return new ReportItem { Title = "Blu-ray transport stream", Detail = "MPEG-2 transport stream with 192-byte Blu-ray source packets" };
             if (data.Length > 188 && data[0] == 0x47 && data[188] == 0x47)
@@ -145,9 +231,17 @@ namespace FileDentify
             if (mobileTone != null)
                 yield return new ReportItem { Title = "Mobile tone extension", Detail = mobileTone };
 
+            var legacyMusic = LegacyMusicExtensionDescription(path);
+            if (legacyMusic != null)
+                yield return new ReportItem { Title = "Legacy music extension", Detail = legacyMusic };
+
             var game = GameExtensionDescription(path);
             if (game != null)
                 yield return new ReportItem { Title = "Game/ROM extension", Detail = game };
+
+            var ebook = EbookExtensionDescription(path);
+            if (ebook != null)
+                yield return new ReportItem { Title = "Ebook/help extension", Detail = ebook };
 
             var nativeInstruments = NativeInstrumentsExtensionDescription(path);
             if (nativeInstruments != null)
@@ -227,6 +321,8 @@ namespace FileDentify
                 case ".vdf": return "Valve Data Format text";
                 case ".ips": return "IPS binary patch";
                 case ".bps": return "BPS binary patch";
+                case ".bpak": return "Protected game package";
+                case ".nvda-addon": return "NVDA add-on package";
                 default: return null;
             }
         }
@@ -238,10 +334,75 @@ namespace FileDentify
                 case ".imy": return "iMelody mobile ringtone";
                 case ".mmf": return "Yamaha SMAF/MMF mobile audio or ringtone";
                 case ".pmd": return "Qualcomm CMX/PMD mobile audio";
+                case ".qcp": return "Qualcomm PureVoice/QCELP mobile audio";
+                case ".mld": return "MFi/MLD mobile melody";
+                case ".mxmf": return "Mobile XMF music container";
                 case ".amr": return "Adaptive Multi-Rate mobile speech/audio";
                 case ".ota": return "Nokia OTA ringtone or operator-logo data";
                 case ".rtttl": return "RTTTL ringtone text";
                 case ".rtx": return "Nokia RTX ringtone text";
+                default: return null;
+            }
+        }
+
+        private static string LegacyMusicExtensionDescription(string path)
+        {
+            switch (Path.GetExtension(path).ToLowerInvariant())
+            {
+                case ".vgm": return "Video Game Music chiptune log";
+                case ".vgz": return "gzip-compressed Video Game Music log";
+                case ".sid": return "Commodore 64 SID music";
+                case ".s98": return "S98 chiptune sound log";
+                case ".rsn": return "SNES RSN/SPC music archive";
+                case ".mini2sf": return "Nintendo DS mini2SF music stub";
+                case ".xmf": return "Extensible Music Format container";
+                case ".rmf": return "Beatnik Rich Music Format";
+                case ".rcp": return "Recomposer RCP sequence";
+                case ".hed": return "Recomposer header/metadata sidecar";
+                case ".g36": return "Recomposer G36 sequence";
+                case ".wrd": return "WRD MIDI lyric/graphics script";
+                case ".mag": return "MAG graphics file used by old MIDI collections";
+                case ".lyc": return "Roland/Karaoke lyric sidecar";
+                case ".zel": return "Text music macro/source file";
+                case ".gmc": return "Text music macro/source file";
+                case ".qsq": return "Korg i-series QSEQ song";
+                case ".ovw": return "Cubase waveform overview sidecar";
+                case ".sfk": return "Sound Forge waveform overview sidecar";
+                case ".peak": return "Audio waveform peak sidecar";
+                case ".sfi": return "Sampler or impulse-response SFI data";
+                case ".sam": return "Raw sampler sample";
+                case ".tun": return "Microtuning map file";
+                default: return null;
+            }
+        }
+
+        private static string EbookExtensionDescription(string path)
+        {
+            switch (Path.GetExtension(path).ToLowerInvariant())
+            {
+                case ".lit": return "Microsoft Reader LIT ebook";
+                case ".mobi": return "Mobipocket/Kindle ebook";
+                case ".prc": return "Palm/Mobipocket resource database";
+                case ".pdb": return "Palm/eReader database";
+                case ".lrf": return "Sony Reader LRF ebook";
+                case ".brf": return "Braille Ready Format text";
+                case ".cbr": return "Comic Book RAR archive";
+                case ".cbz": return "Comic Book ZIP archive";
+                case ".chm": return "Compiled HTML Help file";
+                case ".hlp": return "WinHelp help file";
+                default: return null;
+            }
+        }
+
+        private static string VmwareMetadataExtensionDescription(string path)
+        {
+            switch (Path.GetExtension(path).ToLowerInvariant())
+            {
+                case ".vmx": return "VMware virtual machine configuration";
+                case ".vmsd": return "VMware snapshot metadata";
+                case ".vmxf": return "VMware extended virtual machine metadata";
+                case ".nvram": return "VMware virtual machine NVRAM";
+                case ".scoreboard": return "VMware virtual machine runtime scoreboard";
                 default: return null;
             }
         }
@@ -358,6 +519,9 @@ namespace FileDentify
                 case ".svd": return "Roland sound/backup data";
                 case ".svq": return "Roland sequencer song";
                 case ".smp": return "Sampler or device sample data";
+                case ".efe": return "Ensoniq EPS instrument file";
+                case ".eda": return "Ensoniq ASR-10 disk image";
+                case ".edt": return "Ensoniq TS disk image";
                 case ".helm": return "Helm synthesizer preset";
                 case ".wt": return "Surge wavetable";
                 case ".nam": return "Neural Amp Modeler model";
@@ -393,6 +557,15 @@ namespace FileDentify
                 case ".fxr_rmx": return "Spectrasonics Stylus RMX effect rack";
                 case ".kit_rmx": return "Spectrasonics Stylus RMX kit";
                 case ".prt_rmx": return "Spectrasonics Stylus RMX part";
+                case ".ctb": return "liblouis braille contraction/translation table";
+                case ".utb": return "liblouis Unicode braille translation table";
+                case ".uti": return "liblouis include table";
+                case ".cti": return "liblouis character/include table";
+                case ".rock": return "Rockbox plug-in module";
+                case ".milk": return "MilkDrop visualisation preset";
+                case ".maki": return "Winamp Modern skin MAKI script";
+                case ".avb": return "Microsoft Chat Comic Art avatar";
+                case ".jgl": return "Roland Juno-G Librarian file";
                 default: return null;
             }
         }
@@ -461,6 +634,35 @@ namespace FileDentify
                     return null;
                 default: return null;
             }
+        }
+
+        private static string SpeechVoiceExtensionDescription(string path, byte[] data)
+        {
+            var lower = path.ToLowerInvariant();
+            var name = Path.GetFileName(path) ?? string.Empty;
+            var ext = Path.GetExtension(path).ToLowerInvariant();
+            if (lower.Contains("\\ivona\\") || name.StartsWith("ivona", StringComparison.OrdinalIgnoreCase))
+                return "IVONA speech voice package";
+            if (lower.Contains("\\loquendo") || name.IndexOf("Loquendo_TTS", StringComparison.OrdinalIgnoreCase) >= 0)
+                return "Loquendo TTS package";
+            if (lower.Contains("\\supertonic\\") && ext == ".onnx")
+                return "SuperTonic ONNX neural TTS model";
+            if (lower.Contains("\\orpheus\\") && ext == ".tts")
+                return "Dolphin Orpheus TTS language data";
+            if ((lower.Contains("\\eloquence\\") || lower.Contains("\\ibmtts\\")) && ext == ".syn")
+                return "Eloquence/IBM TTS synthesizer language module";
+            if (lower.Contains("\\rhvoice") && (name.Equals("voice.data", StringComparison.OrdinalIgnoreCase) || ext == ".fst"))
+                return "RHVoice speech data";
+            if (lower.Contains("\\rhvoice") && ext == ".pdf" && !StartsWith(data, Encoding.ASCII.GetBytes("%PDF")))
+                return "RHVoice acoustic model data using .pdf extension";
+            if (lower.Contains("\\flexvoice\\") && (ext == ".bin" || ext == ".dat"))
+                return "Mindmaker FlexVoice speech data";
+            if ((lower.Contains("\\espeak-ng-data\\") || lower.Contains("\\espeak-data\\")) &&
+                (name.EndsWith("_dict", StringComparison.OrdinalIgnoreCase) || name.StartsWith("phon", StringComparison.OrdinalIgnoreCase)))
+                return "eSpeak NG speech synthesis data";
+            if (lower.Contains("\\stspeech\\") || lower.Contains("\\bestspeech\\") || lower.Contains("\\tgspeechbox\\"))
+                return "NVDA speech engine support data";
+            return null;
         }
 
         private static readonly Signature[] Signatures =

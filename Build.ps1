@@ -42,27 +42,27 @@ foreach ($oldPath in @($oldPackageOutput, $oldPackageConsoleOutput, $oldInstalle
 }
 
 $resources = @(
-    ('/resource:"{0}",FileDentify.Embedded.file.exe' -f (Join-Path $libmagicRoot 'file.exe')),
-    ('/resource:"{0}",FileDentify.Embedded.libmagic-1.dll' -f (Join-Path $libmagicRoot 'libmagic-1.dll')),
-    ('/resource:"{0}",FileDentify.Embedded.libsystre-0.dll' -f (Join-Path $libmagicRoot 'libsystre-0.dll')),
-    ('/resource:"{0}",FileDentify.Embedded.libtre-5.dll' -f (Join-Path $libmagicRoot 'libtre-5.dll')),
-    ('/resource:"{0}",FileDentify.Embedded.libintl-8.dll' -f (Join-Path $libmagicRoot 'libintl-8.dll')),
-    ('/resource:"{0}",FileDentify.Embedded.libiconv-2.dll' -f (Join-Path $libmagicRoot 'libiconv-2.dll')),
-    ('/resource:"{0}",FileDentify.Embedded.magic.mgc' -f (Join-Path $libmagicRoot 'magic.mgc')),
-    ('/resource:"{0}",FileDentify.Embedded.COPYING.file' -f (Join-Path $libmagicRoot 'COPYING.file')),
-    ('/resource:"{0}",FileDentify.Embedded.COPYING.libsystre' -f (Join-Path $libmagicRoot 'COPYING.libsystre')),
-    ('/resource:"{0}",FileDentify.Embedded.COPYING.libtre' -f (Join-Path $libmagicRoot 'COPYING.libtre')),
-    ('/resource:"{0}",FileDentify.Embedded.COPYING.gettext-runtime' -f (Join-Path $libmagicRoot 'COPYING.gettext-runtime')),
-    ('/resource:"{0}",FileDentify.Embedded.COPYING.libintl' -f (Join-Path $libmagicRoot 'COPYING.libintl')),
-    ('/resource:"{0}",FileDentify.Embedded.COPYING.libiconv-gpl' -f (Join-Path $libmagicRoot 'COPYING.libiconv-gpl')),
-    ('/resource:"{0}",FileDentify.Embedded.COPYING.libiconv-lgpl' -f (Join-Path $libmagicRoot 'COPYING.libiconv-lgpl')),
-    ('/resource:"{0}",FileDentify.Embedded.Tolk.dll' -f (Join-Path $tolkRoot 'Tolk.dll')),
-    ('/resource:"{0}",FileDentify.Embedded.nvdaControllerClient64.dll' -f (Join-Path $tolkRoot 'nvdaControllerClient64.dll')),
-    ('/resource:"{0}",FileDentify.Embedded.Tolk.LICENSE.txt' -f (Join-Path $tolkRoot 'Tolk.LICENSE.txt'))
+    ('/resource:{0},FileDentify.Embedded.file.exe' -f (Join-Path $libmagicRoot 'file.exe')),
+    ('/resource:{0},FileDentify.Embedded.libmagic-1.dll' -f (Join-Path $libmagicRoot 'libmagic-1.dll')),
+    ('/resource:{0},FileDentify.Embedded.libsystre-0.dll' -f (Join-Path $libmagicRoot 'libsystre-0.dll')),
+    ('/resource:{0},FileDentify.Embedded.libtre-5.dll' -f (Join-Path $libmagicRoot 'libtre-5.dll')),
+    ('/resource:{0},FileDentify.Embedded.libintl-8.dll' -f (Join-Path $libmagicRoot 'libintl-8.dll')),
+    ('/resource:{0},FileDentify.Embedded.libiconv-2.dll' -f (Join-Path $libmagicRoot 'libiconv-2.dll')),
+    ('/resource:{0},FileDentify.Embedded.magic.mgc' -f (Join-Path $libmagicRoot 'magic.mgc')),
+    ('/resource:{0},FileDentify.Embedded.COPYING.file' -f (Join-Path $libmagicRoot 'COPYING.file')),
+    ('/resource:{0},FileDentify.Embedded.COPYING.libsystre' -f (Join-Path $libmagicRoot 'COPYING.libsystre')),
+    ('/resource:{0},FileDentify.Embedded.COPYING.libtre' -f (Join-Path $libmagicRoot 'COPYING.libtre')),
+    ('/resource:{0},FileDentify.Embedded.COPYING.gettext-runtime' -f (Join-Path $libmagicRoot 'COPYING.gettext-runtime')),
+    ('/resource:{0},FileDentify.Embedded.COPYING.libintl' -f (Join-Path $libmagicRoot 'COPYING.libintl')),
+    ('/resource:{0},FileDentify.Embedded.COPYING.libiconv-gpl' -f (Join-Path $libmagicRoot 'COPYING.libiconv-gpl')),
+    ('/resource:{0},FileDentify.Embedded.COPYING.libiconv-lgpl' -f (Join-Path $libmagicRoot 'COPYING.libiconv-lgpl')),
+    ('/resource:{0},FileDentify.Embedded.Tolk.dll' -f (Join-Path $tolkRoot 'Tolk.dll')),
+    ('/resource:{0},FileDentify.Embedded.nvdaControllerClient64.dll' -f (Join-Path $tolkRoot 'nvdaControllerClient64.dll')),
+    ('/resource:{0},FileDentify.Embedded.Tolk.LICENSE.txt' -f (Join-Path $tolkRoot 'Tolk.LICENSE.txt'))
 )
 
 foreach ($resource in $resources) {
-    $path = $resource -replace '^/resource:"([^"]+)".*$', '$1'
+    $path = $resource -replace '^/resource:([^,]+).*$','$1'
     if (-not (Test-Path -LiteralPath $path)) {
         throw "Required embedded resource is missing: $path"
     }

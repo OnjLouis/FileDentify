@@ -25,6 +25,11 @@ namespace FileDentify
             if (StartsWith(header, Encoding.ASCII.GetBytes("NESM\x1A"))) return "NES Sound Format music";
             if (StartsWith(header, Encoding.ASCII.GetBytes("NES\x1A"))) return "iNES Nintendo Entertainment System ROM";
             if (StartsWith(header, Encoding.ASCII.GetBytes("PACK"))) return "Quake PACK game archive";
+            if (LooksLikeQuakeBsp(path, header)) return "Quake BSP map";
+            if (LooksLikeQuakeDemo(path, header)) return Path.GetExtension(path).Equals(".qwd", StringComparison.OrdinalIgnoreCase) ? "QuakeWorld demo recording" : "Quake demo recording";
+            if (LooksLikeQuakeModel(path, header)) return "Quake model";
+            if (LooksLikeQuakeSprite(path, header)) return "Quake sprite";
+            if (LooksLikeQuakeProgsDat(path, header)) return "QuakeC progs.dat bytecode";
             if (StartsWith(header, Encoding.ASCII.GetBytes("IWAD"))) return "Doom internal WAD game data";
             if (StartsWith(header, Encoding.ASCII.GetBytes("PWAD"))) return "Doom patch WAD game data";
             if (StartsWith(header, Encoding.ASCII.GetBytes("MComprHD"))) return "MAME Compressed Hunks of Data disk image";
@@ -40,6 +45,8 @@ namespace FileDentify
             if (LooksLikeUnityAsset(path, header)) return "Unity asset data file";
             if (LooksLikeSteamVdf(path, header)) return ext == ".acf" ? "Steam app manifest" : "Valve Data Format text";
             if (LooksLikeRolandMt32Rom(path)) return "Roland MT-32/CM-32L ROM image";
+            if (LooksLikeFruitMachineBpak(path)) return "Protected fruit-machine game package";
+            if (LooksLikeDuke3dSave(path)) return "Duke Nukem 3D saved game";
 
             switch (ext)
             {
@@ -83,6 +90,7 @@ namespace FileDentify
                 case ".vdf": return "Valve Data Format text";
                 case ".ips": return "IPS binary patch";
                 case ".bps": return "BPS binary patch";
+                case ".bpak": return "Protected game package";
                 default: return null;
             }
         }
@@ -96,7 +104,7 @@ namespace FileDentify
             var section = AddSection(sections, "Game/ROM data");
             Add(section, "Format hint", type);
             Add(section, "Detection basis", GameDetectionBasis(path, header));
-            var hasSpecificSafetyNote = IsNintendoSwitchNcaConcatSegment(path) || IsNintendoSwitchSaveFile(path);
+            var hasSpecificSafetyNote = IsNintendoSwitchNcaConcatSegment(path) || IsNintendoSwitchSaveFile(path) || string.Equals(Path.GetExtension(path), ".bpak", StringComparison.OrdinalIgnoreCase);
 
             if (StartsWith(header, Encoding.ASCII.GetBytes("NESM\x1A")))
                 AddNsfInfo(section, header);
@@ -116,6 +124,16 @@ namespace FileDentify
                 AddSnesInfo(section, header);
             else if (StartsWith(header, Encoding.ASCII.GetBytes("PACK")))
                 AddQuakePackInfo(section, header);
+            else if (LooksLikeQuakeBsp(path, header))
+                AddQuakeBspInfo(section, path, header);
+            else if (LooksLikeQuakeDemo(path, header))
+                AddQuakeDemoInfo(section, path, header);
+            else if (LooksLikeQuakeModel(path, header))
+                AddQuakeModelInfo(section, path, header);
+            else if (LooksLikeQuakeSprite(path, header))
+                AddQuakeSpriteInfo(section, path, header);
+            else if (LooksLikeQuakeProgsDat(path, header))
+                AddQuakeProgsDatInfo(section, path, header);
             else if (StartsWith(header, Encoding.ASCII.GetBytes("IWAD")) || StartsWith(header, Encoding.ASCII.GetBytes("PWAD")))
                 AddDoomWadInfo(section, header);
             else if (StartsWith(header, Encoding.ASCII.GetBytes("MComprHD")))
@@ -138,6 +156,10 @@ namespace FileDentify
                 AddNintendoSwitchSaveInfo(section, path);
             else if (Path.GetExtension(path).Equals(".ips", StringComparison.OrdinalIgnoreCase))
                 AddIpsInfo(section, header);
+            else if (LooksLikeFruitMachineBpak(path) || Path.GetExtension(path).Equals(".bpak", StringComparison.OrdinalIgnoreCase))
+                AddBpakInfo(section, path, header);
+            else if (LooksLikeDuke3dSave(path))
+                AddDuke3dSaveInfo(section, path);
 
             if (!hasSpecificSafetyNote)
                 Add(section, "Notes", "FileDentify reports header-level evidence for game files. It does not validate ROM dumps, decrypt game archives, or emulate content.");
@@ -151,6 +173,11 @@ namespace FileDentify
             if (StartsWith(header, Encoding.ASCII.GetBytes("NESM\x1A"))) parts.Add("NESM marker");
             if (StartsWith(header, Encoding.ASCII.GetBytes("NES\x1A"))) parts.Add("iNES marker");
             if (StartsWith(header, Encoding.ASCII.GetBytes("PACK"))) parts.Add("PACK marker");
+            if (LooksLikeQuakeBsp(path, header)) parts.Add("BSP version/lump table and .bsp extension");
+            if (LooksLikeQuakeDemo(path, header)) parts.Add("Quake demo extension and demo-like header text");
+            if (LooksLikeQuakeModel(path, header)) parts.Add("Quake MDL version and .mdl extension");
+            if (LooksLikeQuakeSprite(path, header)) parts.Add("Quake SPR version and .spr extension");
+            if (LooksLikeQuakeProgsDat(path, header)) parts.Add("progs.dat/qwprogs.dat filename and QuakeC header version");
             if (StartsWith(header, Encoding.ASCII.GetBytes("IWAD"))) parts.Add("IWAD marker");
             if (StartsWith(header, Encoding.ASCII.GetBytes("PWAD"))) parts.Add("PWAD marker");
             if (StartsWith(header, Encoding.ASCII.GetBytes("MComprHD"))) parts.Add("MComprHD marker");
@@ -164,7 +191,137 @@ namespace FileDentify
             if (IsNintendoSwitchSaveFile(path)) parts.Add("Nintendo save folder path");
             if (LooksLikeUnityAsset(path, header)) parts.Add("Unity version string");
             if (LooksLikeRolandMt32Rom(path)) parts.Add("Roland MT-32/CM-32L filename");
+            if (LooksLikeFruitMachineBpak(path)) parts.Add(".bpak extension and fruit-machine/game-package filename context");
+            if (LooksLikeDuke3dSave(path)) parts.Add("Duke 3D path/name context and .sav extension");
             return string.Join(", ", parts.ToArray());
+        }
+
+        private static bool LooksLikeFruitMachineBpak(string path)
+        {
+            if (!string.Equals(Path.GetExtension(path), ".bpak", StringComparison.OrdinalIgnoreCase))
+                return false;
+            var text = (Path.GetFileName(path) + " " + (Path.GetDirectoryName(path) ?? string.Empty)).ToLowerInvariant();
+            return text.Contains("t7") || text.Contains("t8") || text.Contains("bpak") || text.Contains("fruit") ||
+                text.Contains("slot") || text.Contains("black knight") || text.Contains("community");
+        }
+
+        private static void AddBpakInfo(ReportSection section, string path, byte[] header)
+        {
+            Add(section, "Container family", LooksLikeFruitMachineBpak(path) ? "Fruit-machine / digital slot-machine game package" : "Protected game package");
+            Add(section, "Extension", ".bpak");
+            Add(section, "Filename clues", Path.GetFileName(path));
+            Add(section, "Header marker", header.Length >= 4 ? HexPreview(header, 16) : "(no sampled bytes)");
+            Add(section, "Notes", "BPAK appears in more than one ecosystem. For this filename pattern, FileDentify treats it as a protected fruit-machine or digital slot-machine game package. It reports identification clues only; it does not decrypt, validate, emulate, or extract protected game content.");
+        }
+
+        private static bool LooksLikeQuakeBsp(string path, byte[] header)
+        {
+            if (!string.Equals(Path.GetExtension(path), ".bsp", StringComparison.OrdinalIgnoreCase) || header.Length < 4)
+                return false;
+            var version = ReadGameInt32LittleEndian(header, 0);
+            return version == 29 || version == 30;
+        }
+
+        private static void AddQuakeBspInfo(ReportSection section, string path, byte[] header)
+        {
+            var version = ReadGameInt32LittleEndian(header, 0);
+            Add(section, "Engine family", version == 29 ? "Quake BSP version 29" : "Quake/GoldSrc-style BSP version " + version.ToString(CultureInfo.InvariantCulture));
+            Add(section, "Map name", Path.GetFileNameWithoutExtension(path));
+            Add(section, "Lump table", header.Length >= 4 + 15 * 8 ? "15 offset/length entries detected after the version field." : "Header sample is too short to read the full Quake lump table.");
+            if (header.Length >= 4 + 15 * 8)
+            {
+                var nonEmpty = 0;
+                for (var i = 0; i < 15; i++)
+                {
+                    var length = ReadGameInt32LittleEndian(header, 4 + i * 8 + 4);
+                    if (length > 0)
+                        nonEmpty++;
+                }
+                Add(section, "Non-empty lumps", nonEmpty.ToString(CultureInfo.InvariantCulture) + " of 15");
+            }
+        }
+
+        private static bool LooksLikeQuakeDemo(string path, byte[] header)
+        {
+            var ext = Path.GetExtension(path);
+            if (!string.Equals(ext, ".dem", StringComparison.OrdinalIgnoreCase) && !string.Equals(ext, ".qwd", StringComparison.OrdinalIgnoreCase))
+                return false;
+            var text = AsciiPreview(header, Math.Min(header.Length, 512));
+            return text.IndexOf("Version ", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                text.IndexOf("qw", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                string.Equals(ext, ".qwd", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static void AddQuakeDemoInfo(ReportSection section, string path, byte[] header)
+        {
+            var ext = Path.GetExtension(path);
+            Add(section, "Demo family", string.Equals(ext, ".qwd", StringComparison.OrdinalIgnoreCase) ? "QuakeWorld demo" : "Quake demo");
+            var strings = FindAsciiStrings(header, 3, 12).Select(item => item.Value).Where(value => value.Length >= 3).Take(8).ToArray();
+            if (strings.Length > 0)
+                Add(section, "Early readable strings", string.Join("\n", strings));
+            Add(section, "Notes", "Quake demo formats are stream recordings. FileDentify reports header/sample clues only and does not replay or validate the demo.");
+        }
+
+        private static bool LooksLikeQuakeModel(string path, byte[] header)
+        {
+            return string.Equals(Path.GetExtension(path), ".mdl", StringComparison.OrdinalIgnoreCase) &&
+                header.Length >= 8 &&
+                StartsWith(header, Encoding.ASCII.GetBytes("IDPO")) &&
+                ReadGameInt32LittleEndian(header, 4) == 6;
+        }
+
+        private static void AddQuakeModelInfo(ReportSection section, string path, byte[] header)
+        {
+            Add(section, "Model family", "Quake alias model (IDPO)");
+            Add(section, "Version", header.Length >= 8 ? ReadGameInt32LittleEndian(header, 4).ToString(CultureInfo.InvariantCulture) : "(unknown)");
+            Add(section, "Model name", Path.GetFileNameWithoutExtension(path));
+        }
+
+        private static bool LooksLikeQuakeSprite(string path, byte[] header)
+        {
+            return string.Equals(Path.GetExtension(path), ".spr", StringComparison.OrdinalIgnoreCase) &&
+                header.Length >= 8 &&
+                StartsWith(header, Encoding.ASCII.GetBytes("IDSP"));
+        }
+
+        private static void AddQuakeSpriteInfo(ReportSection section, string path, byte[] header)
+        {
+            Add(section, "Sprite family", "Quake sprite (IDSP)");
+            Add(section, "Version", header.Length >= 8 ? ReadGameInt32LittleEndian(header, 4).ToString(CultureInfo.InvariantCulture) : "(unknown)");
+            Add(section, "Sprite name", Path.GetFileNameWithoutExtension(path));
+        }
+
+        private static bool LooksLikeQuakeProgsDat(string path, byte[] header)
+        {
+            var name = Path.GetFileName(path) ?? string.Empty;
+            if (!name.Equals("progs.dat", StringComparison.OrdinalIgnoreCase) &&
+                !name.Equals("qwprogs.dat", StringComparison.OrdinalIgnoreCase) &&
+                !name.Equals("spprogs.dat", StringComparison.OrdinalIgnoreCase))
+                return false;
+            return header.Length >= 4 && ReadGameInt32LittleEndian(header, 0) == 6;
+        }
+
+        private static void AddQuakeProgsDatInfo(ReportSection section, string path, byte[] header)
+        {
+            Add(section, "Program family", "QuakeC compiled game logic");
+            Add(section, "Version", header.Length >= 4 ? ReadGameInt32LittleEndian(header, 0).ToString(CultureInfo.InvariantCulture) : "(unknown)");
+            Add(section, "Role", Path.GetFileName(path));
+            Add(section, "Notes", "Quake progs.dat files contain compiled QuakeC game logic. FileDentify reports header-level metadata only.");
+        }
+
+        private static bool LooksLikeDuke3dSave(string path)
+        {
+            if (!string.Equals(Path.GetExtension(path), ".sav", StringComparison.OrdinalIgnoreCase))
+                return false;
+            var text = (Path.GetFileName(path) + " " + (Path.GetDirectoryName(path) ?? string.Empty)).ToLowerInvariant();
+            return text.Contains("duke3d") || text.Contains("duke nukem") || Regex.IsMatch(Path.GetFileName(path) ?? string.Empty, "^game\\d+\\.sav$", RegexOptions.IgnoreCase);
+        }
+
+        private static void AddDuke3dSaveInfo(ReportSection section, string path)
+        {
+            Add(section, "Save family", "Duke Nukem 3D / Build engine saved game");
+            Add(section, "Save file", Path.GetFileName(path));
+            Add(section, "Notes", "Detection is based on the .sav extension plus Duke 3D path/name context. FileDentify does not parse saved-game internals yet.");
         }
 
         private static bool LooksLikeRolandMt32Rom(string path)
@@ -764,6 +921,13 @@ namespace FileDentify
                 case 0x2: return "1 MiB";
                 default: return "unknown";
             }
+        }
+
+        private static int ReadGameInt32LittleEndian(byte[] data, int offset)
+        {
+            if (data == null || offset < 0 || data.Length < offset + 4)
+                return 0;
+            return (int)ReadUInt32LittleEndian(data, offset);
         }
     }
 }

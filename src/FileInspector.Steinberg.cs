@@ -42,6 +42,8 @@ namespace FileDentify
             var ext = Path.GetExtension(path).ToLowerInvariant();
             if (ext == ".wrk" || ext == ".cwp" || ext == ".rpp" || ext == ".rpp-bak")
                 return;
+            if (QwsTypeName(path, data) != null)
+                return;
 
             var type = SteinbergCubaseTypeName(path);
             var strings = FindReadableTextLines(data, 3, 500);

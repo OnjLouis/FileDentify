@@ -27,7 +27,44 @@ namespace FileDentify
 
         private static void Add(ReportSection section, string title, string detail)
         {
+            if (section != null && IsMergeableReportNoteTitle(title))
+            {
+                var existing = section.Items.FirstOrDefault(item => IsMergeableReportNoteTitle(item.Title));
+                var newDetail = FormatMergedReportNote(title, detail);
+                if (existing != null)
+                {
+                    if (string.IsNullOrWhiteSpace(newDetail))
+                        return;
+                    existing.Title = "Notes";
+                    var oldDetail = existing.Detail ?? string.Empty;
+                    if (oldDetail.IndexOf(newDetail, StringComparison.OrdinalIgnoreCase) >= 0)
+                        return;
+                    existing.Detail = string.IsNullOrWhiteSpace(oldDetail)
+                        ? newDetail
+                        : oldDetail.TrimEnd() + Environment.NewLine + Environment.NewLine + newDetail;
+                    return;
+                }
+                section.Items.Add(new ReportItem { Title = "Notes", Detail = newDetail });
+                return;
+            }
             section.Items.Add(new ReportItem { Title = title, Detail = detail ?? string.Empty });
+        }
+
+        private static bool IsMergeableReportNoteTitle(string title)
+        {
+            var text = (title ?? string.Empty).Trim();
+            return string.Equals(text, "Notes", StringComparison.OrdinalIgnoreCase) ||
+                text.EndsWith(" note", StringComparison.OrdinalIgnoreCase) ||
+                text.EndsWith(" notes", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string FormatMergedReportNote(string title, string detail)
+        {
+            var text = detail ?? string.Empty;
+            var label = (title ?? string.Empty).Trim();
+            if (string.Equals(label, "Notes", StringComparison.OrdinalIgnoreCase) || string.IsNullOrWhiteSpace(label))
+                return text;
+            return label + ": " + text;
         }
 
         private static byte[] ReadPrefix(string path, int maxBytes)
@@ -86,15 +123,30 @@ namespace FileDentify
             var developerType = DeveloperFormatTypeName(path, header);
             if (developerType != null)
                 return developerType;
+            var developerAppResourceType = DeveloperAppResourceTypeName(path, header);
+            if (developerAppResourceType != null)
+                return developerAppResourceType;
             var backupConfigType = BackupConfigTypeName(path, header);
             if (backupConfigType != null)
                 return backupConfigType;
             var legacySoundBankType = LegacySoundBankTypeName(path, header, length);
             if (legacySoundBankType != null)
                 return legacySoundBankType;
+            var ensoniqType = EnsoniqTypeName(path, header);
+            if (ensoniqType != null)
+                return ensoniqType;
+            var qwsType = QwsTypeName(path, header);
+            if (qwsType != null)
+                return qwsType;
+            var nvdaAddonType = NvdaAddonTypeName(path, header);
+            if (nvdaAddonType != null)
+                return nvdaAddonType;
             var gameType = GameFileTypeName(path, header);
             if (gameType != null)
                 return gameType;
+            var legacyMusicType = LegacyMusicTypeName(path, header);
+            if (legacyMusicType != null)
+                return legacyMusicType;
             if (header.Length >= 32 && AsciiPreview(header, 32).Contains("Roland SRX"))
                 return "Roland SRX expansion ROM image";
             var mobileToneType = MobilePhoneToneTypeName(path, header);
@@ -130,6 +182,9 @@ namespace FileDentify
             var musicProjectType = MusicProjectFormatTypeName(path, header);
             if (musicProjectType != null)
                 return musicProjectType;
+            var projectSidecarType = ProjectSidecarTypeName(path, header);
+            if (projectSidecarType != null)
+                return projectSidecarType;
             var macAudioPluginType = MacAudioPluginTypeName(path, header);
             if (macAudioPluginType != null)
                 return macAudioPluginType;
@@ -139,6 +194,27 @@ namespace FileDentify
             var firmwareType = FirmwareTypeName(path, header);
             if (firmwareType != null)
                 return firmwareType;
+            var hardwareIdType = HardwareIdDatabaseTypeName(path, header);
+            if (hardwareIdType != null)
+                return hardwareIdType;
+            var accessibilityDataType = AccessibilityDataTypeName(path, header);
+            if (accessibilityDataType != null)
+                return accessibilityDataType;
+            var legacyAppResourceType = LegacyAppResourceTypeName(path, header);
+            if (legacyAppResourceType != null)
+                return legacyAppResourceType;
+            var personalDataType = PersonalDataTypeName(path, header);
+            if (personalDataType != null)
+                return personalDataType;
+            var windowsSystemType = WindowsSystemTypeName(path, header);
+            if (windowsSystemType != null)
+                return windowsSystemType;
+            var installerDataType = InstallerDataTypeName(path, header);
+            if (installerDataType != null)
+                return installerDataType;
+            var virtualMachineMetadataType = VirtualMachineMetadataTypeName(path, header);
+            if (virtualMachineMetadataType != null)
+                return virtualMachineMetadataType;
             var symbianType = SymbianPackageTypeName(path, header);
             if (symbianType != null)
                 return symbianType;
@@ -161,6 +237,9 @@ namespace FileDentify
             var zipDocumentType = ZipDocumentTypeName(path, header);
             if (zipDocumentType != null)
                 return zipDocumentType;
+            var ebookType = EbookTypeName(path, header);
+            if (ebookType != null)
+                return ebookType;
             var font = FontFormatName(header);
             if (font != null)
                 return font;

@@ -693,6 +693,8 @@ namespace FileDentify
             if (!IsZipHeader(header))
                 return null;
             var ext = Path.GetExtension(path);
+            if (string.Equals(ext, ".nupkg", StringComparison.OrdinalIgnoreCase) || IsAppxLikePackage(path, header))
+                return null;
             switch ((ext ?? string.Empty).ToLowerInvariant())
             {
                 case ".docx": return "Microsoft Word document";
@@ -743,6 +745,8 @@ namespace FileDentify
         private static void AddZipDocumentMetadata(List<ReportSection> sections, string path, byte[] header)
         {
             if (!IsZipHeader(header))
+                return;
+            if (string.Equals(Path.GetExtension(path), ".nupkg", StringComparison.OrdinalIgnoreCase) || IsAppxLikePackage(path, header))
                 return;
 
             try

@@ -32,6 +32,7 @@ namespace FileDentify
             if (ext == ".svd" || StartsWith(header, Encoding.ASCII.GetBytes("\0nSVD1"))) return "Roland sound data";
             if (ext == ".svq" || StartsWith(header, Encoding.ASCII.GetBytes("RSVQ"))) return "Roland sequencer song";
             if (ext == ".smp" && StartsWith(header, Encoding.ASCII.GetBytes("RFWV"))) return "Roland FA sample data";
+            if (ext == ".jgl" && StartsWith(header, Encoding.ASCII.GetBytes("JunoGLibrarianFile"))) return "Roland Juno-G Librarian data";
             if (LhaMethod(header) != null || ext == ".lha" || ext == ".lzh") return "LHA/LZH archive";
             if (ext == ".mogg") return "MOGG multitrack Ogg audio";
             if (ext == ".sfark") return "sfArk compressed SoundFont archive";
@@ -494,6 +495,8 @@ namespace FileDentify
                 AddRolandSvqInfo(sections, header);
             else if (ext == ".smp" && StartsWith(header, Encoding.ASCII.GetBytes("RFWV")))
                 AddRolandSampleInfo(sections, header);
+            else if (ext == ".jgl" && StartsWith(header, Encoding.ASCII.GetBytes("JunoGLibrarianFile")))
+                AddRolandJunoGLibrarianInfo(sections, header);
         }
 
         private static void AddSysExInfo(List<ReportSection> sections, byte[] header)
@@ -597,6 +600,24 @@ namespace FileDentify
                 Add(section, "Channel count", ReadUInt32BigEndian(header, 12).ToString(CultureInfo.InvariantCulture));
                 Add(section, "Bits/format-like field", ReadUInt32BigEndian(header, 16).ToString(CultureInfo.InvariantCulture));
             }
+        }
+
+        private static void AddRolandJunoGLibrarianInfo(List<ReportSection> sections, byte[] header)
+        {
+            if (!StartsWith(header, Encoding.ASCII.GetBytes("JunoGLibrarianFile")))
+                return;
+
+            var section = AddSection(sections, "Roland sound data");
+            Add(section, "Format hint", "Roland Juno-G Librarian file");
+            Add(section, "Marker", "JunoGLibrarianFile");
+            var names = FindReadableTextLines(header, 4, 40)
+                .Where(line => !line.Equals("JunoGLibrarianFile0000", StringComparison.OrdinalIgnoreCase))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(24)
+                .ToArray();
+            if (names.Length > 0)
+                Add(section, "Visible patch or library names", string.Join("\r\n", names));
+            Add(section, "Notes", "Juno-G Librarian files are Roland patch/library dumps. FileDentify reports visible names and markers only; it does not send SysEx or write data to hardware.");
         }
 
         private static void AddJsonString(ReportSection section, Dictionary<string, object> root, string key, string label)
