@@ -27,8 +27,13 @@ namespace FileDentify
                 case ".bundle":
                 case ".plugin":
                 case ".appex":
+                case ".xpc":
+                case ".driver":
                 case ".kext":
                 case ".prefpane":
+                case ".storyboardc":
+                case ".momd":
+                case ".rtfd":
                 case ".component":
                 case ".vst":
                 case ".vst3":
@@ -60,6 +65,7 @@ namespace FileDentify
             AddLogicProjectPackageInfo(sections, dir.FullName);
             AddSparseBundleInfo(sections, dir.FullName);
             AddAppleBundleDirectoryInfo(sections, dir.FullName);
+            AddAppleResourceDirectoryInfo(sections, dir.FullName);
             AddMacAudioPluginDirectoryInfo(sections, dir.FullName);
             AddUniversalAudioLunaDirectoryInfo(sections, dir.FullName);
             AddAppleMobileBackupDirectoryInfo(sections, dir.FullName);
@@ -84,8 +90,13 @@ namespace FileDentify
                 case ".bundle": return "macOS loadable bundle";
                 case ".plugin": return "macOS plug-in bundle";
                 case ".appex": return "Apple app extension bundle";
+                case ".xpc": return "Apple XPC service bundle";
+                case ".driver": return "macOS audio or hardware driver bundle";
                 case ".kext": return "macOS kernel extension bundle";
                 case ".prefpane": return "macOS preference pane bundle";
+                case ".storyboardc": return "Compiled Apple storyboard resource";
+                case ".momd": return "Compiled Apple Core Data model bundle";
+                case ".rtfd": return "Rich Text Format Directory document";
                 case ".component": return "Apple Audio Unit plug-in bundle";
                 case ".vst": return "Mac VST plug-in bundle";
                 case ".vst3": return "VST3 plug-in bundle";
@@ -327,7 +338,7 @@ namespace FileDentify
         private static void AddAppleBundleDirectoryInfo(List<ReportSection> sections, string path)
         {
             var ext = Path.GetExtension(path).ToLowerInvariant();
-            if (ext != ".app" && ext != ".framework" && ext != ".bundle" && ext != ".plugin" && ext != ".appex" && ext != ".kext" && ext != ".prefpane")
+            if (ext != ".app" && ext != ".framework" && ext != ".bundle" && ext != ".plugin" && ext != ".appex" && ext != ".xpc" && ext != ".driver" && ext != ".kext" && ext != ".prefpane")
                 return;
             var plist = Path.Combine(path, "Contents", "Info.plist");
             if (!File.Exists(plist))
@@ -344,6 +355,36 @@ namespace FileDentify
             AddPlistValue(section, text, "CFBundleShortVersionString", "Short version");
             AddPlistValue(section, text, "CFBundleVersion", "Bundle version");
             AddPlistValue(section, text, "LSMinimumSystemVersion", "Minimum macOS");
+        }
+
+        private static void AddAppleResourceDirectoryInfo(List<ReportSection> sections, string path)
+        {
+            var ext = Path.GetExtension(path).ToLowerInvariant();
+            if (ext != ".storyboardc" && ext != ".momd" && ext != ".rtfd")
+                return;
+
+            var section = AddSection(sections, "Apple resource package");
+            Add(section, "Format hint", DirectoryPackageTypeName(path));
+            Add(section, "Package name", Path.GetFileName(path));
+
+            var files = SafeDirectoryFiles(path).ToArray();
+            Add(section, "Direct files", files.Length.ToString(CultureInfo.InvariantCulture));
+            var folders = SafeDirectoryDirectories(path).ToArray();
+            Add(section, "Direct folders", folders.Length.ToString(CultureInfo.InvariantCulture));
+
+            var extensions = files
+                .Select(file => Path.GetExtension(file))
+                .Where(item => !string.IsNullOrWhiteSpace(item))
+                .GroupBy(item => item, StringComparer.OrdinalIgnoreCase)
+                .OrderByDescending(group => group.Count())
+                .ThenBy(group => group.Key, StringComparer.OrdinalIgnoreCase)
+                .Take(10)
+                .Select(group => group.Key + " " + group.Count().ToString(CultureInfo.InvariantCulture))
+                .ToArray();
+            if (extensions.Length > 0)
+                Add(section, "Direct file extensions", string.Join(Environment.NewLine, extensions));
+
+            Add(section, "Notes", "Apple resource packages are directory-backed resources that Windows shows as folders. FileDentify reports their bounded structure without rendering UI resources or opening documents.");
         }
 
         private static void AddMacAudioPluginDirectoryInfo(List<ReportSection> sections, string path)

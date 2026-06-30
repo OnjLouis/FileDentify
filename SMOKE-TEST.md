@@ -439,6 +439,7 @@ After the GitHub repository exists:
 - After publishing a GitHub release asset, extract the previous public portable build to a temporary folder, run its updater, and confirm it updates to the new release before considering the release shipped.
 - `FileDentify.ini` must survive updates.
 - An update from 1.2 or earlier should remove any old installed `README.md`; the embedded manual is the user documentation source of truth.
+- FileDentify-specific runtime extraction and agent-created test artifacts should be cleaned up after smoke/release work. Check `%TEMP%` for old FileDentify extraction folders and the agent's project temp workspace for disposable scan inventories or review reports; remove anything no longer needed before handing back.
 
 ## Release Package Cleanliness
 

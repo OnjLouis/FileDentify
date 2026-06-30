@@ -18,6 +18,9 @@ namespace FileDentify
             "NVDA add-on",
             "Accessibility data",
             "Speech voice",
+            "Roland sample data",
+            "Roland sequencer song",
+            "Roland sound data",
             "Native Instruments",
             "Korg",
             "iKaossilator",
@@ -54,6 +57,7 @@ namespace FileDentify
             "REAPER project",
             "Cakewalk project",
             "Sampler instrument",
+            "Audio sample resource",
             "Nintendo Switch content",
             "Game/ROM data",
             "Legacy music/game audio",
@@ -79,10 +83,30 @@ namespace FileDentify
             "Office document metadata",
             "OpenDocument metadata",
             "Image",
+            "Windows property metadata",
             "Audio metadata",
             "QuickTime metadata",
+            "ISO base media",
+            "Media details",
+            "ffprobe",
             "MPEG transport stream",
             "Readable text"
+        };
+
+        private static readonly string[] GenericEvidenceSections =
+        {
+            "Filesystem",
+            "Signature matches",
+            "Readable text",
+            "Unix file/libmagic",
+            "Hashes",
+            "Header bytes",
+            "Structure hints",
+            "Printable strings",
+            "Byte statistics",
+            "Text hints",
+            "Companion tools",
+            "External tools"
         };
 
         public static void Apply(IEnumerable<FileReport> reports, IEnumerable<string> configuredOrder)
@@ -118,32 +142,71 @@ namespace FileDentify
             foreach (var section in list.Where(section => IsPinnedSection(section.Title)))
             {
                 yielded.Add(section);
-                yield return section;
+                    yield return section;
             }
 
-            foreach (var title in DefaultPrioritySections)
+            foreach (var section in SectionsFromConfiguredOrder(list, configuredOrder).Where(IsSpecificSection))
+            {
+                if (yielded.Add(section))
+                    yield return section;
+            }
+
+            foreach (var title in DefaultPrioritySections.Where(title => !IsGenericEvidenceSection(title)))
             {
                 foreach (var section in list.Where(item => string.Equals(item.Title, title, StringComparison.OrdinalIgnoreCase) && !IsPinnedSection(item.Title)))
                 {
-                    if (configuredOrder.Contains(section.Title, StringComparer.OrdinalIgnoreCase))
-                        continue;
                     if (yielded.Add(section))
                         yield return section;
                 }
             }
 
-            foreach (var title in configuredOrder)
-            {
-                var section = list.FirstOrDefault(item => string.Equals(item.Title, title, StringComparison.OrdinalIgnoreCase) && !IsPinnedSection(item.Title));
-                if (section != null && yielded.Add(section))
-                    yield return section;
-            }
-
-            foreach (var section in list.Where(section => !IsPinnedSection(section.Title) && !configuredOrder.Contains(section.Title, StringComparer.OrdinalIgnoreCase)))
+            foreach (var section in list.Where(section => !IsPinnedSection(section.Title) && IsSpecificSection(section)))
             {
                 if (yielded.Add(section))
                     yield return section;
             }
+
+            foreach (var section in SectionsFromConfiguredOrder(list, configuredOrder).Where(IsGenericOrUnclassifiedSection))
+            {
+                if (yielded.Add(section))
+                    yield return section;
+            }
+
+            foreach (var section in list.Where(section => !IsPinnedSection(section.Title)))
+            {
+                if (yielded.Add(section))
+                    yield return section;
+            }
+        }
+
+        public static bool IsGenericEvidenceSection(string title)
+        {
+            return GenericEvidenceSections.Contains(title ?? string.Empty, StringComparer.OrdinalIgnoreCase);
+        }
+
+        public static bool IsSpecificSectionForOrdering(string title)
+        {
+            return !IsPinnedSection(title) && !IsGenericEvidenceSection(title);
+        }
+
+        private static IEnumerable<ReportSection> SectionsFromConfiguredOrder(List<ReportSection> list, List<string> configuredOrder)
+        {
+            foreach (var title in configuredOrder)
+            {
+                var section = list.FirstOrDefault(item => string.Equals(item.Title, title, StringComparison.OrdinalIgnoreCase) && !IsPinnedSection(item.Title));
+                if (section != null)
+                    yield return section;
+            }
+        }
+
+        private static bool IsSpecificSection(ReportSection section)
+        {
+            return section != null && IsSpecificSectionForOrdering(section.Title);
+        }
+
+        private static bool IsGenericOrUnclassifiedSection(ReportSection section)
+        {
+            return section != null && !IsPinnedSection(section.Title) && !IsSpecificSection(section);
         }
     }
 }

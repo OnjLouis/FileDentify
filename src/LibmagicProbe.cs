@@ -118,7 +118,7 @@ namespace FileDentify
                 if (!string.IsNullOrEmpty(extractedDirectory) && Directory.Exists(extractedDirectory))
                     return extractedDirectory;
 
-                var dir = Path.Combine(Path.GetTempPath(), "FileDentify-libmagic-" + Process.GetCurrentProcess().Id.ToString(CultureInfo.InvariantCulture));
+                var dir = TemporaryFileService.GetProcessDirectory("libmagic");
                 Directory.CreateDirectory(dir);
                 ExtractResource("FileDentify.Embedded.file.exe", Path.Combine(dir, "file.exe"));
                 ExtractResource("FileDentify.Embedded.libmagic-1.dll", Path.Combine(dir, "libmagic-1.dll"));

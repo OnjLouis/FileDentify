@@ -409,7 +409,15 @@ namespace FileDentify
 
         private static string SymbianResourceExtensionDescription(string path)
         {
-            switch (Path.GetExtension(path).ToLowerInvariant())
+            var ext = Path.GetExtension(path).ToLowerInvariant();
+            if (Regex.IsMatch(ext, @"^\.[0-9]+x[0-9]+$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant) &&
+                (path.IndexOf("\\System\\", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 path.IndexOf("\\_PAlbTN\\", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 path.IndexOf("\\Images\\", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 path.IndexOf("\\Videos\\", StringComparison.OrdinalIgnoreCase) >= 0))
+                return "Symbian gallery thumbnail image";
+
+            switch (ext)
             {
                 case ".app": return "Symbian OS application binary";
                 case ".aif": return "Symbian application information file";
@@ -417,6 +425,7 @@ namespace FileDentify
                 case ".mbm": return "Symbian multi-bitmap image resource";
                 case ".mif": return "Symbian icon/resource file";
                 case ".mdl": return "Symbian recognizer or plug-in module";
+                case ".mask": return path.IndexOf("\\System\\", StringComparison.OrdinalIgnoreCase) >= 0 ? "Symbian image mask sidecar" : null;
                 default: return null;
             }
         }
@@ -523,7 +532,16 @@ namespace FileDentify
                 case ".eda": return "Ensoniq ASR-10 disk image";
                 case ".edt": return "Ensoniq TS disk image";
                 case ".helm": return "Helm synthesizer preset";
-                case ".wt": return "Surge wavetable";
+                case ".wt": return "Wavetable data";
+                case ".arta": return "Arturia sample payload";
+                case ".astr": return "Arturia bitmap/UI resource";
+                case ".eiiwav": return "Arturia Emulator II V sample audio";
+                case ".roliaudio": return "ROLI Equator sample audio";
+                case ".ignitex": return "Initial Audio Sektor sample data";
+                case ".grir": return "Native Instruments Guitar Rig impulse response";
+                case ".sdir": return "Apple Space Designer impulse response";
+                case ".caf": return "Core Audio Format audio";
+                case ".scl": return "Scala tuning scale";
                 case ".nam": return "Neural Amp Modeler model";
                 case ".mtdrum": return "Microtonic drum preset";
                 case ".chords": return "Chord preset";

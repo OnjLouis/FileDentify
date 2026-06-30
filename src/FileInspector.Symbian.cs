@@ -4,6 +4,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace FileDentify
 {
@@ -28,7 +29,11 @@ namespace FileDentify
                 case ".mbm": return "Symbian multi-bitmap image resource";
                 case ".mif": return "Symbian icon/resource file";
                 case ".mdl": return "Symbian recognizer or plug-in module";
+                case ".mask":
+                    return PathLooksSymbian(path) ? "Symbian image mask sidecar" : null;
                 default:
+                    if (LooksLikeSymbianThumbnailPath(path, header))
+                        return "Symbian gallery thumbnail image";
                     if (PathLooksSymbian(path) && (ext == ".dat" || ext == ".bin") && HasSymbianUidFields(header))
                         return "Symbian app support data";
                     return null;
@@ -107,10 +112,11 @@ namespace FileDentify
                 Add(section, "UID checksum", "0x" + ReadUInt32LittleEndian(header, 12).ToString("X8", CultureInfo.InvariantCulture));
             }
 
-            if (string.Equals(Path.GetExtension(path), ".mbm", StringComparison.OrdinalIgnoreCase) && header.Length >= 20)
+            if (LooksLikeSymbianMbmHeader(header) && header.Length >= 20)
             {
                 Add(section, "Header marker", "Symbian multi-bitmap/resource-style file");
                 Add(section, "First data offset-like field", "0x" + ReadUInt32LittleEndian(header, 16).ToString("X", CultureInfo.InvariantCulture));
+                AddSymbianThumbnailDimensions(section, path);
             }
 
             var strings = FindReadableTextLines(sample, 4, 80)
@@ -184,6 +190,34 @@ namespace FileDentify
             var uid2 = ReadUInt32LittleEndian(header, 4);
             var uid3 = ReadUInt32LittleEndian(header, 8);
             return uid1 != 0 || uid2 != 0 || uid3 != 0;
+        }
+
+        private static bool LooksLikeSymbianMbmHeader(byte[] header)
+        {
+            return header != null &&
+                header.Length >= 16 &&
+                ReadUInt32LittleEndian(header, 0) == 0x10000037 &&
+                ReadUInt32LittleEndian(header, 4) == 0x10000042;
+        }
+
+        private static bool LooksLikeSymbianThumbnailPath(string path, byte[] header)
+        {
+            var ext = Path.GetExtension(path) ?? string.Empty;
+            if (!LooksLikeSymbianMbmHeader(header) || !Regex.IsMatch(ext, @"^\.[0-9]+x[0-9]+$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+                return false;
+
+            return PathLooksSymbian(path) ||
+                path.IndexOf("\\_PAlbTN\\", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                path.IndexOf("\\Images\\", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                path.IndexOf("\\Videos\\", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static void AddSymbianThumbnailDimensions(ReportSection section, string path)
+        {
+            var ext = Path.GetExtension(path) ?? string.Empty;
+            var match = Regex.Match(ext, @"^\.(?<width>[0-9]+)x(?<height>[0-9]+)$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            if (match.Success)
+                Add(section, "Thumbnail dimensions", match.Groups["width"].Value + " x " + match.Groups["height"].Value);
         }
 
         private static bool PathLooksSymbian(string path)

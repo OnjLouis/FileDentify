@@ -35,6 +35,8 @@ namespace FileDentify
                 return FlexVoiceTypeName(path);
             if (LooksLikeOtherNvdaSpeechEngineData(path, header))
                 return OtherNvdaSpeechEngineTypeName(path, header);
+            if (LooksLikeScanSoftRealSpeakMobile(path, header))
+                return "ScanSoft RealSpeak Mobile speech data";
             if (LooksLikeMicrosoftSpeechVoice(path, header))
                 return MicrosoftSpeechVoiceTypeName(path, header);
             if (LooksLikeAcapelaVoicePath(path))
@@ -83,6 +85,12 @@ namespace FileDentify
             if (LooksLikeLoquendoSpeechData(path, header))
             {
                 AddLoquendoSpeechInfo(section, path, header);
+                return;
+            }
+
+            if (LooksLikeScanSoftRealSpeakMobile(path, header))
+            {
+                AddScanSoftRealSpeakMobileInfo(section, header);
                 return;
             }
 
@@ -164,7 +172,43 @@ namespace FileDentify
                 return FlexVoiceRole(path);
             if (LooksLikeOtherNvdaSpeechEngineData(path, header))
                 return OtherNvdaSpeechEngineRole(path, header);
+            if (LooksLikeScanSoftRealSpeakMobile(path, header))
+                return "mobile TTS engine or voice header";
             return PiperVoiceRole(path);
+        }
+
+        private static bool LooksLikeScanSoftRealSpeakMobile(string path, byte[] header)
+        {
+            if (!Path.GetExtension(path).Equals(".hdr", StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            var text = AsciiPreview(header, Math.Min(header.Length, 1024));
+            return text.IndexOf("<SCANSOFT>", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                text.IndexOf("RealSpeak Mobile", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                (path.IndexOf("\\rsm\\", StringComparison.OrdinalIgnoreCase) >= 0 && text.IndexOf("<COMPTYPE>", StringComparison.OrdinalIgnoreCase) >= 0);
+        }
+
+        private static void AddScanSoftRealSpeakMobileInfo(ReportSection section, byte[] header)
+        {
+            Add(section, "Vendor/family", "ScanSoft RealSpeak Mobile");
+            AddXmlishTag(section, header, "COMPTYPE", "Component type");
+            AddXmlishTag(section, header, "NAME", "Name");
+            AddXmlishTag(section, header, "BROKERSTRING", "Broker string");
+            AddXmlishTag(section, header, "ENGINE", "Engine");
+            AddXmlishTag(section, header, "VERSION", "Version");
+            Add(section, "Notes", "RealSpeak Mobile speech files are reported from small text headers and safe metadata only. FileDentify does not load the TTS engine or decode proprietary voice payloads.");
+        }
+
+        private static void AddXmlishTag(ReportSection section, byte[] header, string tag, string label)
+        {
+            var text = Encoding.UTF8.GetString(header.Take(Math.Min(header.Length, 64 * 1024)).ToArray());
+            var match = Regex.Match(text, "<" + Regex.Escape(tag) + ">(?<value>.*?)</" + Regex.Escape(tag) + ">", RegexOptions.IgnoreCase | RegexOptions.Singleline);
+            if (match.Success)
+            {
+                var value = match.Groups["value"].Value.Trim();
+                if (!string.IsNullOrWhiteSpace(value))
+                    Add(section, label, value);
+            }
         }
 
         private static bool LooksLikeAttNaturalVoice(string path, byte[] header)

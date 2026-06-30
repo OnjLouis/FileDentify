@@ -23,6 +23,8 @@ namespace FileDentify
             if (ext == ".adv") return "Ableton device preset";
             if (ext == ".helm") return "Helm synthesizer preset";
             if (ext == ".wt" && StartsWith(header, Encoding.ASCII.GetBytes("vawt"))) return "Surge wavetable";
+            var audioResourceType = AudioSampleResourceTypeName(path, header);
+            if (audioResourceType != null) return audioResourceType;
             if (ext == ".nam") return "Neural Amp Modeler model";
             if (ext == ".mtdrum") return "Microtonic drum preset";
             if (ext == ".chords") return "Chord preset";
@@ -63,6 +65,7 @@ namespace FileDentify
             AddFmodBankInfo(sections, path, header);
             AddWwiseMediaInfo(sections, path, header);
             AddSpitfireAudioInfo(sections, path, header, stringSample, fileLength);
+            AddAudioSampleResourceInfo(sections, path, header, stringSample, fileLength);
         }
 
         private static string SpitfireAudioTypeName(string path, byte[] header)
@@ -1096,6 +1099,219 @@ namespace FileDentify
                 if (hints.Length > 0)
                     Add(section, "Visible sample or EXS strings", string.Join("\r\n", hints));
             }
+        }
+
+        private static string AudioSampleResourceTypeName(string path, byte[] header)
+        {
+            var ext = Path.GetExtension(path).ToLowerInvariant();
+            switch (ext)
+            {
+                case ".arta": return "Arturia sample payload";
+                case ".astr": return "Arturia bitmap/UI resource";
+                case ".eiiwav": return "Arturia Emulator II V sample audio";
+                case ".roliaudio": return "ROLI Equator sample audio";
+                case ".ignitex": return "Initial Audio Sektor sample data";
+                case ".grir": return "Native Instruments Guitar Rig impulse response";
+                case ".sdir": return "Apple Space Designer impulse response";
+                case ".caf": return StartsWith(header, Encoding.ASCII.GetBytes("caff")) ? "Core Audio Format audio" : "Core Audio Format audio";
+                case ".scl": return "Scala tuning scale";
+                case ".wt": return StartsWith(header, Encoding.ASCII.GetBytes("vawt")) ? "Surge wavetable" : "Wavetable data";
+                default: return null;
+            }
+        }
+
+        private static void AddAudioSampleResourceInfo(List<ReportSection> sections, string path, byte[] header, byte[] sample, long fileLength)
+        {
+            var type = AudioSampleResourceTypeName(path, header);
+            if (type == null)
+                return;
+
+            var ext = Path.GetExtension(path).ToLowerInvariant();
+            var section = AddSection(sections, "Audio sample resource");
+            Add(section, "Format hint", type);
+            Add(section, "Product or vendor", AudioResourceVendor(path, ext));
+            Add(section, "Library folder", AudioResourceLibrary(path));
+            Add(section, "Role", AudioResourceRole(path, ext));
+            Add(section, "File size", FormatBytes(fileLength));
+
+            if (ext == ".caf")
+                AddCoreAudioFormatInfo(section, header);
+            else if (ext == ".scl")
+                AddScalaScaleInfo(section, sample);
+            else if (ext == ".wt")
+                AddWavetableResourceInfo(section, header, sample);
+            else
+                AddAudioResourceVisibleStrings(section, sample);
+
+            Add(section, "Notes", "These audio-library resource files are reported from extension, folder context, headers, and visible metadata. FileDentify does not decode proprietary sample payloads or load plug-ins.");
+        }
+
+        private static void AddCoreAudioFormatInfo(ReportSection section, byte[] header)
+        {
+            if (!StartsWith(header, Encoding.ASCII.GetBytes("caff")))
+            {
+                Add(section, "Header marker", "Not present in sampled header; reported from .caf extension.");
+                return;
+            }
+
+            Add(section, "Header marker", "caff");
+            if (header.Length >= 8)
+            {
+                Add(section, "CAF version", ReadUInt16BigEndian(header, 4).ToString(CultureInfo.InvariantCulture));
+                Add(section, "CAF flags", "0x" + ReadUInt16BigEndian(header, 6).ToString("X4", CultureInfo.InvariantCulture));
+            }
+
+            var chunks = new List<string>();
+            var offset = 8;
+            while (offset + 12 <= header.Length && chunks.Count < 12)
+            {
+                var id = Encoding.ASCII.GetString(header, offset, 4);
+                if (!Regex.IsMatch(id, "^[A-Za-z0-9_ ]{4}$"))
+                    break;
+                var size = ReadUInt64BigEndian(header, offset + 4);
+                chunks.Add(id.Trim() + " (" + (size == ulong.MaxValue ? "variable size" : FormatUnsignedBytes(size)) + ")");
+                if (size == ulong.MaxValue || size > int.MaxValue)
+                    break;
+                var next = offset + 12 + (int)size;
+                if (next <= offset)
+                    break;
+                offset = next;
+            }
+            if (chunks.Count > 0)
+                Add(section, "CAF chunks", string.Join(Environment.NewLine, chunks.ToArray()));
+        }
+
+        private static void AddScalaScaleInfo(ReportSection section, byte[] sample)
+        {
+            var text = DecodeTextSample(sample);
+            var lines = text.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None)
+                .Select(line => CleanMetadataText(line.Trim()))
+                .Where(line => line.Length > 0 && !line.StartsWith("!", StringComparison.Ordinal))
+                .Take(12)
+                .ToArray();
+            if (lines.Length > 0)
+                Add(section, "Scale text", string.Join(Environment.NewLine, lines));
+
+            var firstNumber = lines.FirstOrDefault(line => Regex.IsMatch(line, "^\\d+\\s*$"));
+            if (!string.IsNullOrWhiteSpace(firstNumber))
+                Add(section, "Declared note count", firstNumber);
+        }
+
+        private static void AddWavetableResourceInfo(ReportSection section, byte[] header, byte[] sample)
+        {
+            if (StartsWith(header, Encoding.ASCII.GetBytes("vawt")))
+                Add(section, "Header marker", "vawt");
+            var names = FindReadableTextLines(sample, 4, 80)
+                .Where(line => line.IndexOf(".wav", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    line.IndexOf("wavetable", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    line.IndexOf("wave", StringComparison.OrdinalIgnoreCase) >= 0)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(16)
+                .ToArray();
+            if (names.Length > 0)
+                Add(section, "Visible wavetable strings", string.Join(Environment.NewLine, names));
+        }
+
+        private static void AddAudioResourceVisibleStrings(ReportSection section, byte[] sample)
+        {
+            var visible = FindReadableTextLines(sample, 4, 100)
+                .Where(IsUsefulAudioResourceString)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(18)
+                .ToArray();
+            if (visible.Length > 0)
+                Add(section, "Visible strings", string.Join(Environment.NewLine, visible));
+        }
+
+        private static bool IsUsefulAudioResourceString(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return false;
+            return value.IndexOf(".wav", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                value.IndexOf(".aif", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                value.IndexOf(".flac", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                value.IndexOf("sample", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                value.IndexOf("impulse", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                value.IndexOf("cabinet", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                value.IndexOf("wavetable", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                value.IndexOf("Arturia", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                value.IndexOf("ROLI", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static string AudioResourceVendor(string path, string ext)
+        {
+            foreach (var vendor in new[] { "Arturia", "ROLI", "Initial Audio", "Native Instruments", "Apple", "Sonic Charge", "KV331 Audio" })
+                if (path.IndexOf(vendor, StringComparison.OrdinalIgnoreCase) >= 0)
+                    return vendor;
+            switch (ext)
+            {
+                case ".caf":
+                case ".sdir": return "Apple";
+                case ".scl": return "Scala tuning format";
+                default: return ParentName(path);
+            }
+        }
+
+        private static string AudioResourceLibrary(string path)
+        {
+            var vendorProduct = AudioResourceProductAfterVendor(path);
+            if (!string.IsNullOrWhiteSpace(vendorProduct))
+                return vendorProduct;
+
+            foreach (var segment in new[] { "Samples", "resources", "Resources", "Expansions", "Content", "Audio", "Impulse Responses" })
+            {
+                var value = SegmentAfter(path, segment);
+                if (!string.IsNullOrWhiteSpace(value))
+                    return value;
+            }
+            return ParentName(path);
+        }
+
+        private static string AudioResourceProductAfterVendor(string path)
+        {
+            var parts = path.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            foreach (var vendor in new[] { "Arturia", "ROLI", "Initial Audio", "Native Instruments", "Sonic Charge", "KV331 Audio" })
+            {
+                for (var i = 0; i < parts.Length; i++)
+                {
+                    if (!parts[i].Equals(vendor, StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    for (var j = i + 1; j < parts.Length; j++)
+                    {
+                        if (IsGenericAudioResourceSegment(parts[j]))
+                            continue;
+                        return parts[j];
+                    }
+                }
+            }
+            return string.Empty;
+        }
+
+        private static bool IsGenericAudioResourceSegment(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return true;
+            foreach (var generic in new[] { "Samples", "resources", "Resources", "Factory", "Content", "Presets", "Third Party", "Native Instruments", "Multisamples", "instruments", "internal_presets", "wt", "scl" })
+                if (value.Equals(generic, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            return false;
+        }
+
+        private static string AudioResourceRole(string path, string ext)
+        {
+            if (path.IndexOf("Impulse Responses", StringComparison.OrdinalIgnoreCase) >= 0 || ext == ".sdir" || ext == ".grir")
+                return "Impulse response or cabinet response";
+            if (path.IndexOf("Wavetables", StringComparison.OrdinalIgnoreCase) >= 0 || path.IndexOf("\\wt\\", StringComparison.OrdinalIgnoreCase) >= 0 || ext == ".wt")
+                return "Wavetable";
+            if (path.IndexOf("bitmap", StringComparison.OrdinalIgnoreCase) >= 0 || ext == ".astr")
+                return "UI bitmap/resource";
+            if (path.IndexOf("SFZ", StringComparison.OrdinalIgnoreCase) >= 0 || ext == ".arta" || ext == ".eiiwav" || ext == ".roliaudio" || ext == ".ignitex")
+                return "Sampler audio payload";
+            if (ext == ".scl")
+                return "Microtuning scale";
+            if (ext == ".caf")
+                return "Core Audio sound or voice payload";
+            return "Audio-library support data";
         }
 
         private static void AddFmodBankInfo(List<ReportSection> sections, string path, byte[] header)

@@ -126,9 +126,11 @@ namespace FileDentify
         {
             lock (Sync)
             {
-                if (!loaded)
-                    return;
-                try { Tolk_Unload(); } catch { }
+                if (loaded)
+                {
+                    try { Tolk_Unload(); } catch { }
+                }
+                try { SetDllDirectory(null); } catch { }
                 loaded = false;
             }
         }
@@ -215,7 +217,7 @@ namespace FileDentify
             if (!string.IsNullOrEmpty(extractedDirectory) && Directory.Exists(extractedDirectory))
                 return extractedDirectory;
 
-            var dir = Path.Combine(Path.GetTempPath(), "FileDentify-tolk-" + Process.GetCurrentProcess().Id.ToString(CultureInfo.InvariantCulture));
+            var dir = TemporaryFileService.GetProcessDirectory("tolk");
             Directory.CreateDirectory(dir);
             ExtractResource("FileDentify.Embedded.nvdaControllerClient64.dll", Path.Combine(dir, "nvdaControllerClient64.dll"));
             ExtractResource("FileDentify.Embedded.Tolk.dll", Path.Combine(dir, "Tolk.dll"));

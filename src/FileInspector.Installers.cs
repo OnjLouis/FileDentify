@@ -20,7 +20,7 @@ namespace FileDentify
                 return "InstallShield setup header/data file";
             if (ext == ".inx")
                 return "InstallShield setup script";
-            if (ext == ".hdr")
+            if (ext == ".hdr" && LooksLikeInstallShieldHdr(path, header))
                 return "InstallShield setup header/data file";
             return null;
         }
@@ -86,6 +86,21 @@ namespace FileDentify
             if (ext == ".hdr")
                 return "InstallShield cabinet/header metadata";
             return "installer support file";
+        }
+
+        private static bool LooksLikeInstallShieldHdr(string path, byte[] header)
+        {
+            if (StartsWith(header, Encoding.ASCII.GetBytes("ISc(")))
+                return true;
+
+            var name = Path.GetFileName(path) ?? string.Empty;
+            var directory = Path.GetDirectoryName(path) ?? string.Empty;
+            if (name.StartsWith("data", StringComparison.OrdinalIgnoreCase) && directory.IndexOf("Disk", StringComparison.OrdinalIgnoreCase) >= 0)
+                return true;
+
+            var preview = AsciiPreview(header, Math.Min(header.Length, 512));
+            return preview.IndexOf("InstallShield", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                preview.IndexOf("PackageForTheWeb", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         private static bool IsUsefulInstallerString(string value)

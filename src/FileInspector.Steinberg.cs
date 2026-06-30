@@ -58,9 +58,7 @@ namespace FileDentify
             var hasSteinbergText = strings.Any(s =>
                 s.IndexOf("Cubase", StringComparison.OrdinalIgnoreCase) >= 0 ||
                 s.IndexOf("Nuendo", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                s.IndexOf("Steinberg", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                s.IndexOf("ASIO", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                s.IndexOf("VST", StringComparison.OrdinalIgnoreCase) >= 0);
+                s.IndexOf("Steinberg", StringComparison.OrdinalIgnoreCase) >= 0);
 
             if (type == null && !hasSteinbergText)
                 return;

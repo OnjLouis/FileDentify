@@ -160,6 +160,8 @@ namespace FileDentify
                 AddBpakInfo(section, path, header);
             else if (LooksLikeDuke3dSave(path))
                 AddDuke3dSaveInfo(section, path);
+            else if (Path.GetExtension(path).Equals(".sav", StringComparison.OrdinalIgnoreCase))
+                AddGenericGameSaveInfo(section, path, header);
 
             if (!hasSpecificSafetyNote)
                 Add(section, "Notes", "FileDentify reports header-level evidence for game files. It does not validate ROM dumps, decrypt game archives, or emulate content.");
@@ -194,6 +196,44 @@ namespace FileDentify
             if (LooksLikeFruitMachineBpak(path)) parts.Add(".bpak extension and fruit-machine/game-package filename context");
             if (LooksLikeDuke3dSave(path)) parts.Add("Duke 3D path/name context and .sav extension");
             return string.Join(", ", parts.ToArray());
+        }
+
+        private static void AddGenericGameSaveInfo(ReportSection section, string path, byte[] header)
+        {
+            Add(section, "Common use", "Emulator or flashcart save data.");
+            var visible = FindReadableTextLines(header, 4, 40)
+                .Where(line => line.Any(char.IsLetterOrDigit))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(8)
+                .ToArray();
+            if (visible.Length > 0)
+                Add(section, "Visible save strings", string.Join(Environment.NewLine, visible));
+
+            var siblingRom = FindSiblingRomForSave(path);
+            if (!string.IsNullOrWhiteSpace(siblingRom))
+                Add(section, "Matching ROM nearby", Path.GetFileName(siblingRom));
+        }
+
+        private static string FindSiblingRomForSave(string path)
+        {
+            try
+            {
+                var dir = Path.GetDirectoryName(path);
+                var baseName = Path.GetFileNameWithoutExtension(path);
+                if (string.IsNullOrWhiteSpace(dir) || string.IsNullOrWhiteSpace(baseName))
+                    return string.Empty;
+
+                foreach (var ext in new[] { ".nds", ".gba", ".gb", ".gbc", ".nes", ".smc", ".sfc", ".gen", ".md", ".n64", ".z64" })
+                {
+                    var candidate = Path.Combine(dir, baseName + ext);
+                    if (File.Exists(candidate))
+                        return candidate;
+                }
+            }
+            catch
+            {
+            }
+            return string.Empty;
         }
 
         private static bool LooksLikeFruitMachineBpak(string path)
@@ -321,7 +361,7 @@ namespace FileDentify
         {
             Add(section, "Save family", "Duke Nukem 3D / Build engine saved game");
             Add(section, "Save file", Path.GetFileName(path));
-            Add(section, "Notes", "Detection is based on the .sav extension plus Duke 3D path/name context. FileDentify does not parse saved-game internals yet.");
+            Add(section, "Notes", "Detection is based on the .sav extension plus Duke 3D path/name context. FileDentify identifies the save family and visible context; it does not decode proprietary saved-game payloads.");
         }
 
         private static bool LooksLikeRolandMt32Rom(string path)

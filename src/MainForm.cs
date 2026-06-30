@@ -34,6 +34,7 @@ namespace FileDentify
         private readonly ToolStripMenuItem htmlDetailsMenuItem;
         private readonly System.Windows.Forms.Timer updateCheckTimer;
         private readonly System.Windows.Forms.Timer treeShortcutAnnouncementTimer;
+        private readonly SingleInstanceService singleInstanceService;
         private AppSettings settings;
         private readonly List<string> loadedFiles = new List<string>();
         private readonly List<FileReport> currentReports = new List<FileReport>();
@@ -59,6 +60,7 @@ namespace FileDentify
 
             var menu = new MenuStrip();
             var fileMenu = new ToolStripMenuItem("&File");
+            fileMenu.DropDownItems.Add(CreateShortcutMenuItem("&New report", "Ctrl+N", delegate { NewReport(); }));
             fileMenu.DropDownItems.Add(CreateShortcutMenuItem("&Open files...", "Ctrl+O", delegate { AddFiles(false); }));
             fileMenu.DropDownItems.Add(CreateShortcutMenuItem("Open fo&lder...", "Ctrl+Shift+L", delegate { OpenFolder(false); }));
             fileMenu.DropDownItems.Add(CreateShortcutMenuItem("&Append files to report...", "Ctrl+Shift+O", delegate { AddFiles(true); }));
@@ -247,6 +249,7 @@ namespace FileDentify
                 resultsTree.SelectedNode = resultsTree.Nodes[0];
                 addFilesButton.Focus();
             }
+            singleInstanceService = SingleInstanceService.Start(this, AppendFilesFromAnotherInstance);
             Shown += delegate { ScheduleStartupUpdateCheck(); };
             FormClosing += delegate
             {
@@ -257,6 +260,7 @@ namespace FileDentify
             FormClosed += delegate
             {
                 Application.RemoveMessageFilter(this);
+                singleInstanceService.Dispose();
                 DeleteTemporaryHtmlReports();
             };
         }
@@ -330,287 +334,272 @@ namespace FileDentify
 
         private void MainForm_KeyDown(object sender, KeyEventArgs e)
         {
-            if (e.KeyCode == Keys.F1)
-            {
-                ShowHelp();
-                e.Handled = true;
-            }
-            else if (!e.Control && !e.Alt && !e.Shift && e.KeyCode == Keys.F7)
-            {
-                ToggleHtmlDetailsView();
-                e.Handled = true;
-            }
-            else if (!e.Control && !e.Alt && !e.Shift && e.KeyCode == Keys.F6 && settings.HtmlDetailsView)
-            {
-                ToggleHtmlDetailsFocus();
-                e.Handled = true;
-            }
-            else if (e.Control && e.Shift && e.KeyCode == Keys.O)
-            {
-                AddFiles(true);
-                e.Handled = true;
-            }
-            else if (e.Control && e.Shift && e.KeyCode == Keys.L)
-            {
-                OpenFolder(false);
-                e.Handled = true;
-            }
-            else if (e.Control && e.KeyCode == Keys.O)
-            {
-                AddFiles(false);
-                e.Handled = true;
-            }
-            else if (e.Control && !e.Shift && e.KeyCode == Keys.R)
-            {
-                OpenSavedReport();
-                e.Handled = true;
-            }
-            else if (e.Control && e.Shift && e.KeyCode == Keys.T)
-            {
-                OpenLastReport();
-                e.Handled = true;
-            }
-            else if (e.Control && e.KeyCode == Keys.S)
-            {
-                SaveReport();
-                e.Handled = true;
-            }
-            else if (!e.Control && !e.Alt && !e.Shift && e.KeyCode == Keys.F5)
-            {
-                RefreshOriginalFiles();
-                e.Handled = true;
-            }
-            else if (!e.Alt && e.KeyCode == Keys.F4)
-            {
-                OpenAdvancedFileViewer();
-                e.Handled = true;
-            }
-            else if (e.Control && e.KeyCode == Keys.C)
-            {
-                CopyCurrentSelection();
-                e.Handled = true;
-            }
-            else if (e.Control && e.KeyCode == Keys.Oemcomma)
-            {
-                ShowPreferences();
-                e.Handled = true;
-            }
-            else if (e.Control && !e.Shift && e.KeyCode == Keys.Up)
-            {
-                MoveSelectedSection(-1);
+            bool suppressKeyPress;
+            if (!TryHandleGlobalShortcut(e.KeyData, false, out suppressKeyPress))
+                return;
+
+            e.Handled = true;
+            if (suppressKeyPress)
                 e.SuppressKeyPress = true;
-                e.Handled = true;
-            }
-            else if (e.Control && !e.Shift && e.KeyCode == Keys.Down)
-            {
-                MoveSelectedSection(1);
-                e.SuppressKeyPress = true;
-                e.Handled = true;
-            }
-            else if (e.Alt && e.KeyCode == Keys.Left)
-            {
-                SelectAdjacentFile(-1);
-                e.SuppressKeyPress = true;
-                e.Handled = true;
-            }
-            else if (e.Alt && e.KeyCode == Keys.Right)
-            {
-                SelectAdjacentFile(1);
-                e.SuppressKeyPress = true;
-                e.Handled = true;
-            }
-            else if (e.Alt && e.KeyCode == Keys.PageUp)
-            {
-                SelectFileByPosition(false);
-                e.SuppressKeyPress = true;
-                e.Handled = true;
-            }
-            else if (e.Alt && e.KeyCode == Keys.PageDown)
-            {
-                SelectFileByPosition(true);
-                e.SuppressKeyPress = true;
-                e.Handled = true;
-            }
-            else if (e.Alt && e.KeyCode == Keys.Up)
-            {
-                SelectAdjacentSection(-1);
-                e.SuppressKeyPress = true;
-                e.Handled = true;
-            }
-            else if (e.Alt && e.KeyCode == Keys.Down)
-            {
-                SelectAdjacentSection(1);
-                e.SuppressKeyPress = true;
-                e.Handled = true;
-            }
-            else if (e.Alt && e.KeyCode == Keys.Home)
-            {
-                SelectSectionByPosition(false);
-                e.SuppressKeyPress = true;
-                e.Handled = true;
-            }
-            else if (e.Alt && e.KeyCode == Keys.End)
-            {
-                SelectSectionByPosition(true);
-                e.SuppressKeyPress = true;
-                e.Handled = true;
-            }
-            else if (e.Alt && !e.Control && !e.Shift && SelectFileByShortcut(e.KeyCode))
-            {
-                e.SuppressKeyPress = true;
-                e.Handled = true;
-            }
-            else if (e.Control && e.Shift && e.KeyCode == Keys.Left)
-            {
-                CollapseAllResults();
-                e.SuppressKeyPress = true;
-                e.Handled = true;
-            }
-            else if (e.Control && e.Shift && e.KeyCode == Keys.Right)
-            {
-                ExpandAllResults();
-                e.SuppressKeyPress = true;
-                e.Handled = true;
-            }
-            else if (e.Shift && e.KeyCode == Keys.F1)
-            {
-                CheckForUpdates(true);
-                e.Handled = true;
-            }
-            else if (e.Control && e.KeyCode == Keys.F1)
-            {
-                OpenProjectPage();
-                e.Handled = true;
-            }
-            else if (e.KeyCode == Keys.Escape)
-            {
-                if (ReturnToHtmlDetailsAfterMenuEscape())
-                {
-                    e.SuppressKeyPress = true;
-                    e.Handled = true;
-                    return;
-                }
-                Close();
-                e.Handled = true;
-            }
         }
 
         protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
         {
-            if (keyData == (Keys.Control | Keys.Shift | Keys.O))
+            bool suppressKeyPress;
+            if (TryHandleGlobalShortcut(keyData, false, out suppressKeyPress))
+                return true;
+            return base.ProcessCmdKey(ref msg, keyData);
+        }
+
+        private bool TryHandleGlobalShortcut(Keys keyData, bool fromHtmlDetails, out bool suppressKeyPress)
+        {
+            suppressKeyPress = false;
+            var modifiers = keyData & Keys.Modifiers;
+            var keyCode = keyData & Keys.KeyCode;
+
+            if (fromHtmlDetails && keyCode == Keys.Tab && (modifiers == Keys.None || modifiers == Keys.Shift))
             {
-                AddFiles(true);
+                FocusHtmlDetailsDocument();
                 return true;
             }
-            if (keyData == (Keys.Control | Keys.Shift | Keys.L))
+            if (fromHtmlDetails && keyCode == Keys.Escape && modifiers == Keys.None)
             {
-                OpenFolder(false);
+                htmlDetailsWantsFocus = false;
+                resultsTree.Focus();
+                statusLabel.Text = "Tree focused.";
                 return true;
             }
-            if (keyData == (Keys.Control | Keys.R))
+            if (!fromHtmlDetails && keyCode == Keys.Escape && modifiers == Keys.None)
             {
-                OpenSavedReport();
+                if (ReturnToHtmlDetailsAfterMenuEscape())
+                {
+                    suppressKeyPress = true;
+                    return true;
+                }
+                Close();
                 return true;
             }
-            if (keyData == (Keys.Control | Keys.Shift | Keys.T))
+
+            if (keyCode == Keys.F1 && modifiers == Keys.None)
             {
-                OpenLastReport();
+                ShowHelp();
                 return true;
             }
-            if (keyData == Keys.F5)
+            if (keyCode == Keys.F1 && modifiers == Keys.Shift)
             {
-                RefreshOriginalFiles();
+                CheckForUpdates(true);
                 return true;
             }
-            if (keyData == Keys.F7)
+            if (keyCode == Keys.F1 && modifiers == Keys.Control)
+            {
+                OpenProjectPage();
+                return true;
+            }
+            if (keyCode == Keys.F7 && modifiers == Keys.None)
             {
                 ToggleHtmlDetailsView();
                 return true;
             }
-            if (keyData == Keys.F6 && settings.HtmlDetailsView)
+            if (keyCode == Keys.F6 && modifiers == Keys.None && settings.HtmlDetailsView)
             {
                 ToggleHtmlDetailsFocus();
                 return true;
             }
-            if (keyData == Keys.F4)
+            if (keyCode == Keys.F5 && modifiers == Keys.None)
+            {
+                RefreshOriginalFiles();
+                return true;
+            }
+            if (keyCode == Keys.F4 && modifiers == Keys.None)
             {
                 OpenAdvancedFileViewer();
                 return true;
             }
-            if (keyData == (Keys.Control | Keys.Shift | Keys.Left))
+
+            if (keyCode == Keys.N && modifiers == Keys.Control)
+            {
+                NewReport();
+                return true;
+            }
+            if (keyCode == Keys.O && modifiers == Keys.Control)
+            {
+                AddFiles(false);
+                return true;
+            }
+            if (keyCode == Keys.O && modifiers == (Keys.Control | Keys.Shift))
+            {
+                AddFiles(true);
+                return true;
+            }
+            if (keyCode == Keys.L && modifiers == (Keys.Control | Keys.Shift))
+            {
+                OpenFolder(false);
+                return true;
+            }
+            if (keyCode == Keys.R && modifiers == Keys.Control)
+            {
+                OpenSavedReport();
+                return true;
+            }
+            if (keyCode == Keys.T && modifiers == (Keys.Control | Keys.Shift))
+            {
+                OpenLastReport();
+                return true;
+            }
+            if (keyCode == Keys.S && modifiers == Keys.Control)
+            {
+                SaveReport();
+                return true;
+            }
+            if (keyCode == Keys.C && modifiers == Keys.Control)
+            {
+                CopyCurrentSelection();
+                return true;
+            }
+            if (keyCode == Keys.Oemcomma && modifiers == Keys.Control)
+            {
+                ShowPreferences();
+                return true;
+            }
+            if (keyCode == Keys.C && modifiers == Keys.Alt)
+            {
+                CopyReport();
+                return true;
+            }
+            if (keyCode == Keys.L && modifiers == Keys.Alt)
+            {
+                OpenContainingFolder();
+                return true;
+            }
+            if (keyCode == Keys.V && modifiers == Keys.Alt)
+            {
+                ViewHtmlReport();
+                return true;
+            }
+
+            if (keyCode == Keys.Left && modifiers == (Keys.Control | Keys.Shift))
             {
                 CollapseAllResults();
+                suppressKeyPress = true;
                 return true;
             }
-            if (keyData == (Keys.Control | Keys.Shift | Keys.Right))
+            if (keyCode == Keys.Right && modifiers == (Keys.Control | Keys.Shift))
             {
                 ExpandAllResults();
+                suppressKeyPress = true;
                 return true;
             }
-            if (keyData == (Keys.Control | Keys.Up))
+            if (keyCode == Keys.Up && modifiers == Keys.Control)
             {
                 MoveSelectedSection(-1);
+                suppressKeyPress = true;
                 return true;
             }
-            if (keyData == (Keys.Control | Keys.Down))
+            if (keyCode == Keys.Down && modifiers == Keys.Control)
             {
                 MoveSelectedSection(1);
+                suppressKeyPress = true;
                 return true;
             }
-            if (keyData == (Keys.Alt | Keys.Left))
-            {
-                SelectAdjacentFile(-1);
-                return true;
-            }
-            if (keyData == (Keys.Alt | Keys.Back))
-            {
-                SelectReportOverview();
-                return true;
-            }
-            if (keyData == (Keys.Alt | Keys.Right))
-            {
-                SelectAdjacentFile(1);
-                return true;
-            }
-            if (keyData == (Keys.Alt | Keys.PageUp))
-            {
-                SelectFileByPosition(false);
-                return true;
-            }
-            if (keyData == (Keys.Alt | Keys.PageDown))
-            {
-                SelectFileByPosition(true);
-                return true;
-            }
-            if (keyData == (Keys.Alt | Keys.Up))
-            {
-                SelectAdjacentSection(-1);
-                return true;
-            }
-            if (keyData == (Keys.Alt | Keys.Down))
-            {
-                SelectAdjacentSection(1);
-                return true;
-            }
-            if (keyData == (Keys.Alt | Keys.Home))
-            {
-                SelectSectionByPosition(false);
-                return true;
-            }
-            if (keyData == (Keys.Alt | Keys.End))
-            {
-                SelectSectionByPosition(true);
-                return true;
-            }
-            var modifiers = keyData & Keys.Modifiers;
-            var keyCode = keyData & Keys.KeyCode;
-            if (modifiers == Keys.Alt && SelectFileByShortcut(keyCode))
-                return true;
+
             if (modifiers == Keys.Control && SelectTreeNodeByShortcut(keyCode, 0))
+            {
+                if (fromHtmlDetails)
+                    PrepareHtmlBrowserKeyboardNavigation();
+                suppressKeyPress = true;
                 return true;
+            }
             if (modifiers == (Keys.Control | Keys.Shift) && SelectTreeNodeByShortcut(keyCode, 10))
+            {
+                if (fromHtmlDetails)
+                    PrepareHtmlBrowserKeyboardNavigation();
+                suppressKeyPress = true;
                 return true;
-            return base.ProcessCmdKey(ref msg, keyData);
+            }
+            if (modifiers != Keys.Alt)
+                return false;
+
+            if (keyCode == Keys.Back)
+            {
+                if (fromHtmlDetails)
+                    PrepareHtmlBrowserKeyboardNavigation();
+                SelectReportOverview();
+                suppressKeyPress = true;
+                return true;
+            }
+            if (keyCode == Keys.Left)
+            {
+                if (fromHtmlDetails)
+                    PrepareHtmlBrowserKeyboardNavigation();
+                SelectAdjacentFile(-1);
+                suppressKeyPress = true;
+                return true;
+            }
+            if (keyCode == Keys.Right)
+            {
+                if (fromHtmlDetails)
+                    PrepareHtmlBrowserKeyboardNavigation();
+                SelectAdjacentFile(1);
+                suppressKeyPress = true;
+                return true;
+            }
+            if (keyCode == Keys.PageUp)
+            {
+                if (fromHtmlDetails)
+                    PrepareHtmlBrowserKeyboardNavigation();
+                SelectFileByPosition(false);
+                suppressKeyPress = true;
+                return true;
+            }
+            if (keyCode == Keys.PageDown)
+            {
+                if (fromHtmlDetails)
+                    PrepareHtmlBrowserKeyboardNavigation();
+                SelectFileByPosition(true);
+                suppressKeyPress = true;
+                return true;
+            }
+            if (keyCode == Keys.Up)
+            {
+                if (fromHtmlDetails)
+                    PrepareHtmlBrowserKeyboardNavigation();
+                SelectAdjacentSection(-1);
+                suppressKeyPress = true;
+                return true;
+            }
+            if (keyCode == Keys.Down)
+            {
+                if (fromHtmlDetails)
+                    PrepareHtmlBrowserKeyboardNavigation();
+                SelectAdjacentSection(1);
+                suppressKeyPress = true;
+                return true;
+            }
+            if (keyCode == Keys.Home)
+            {
+                if (fromHtmlDetails)
+                    PrepareHtmlBrowserKeyboardNavigation();
+                SelectSectionByPosition(false);
+                suppressKeyPress = true;
+                return true;
+            }
+            if (keyCode == Keys.End)
+            {
+                if (fromHtmlDetails)
+                    PrepareHtmlBrowserKeyboardNavigation();
+                SelectSectionByPosition(true);
+                suppressKeyPress = true;
+                return true;
+            }
+            if (SelectFileByShortcut(keyCode))
+            {
+                if (fromHtmlDetails)
+                    PrepareHtmlBrowserKeyboardNavigation();
+                suppressKeyPress = true;
+                return true;
+            }
+
+            return false;
         }
 
         public bool PreFilterMessage(ref Message m)
@@ -623,147 +612,9 @@ namespace FileDentify
             if (m.Msg != wmKeyDown && m.Msg != wmSysKeyDown)
                 return false;
 
-            var keyCode = (Keys)((int)m.WParam & 0xffff);
-            var modifiers = Control.ModifierKeys;
-            if (keyCode == Keys.F6 && modifiers == Keys.None)
-            {
-                ToggleHtmlDetailsFocus();
-                return true;
-            }
-            if (keyCode == Keys.Escape && modifiers == Keys.None)
-            {
-                htmlDetailsWantsFocus = false;
-                resultsTree.Focus();
-                statusLabel.Text = "Tree focused.";
-                return true;
-            }
-            if (keyCode == Keys.F4 && modifiers == Keys.None)
-            {
-                OpenAdvancedFileViewer();
-                return true;
-            }
-            if (keyCode == Keys.F5 && modifiers == Keys.None)
-            {
-                RefreshOriginalFiles();
-                return true;
-            }
-            if (keyCode == Keys.Tab && (modifiers == Keys.None || modifiers == Keys.Shift))
-            {
-                FocusHtmlDetailsDocument();
-                return true;
-            }
-
-            if (modifiers == Keys.Control && keyCode == Keys.C)
-            {
-                CopyCurrentSelection();
-                return true;
-            }
-            if (modifiers == Keys.Control && SelectTreeNodeByShortcut(keyCode, 0))
-                return true;
-            if (modifiers == (Keys.Control | Keys.Shift) && SelectTreeNodeByShortcut(keyCode, 10))
-                return true;
-            if (modifiers == (Keys.Control | Keys.Shift) && keyCode == Keys.Left)
-            {
-                CollapseAllResults();
-                return true;
-            }
-            if (modifiers == (Keys.Control | Keys.Shift) && keyCode == Keys.Right)
-            {
-                ExpandAllResults();
-                return true;
-            }
-            if (modifiers == Keys.Control && keyCode == Keys.Up)
-            {
-                MoveSelectedSection(-1);
-                return true;
-            }
-            if (modifiers == Keys.Control && keyCode == Keys.Down)
-            {
-                MoveSelectedSection(1);
-                return true;
-            }
-
-            if (modifiers != Keys.Alt)
-                return false;
-
-            if (keyCode == Keys.C)
-            {
-                CopyReport();
-                return true;
-            }
-            if (keyCode == Keys.L)
-            {
-                OpenContainingFolder();
-                return true;
-            }
-            if (keyCode == Keys.V)
-            {
-                ViewHtmlReport();
-                return true;
-            }
-
-            if (keyCode == Keys.Back)
-            {
-                PrepareHtmlBrowserKeyboardNavigation();
-                SelectReportOverview();
-                return true;
-            }
-            if (keyCode == Keys.Left)
-            {
-                PrepareHtmlBrowserKeyboardNavigation();
-                SelectAdjacentFile(-1);
-                return true;
-            }
-            if (keyCode == Keys.Right)
-            {
-                PrepareHtmlBrowserKeyboardNavigation();
-                SelectAdjacentFile(1);
-                return true;
-            }
-            if (keyCode == Keys.PageUp)
-            {
-                PrepareHtmlBrowserKeyboardNavigation();
-                SelectFileByPosition(false);
-                return true;
-            }
-            if (keyCode == Keys.PageDown)
-            {
-                PrepareHtmlBrowserKeyboardNavigation();
-                SelectFileByPosition(true);
-                return true;
-            }
-            if (keyCode == Keys.Up)
-            {
-                PrepareHtmlBrowserKeyboardNavigation();
-                SelectAdjacentSection(-1);
-                return true;
-            }
-            if (keyCode == Keys.Down)
-            {
-                PrepareHtmlBrowserKeyboardNavigation();
-                SelectAdjacentSection(1);
-                return true;
-            }
-            if (keyCode == Keys.Home)
-            {
-                PrepareHtmlBrowserKeyboardNavigation();
-                SelectSectionByPosition(false);
-                return true;
-            }
-            if (keyCode == Keys.End)
-            {
-                PrepareHtmlBrowserKeyboardNavigation();
-                SelectSectionByPosition(true);
-                return true;
-            }
-            if (FileIndexFromShortcutKey(keyCode) >= 0)
-            {
-                PrepareHtmlBrowserKeyboardNavigation();
-                if (SelectFileByShortcut(keyCode))
-                    return true;
-            }
-
-            return false;
+            var keyData = ((Keys)((int)m.WParam & 0xffff)) | Control.ModifierKeys;
+            bool suppressKeyPress;
+            return TryHandleGlobalShortcut(keyData, true, out suppressKeyPress);
         }
 
         private bool ReturnToHtmlDetailsAfterMenuEscape()
@@ -1427,6 +1278,31 @@ namespace FileDentify
             }
         }
 
+        private void NewReport()
+        {
+            if (!ConfirmReplaceCurrentReport("New report", "Starting a new report will clear the current report. Save the current report first?"))
+                return;
+
+            loadedFiles.Clear();
+            currentReports.Clear();
+            currentReportElapsed = null;
+            currentSavedReportPath = string.Empty;
+            reportText = string.Empty;
+            resultsTree.Nodes.Clear();
+            detailsBox.Clear();
+            detailsBrowser.DocumentText = string.Empty;
+            PruneAdvancedViewerStates(new string[0]);
+            ShowEmptyState("New report started.", "Choose Open files to inspect a file, or use Send To to append files while FileDentify is open.");
+            addFilesButton.Focus();
+        }
+
+        private void AppendFilesFromAnotherInstance(string[] paths)
+        {
+            if (paths == null || paths.Length == 0)
+                return;
+            LoadFiles(paths, currentReports.Count > 0);
+        }
+
         private void OpenSavedReport()
         {
             if (!ConfirmReplaceCurrentReport())
@@ -1592,13 +1468,18 @@ namespace FileDentify
 
         private bool ConfirmReplaceCurrentReport()
         {
+            return ConfirmReplaceCurrentReport("Open files", "Opening new files will replace the current report. Save the current report first?");
+        }
+
+        private bool ConfirmReplaceCurrentReport(string title, string message)
+        {
             if (currentReports.Count == 0)
                 return true;
 
             var result = MessageBox.Show(
                 this,
-                "Opening new files will replace the current report. Save the current report first?",
-                "Open files",
+                message,
+                title,
                 MessageBoxButtons.YesNoCancel,
                 MessageBoxIcon.Question);
             if (result == DialogResult.Cancel)
@@ -2073,10 +1954,27 @@ namespace FileDentify
 
         private void DetailsBrowser_PreviewKeyDown(object sender, PreviewKeyDownEventArgs e)
         {
-            if (e.KeyCode == Keys.F4 || e.KeyCode == Keys.F5 || e.KeyCode == Keys.F6 || e.KeyCode == Keys.Escape || e.KeyCode == Keys.Tab ||
-                (e.Control && (e.KeyCode == Keys.C || e.KeyCode == Keys.Up || e.KeyCode == Keys.Down || e.KeyCode == Keys.Left || e.KeyCode == Keys.Right || DigitFromShortcutKey(e.KeyCode) >= 0)) ||
-                (e.Alt && (e.KeyCode == Keys.Left || e.KeyCode == Keys.Right || e.KeyCode == Keys.Up || e.KeyCode == Keys.Down || e.KeyCode == Keys.Home || e.KeyCode == Keys.End || e.KeyCode == Keys.PageUp || e.KeyCode == Keys.PageDown || e.KeyCode == Keys.Back || e.KeyCode == Keys.C || e.KeyCode == Keys.L || e.KeyCode == Keys.V || FileIndexFromShortcutKey(e.KeyCode) >= 0)))
+            if (IsHtmlDetailsGlobalShortcut(e.KeyData))
                 e.IsInputKey = true;
+        }
+
+        private bool IsHtmlDetailsGlobalShortcut(Keys keyData)
+        {
+            var modifiers = keyData & Keys.Modifiers;
+            var keyCode = keyData & Keys.KeyCode;
+
+            if (modifiers == Keys.None && (keyCode == Keys.F1 || keyCode == Keys.F4 || keyCode == Keys.F5 || keyCode == Keys.F6 || keyCode == Keys.F7 || keyCode == Keys.Escape || keyCode == Keys.Tab))
+                return true;
+            if (modifiers == Keys.Shift && (keyCode == Keys.F1 || keyCode == Keys.Tab))
+                return true;
+            if (modifiers == Keys.Control && (keyCode == Keys.F1 || keyCode == Keys.N || keyCode == Keys.O || keyCode == Keys.R || keyCode == Keys.S || keyCode == Keys.C || keyCode == Keys.Oemcomma || keyCode == Keys.Up || keyCode == Keys.Down || DigitFromShortcutKey(keyCode) >= 0))
+                return true;
+            if (modifiers == (Keys.Control | Keys.Shift) && (keyCode == Keys.O || keyCode == Keys.L || keyCode == Keys.T || keyCode == Keys.Left || keyCode == Keys.Right || DigitFromShortcutKey(keyCode) >= 0))
+                return true;
+            if (modifiers == Keys.Alt && (keyCode == Keys.Left || keyCode == Keys.Right || keyCode == Keys.Up || keyCode == Keys.Down || keyCode == Keys.Home || keyCode == Keys.End || keyCode == Keys.PageUp || keyCode == Keys.PageDown || keyCode == Keys.Back || keyCode == Keys.C || keyCode == Keys.L || keyCode == Keys.V || FileIndexFromShortcutKey(keyCode) >= 0))
+                return true;
+
+            return false;
         }
 
         private void ApplyDetailsViewMode(bool focusDetails)

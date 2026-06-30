@@ -19,6 +19,10 @@ namespace FileDentify
             if (ext == ".strings") return "Apple localization strings";
             if (ext == ".car" && StartsWith(header, Encoding.ASCII.GetBytes("BOMStore"))) return "Apple compiled asset catalog";
             if (ext == ".nib") return "Apple Interface Builder nib";
+            if (ext == ".metallib") return "Apple Metal shader library";
+            if (ext == ".sdef") return "Apple scripting definition";
+            if (ext == ".entitlements") return "Apple code-signing entitlements";
+            if (ext == ".xcprivacy") return "Apple privacy manifest";
             if (ext == ".mobileconfig") return "Apple configuration profile";
             if (ext == ".ipa" && IsZipHeader(header)) return "iOS application archive";
             if (ext == ".ipsw" && IsZipHeader(header)) return "Apple device firmware restore package";
@@ -171,6 +175,50 @@ namespace FileDentify
                 return;
             }
 
+            if (ext == ".metallib")
+            {
+                var section = AddSection(sections, "Apple Metal shader library");
+                Add(section, "Format hint", "Compiled Apple Metal shader library");
+                Add(section, "File name", Path.GetFileName(path));
+                Add(section, "Common use", "Compiled GPU shader code used by macOS or iOS applications.");
+                Add(section, "Notes", "FileDentify reports Metal shader libraries as compiled application resources; it does not disassemble shader bytecode.");
+                return;
+            }
+
+            if (ext == ".sdef")
+            {
+                var section = AddSection(sections, "Apple scripting definition");
+                Add(section, "Format hint", "AppleScript scripting definition");
+                Add(section, "File name", Path.GetFileName(path));
+                if (LooksLikeText(header))
+                {
+                    var text = Encoding.UTF8.GetString(header, 0, Math.Min(header.Length, 65536));
+                    AddXmlishAttribute(section, text, "suite", "name", "First suite");
+                    AddXmlishAttribute(section, text, "command", "name", "First command");
+                    Add(section, "Visible command count", Regex.Matches(text, "<command\\b", RegexOptions.IgnoreCase).Count.ToString(CultureInfo.InvariantCulture));
+                    Add(section, "Visible class count", Regex.Matches(text, "<class\\b", RegexOptions.IgnoreCase).Count.ToString(CultureInfo.InvariantCulture));
+                }
+                return;
+            }
+
+            if (ext == ".entitlements" || ext == ".xcprivacy")
+            {
+                var section = AddSection(sections, ext == ".entitlements" ? "Apple entitlements" : "Apple privacy manifest");
+                Add(section, "Format hint", ext == ".entitlements" ? "Apple code-signing entitlements" : "Apple privacy manifest");
+                Add(section, "File name", Path.GetFileName(path));
+                if (LooksLikeText(header))
+                {
+                    var text = Encoding.UTF8.GetString(header, 0, Math.Min(header.Length, 65536));
+                    AddPlistValue(section, text, "com.apple.security.app-sandbox", "App sandbox");
+                    AddPlistValue(section, text, "com.apple.security.network.client", "Network client entitlement");
+                    AddPlistValue(section, text, "NSPrivacyTracking", "Privacy tracking");
+                    AddPlistValue(section, text, "NSPrivacyCollectedDataTypes", "Collected data types");
+                    Add(section, "Visible key count", Regex.Matches(text, "<key>", RegexOptions.IgnoreCase).Count.ToString(CultureInfo.InvariantCulture));
+                }
+                Add(section, "Notes", "FileDentify reports visible plist-style keys only. Entitlements and privacy manifests can describe app capabilities, sandboxing, networking, and data-use declarations.");
+                return;
+            }
+
             if (ext == ".mobileconfig")
             {
                 var section = AddSection(sections, "Apple configuration profile");
@@ -281,7 +329,7 @@ namespace FileDentify
             while (dir != null)
             {
                 var ext = dir.Extension.ToLowerInvariant();
-                if (ext == ".app" || ext == ".framework" || ext == ".bundle" || ext == ".plugin" || ext == ".appex" || ext == ".kext" || ext == ".prefpane")
+                if (ext == ".app" || ext == ".framework" || ext == ".bundle" || ext == ".plugin" || ext == ".appex" || ext == ".xpc" || ext == ".driver" || ext == ".kext" || ext == ".prefpane")
                     return dir.FullName;
                 dir = dir.Parent;
             }
@@ -297,9 +345,22 @@ namespace FileDentify
                 case ".bundle": return "macOS loadable bundle";
                 case ".plugin": return "macOS plug-in bundle";
                 case ".appex": return "Apple app extension bundle";
+                case ".xpc": return "Apple XPC service bundle";
+                case ".driver": return "macOS audio or hardware driver bundle";
                 case ".kext": return "macOS kernel extension bundle";
                 case ".prefpane": return "macOS preference pane bundle";
                 default: return "Apple bundle";
+            }
+        }
+
+        private static void AddXmlishAttribute(ReportSection section, string text, string elementName, string attributeName, string label)
+        {
+            var match = Regex.Match(text ?? string.Empty, "<" + Regex.Escape(elementName) + "\\b[^>]*\\b" + Regex.Escape(attributeName) + "\\s*=\\s*\"(?<value>[^\"]+)\"", RegexOptions.IgnoreCase);
+            if (match.Success)
+            {
+                var value = match.Groups["value"].Value.Trim();
+                if (!string.IsNullOrWhiteSpace(value))
+                    Add(section, label, value);
             }
         }
 
