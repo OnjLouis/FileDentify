@@ -1,8 +1,8 @@
 $ErrorActionPreference = 'Stop'
 
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
-$mainForm = Join-Path $root 'src\MainForm.cs'
-$text = Get-Content -LiteralPath $mainForm -Raw
+$mainFormFiles = Get-ChildItem -LiteralPath (Join-Path $root 'src') -Filter 'MainForm*.cs' | Sort-Object Name
+$text = ($mainFormFiles | ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw }) -join "`r`n"
 $failures = New-Object System.Collections.Generic.List[string]
 
 function Get-Block([string]$startPattern, [string]$endPattern) {

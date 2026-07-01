@@ -27,8 +27,9 @@ namespace FileDentify
             if (StartsWith(header, Encoding.ASCII.GetBytes("PSID"))) return "PlaySID C64 music";
             if (StartsWith(header, Encoding.ASCII.GetBytes("RSID"))) return "Real C64 SID music";
             if (StartsWith(header, Encoding.ASCII.GetBytes("S98"))) return "S98 chiptune log";
+            if (StartsWith(header, Encoding.ASCII.GetBytes("GF1PATCH110"))) return "Gravis UltraSound GF1 instrument patch";
             if (ext == ".mxmf" && StartsWith(header, Encoding.ASCII.GetBytes("XMF_"))) return "Mobile XMF music container";
-            if (StartsWith(header, Encoding.ASCII.GetBytes("QSEQ"))) return "Korg i-series QSEQ song";
+            if (StartsWith(header, Encoding.ASCII.GetBytes("QSEQ"))) return "QSEQ DOS MIDI sequencer song/project";
             if (StartsWith(header, Encoding.ASCII.GetBytes("XMF_")) || ext == ".xmf") return "XMF extensible music container";
             if (StartsWith(header, Encoding.ASCII.GetBytes("melo")) || ext == ".mld") return "MFi/MLD mobile melody";
             if (IsQcpHeader(header) || ext == ".qcp") return "Qualcomm PureVoice QCP audio";
@@ -58,7 +59,7 @@ namespace FileDentify
             if (type == null)
                 return;
 
-            var section = AddSection(sections, "Legacy music/game audio");
+            var section = AddSection(sections, type.IndexOf("Gravis UltraSound", StringComparison.OrdinalIgnoreCase) >= 0 ? "Gravis Ultrasound patch" : "Legacy music/game audio");
             Add(section, "Format hint", type);
             Add(section, "File size", FormatBytes(fileLength));
 
@@ -71,6 +72,8 @@ namespace FileDentify
                 AddSidInfo(section, header);
             else if (StartsWith(header, Encoding.ASCII.GetBytes("S98")))
                 AddS98Info(section, header);
+            else if (StartsWith(header, Encoding.ASCII.GetBytes("GF1PATCH110")))
+                AddGravisPatchInfo(section, header);
             else if (IsQcpHeader(header))
                 AddQcpInfo(section, header);
             else if (StartsWith(header, Encoding.ASCII.GetBytes("XMF_")) || ext == ".xmf" || ext == ".mxmf")
@@ -83,6 +86,8 @@ namespace FileDentify
                 AddRsnInfo(section, header);
             else if (StartsWith(header, Encoding.ASCII.GetBytes("IREZ")) || ext == ".rmf")
                 AddBeatnikRmfInfo(section, header);
+            else if (StartsWith(header, Encoding.ASCII.GetBytes("QSEQ")))
+                AddQseqInfo(section, header);
             else if (StartsWith(header, Encoding.ASCII.GetBytes("RCM-PC98")) || StartsWith(header, Encoding.ASCII.GetBytes("COME ON MUSIC RECOMPOSER")) || ext == ".rcp" || ext == ".g36")
                 AddRecomposerInfo(section, header, type);
             else if (ext == ".hed" || ext == ".wrd" || ext == ".mag" || ext == ".lyc" || ext == ".zel" || ext == ".gmc")
@@ -185,6 +190,63 @@ namespace FileDentify
                 Add(section, "Header text", text);
         }
 
+        private static void AddGravisPatchInfo(ReportSection section, byte[] data)
+        {
+            Add(section, "Header marker", "GF1PATCH110");
+            AddFixedAscii(section, data, 0x0C, 10, "Manufacturer ID");
+            var description = BestGravisDescription(data);
+            if (!string.IsNullOrWhiteSpace(description))
+                Add(section, "Description", description);
+            if (data.Length > 0x56)
+            {
+                var instrumentCount = data[0x54];
+                if (instrumentCount > 0 && instrumentCount < 128)
+                    Add(section, "Instrument count", instrumentCount.ToString(CultureInfo.InvariantCulture));
+                var channels = data[0x56];
+                if (channels == 1 || channels == 2)
+                    Add(section, "Output channels", channels == 1 ? "mono" : "stereo");
+            }
+            if (data.Length >= 0x5B)
+            {
+                var waveformCount = ReadUInt16LittleEndian(data, 0x57);
+                if (waveformCount > 0 && waveformCount < 4096)
+                    Add(section, "Waveform count", waveformCount.ToString(CultureInfo.InvariantCulture));
+                var masterVolume = ReadUInt16LittleEndian(data, 0x59);
+                if (masterVolume > 0)
+                    Add(section, "Master volume", masterVolume.ToString(CultureInfo.InvariantCulture));
+            }
+            Add(section, "Notes", "Gravis UltraSound .pat files are GF1 instrument patch/sample files used for MIDI playback by GUS-compatible cards and software synths. FileDentify reports header fields and visible names; it does not play or resample the patch.");
+        }
+
+        private static string BestGravisDescription(byte[] data)
+        {
+            var candidates = new[]
+            {
+                ReadFixedAscii(data, 0x16, Math.Min(62, Math.Max(0, data.Length - 0x16))),
+                ReadFixedAscii(data, 0x18, Math.Min(60, Math.Max(0, data.Length - 0x18)))
+            };
+            return candidates
+                .Select(CleanGravisText)
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .OrderByDescending(s => s.Length)
+                .FirstOrDefault();
+        }
+
+        private static string CleanGravisText(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return string.Empty;
+            var sb = new StringBuilder();
+            foreach (var ch in value)
+            {
+                if (ch == '\0')
+                    break;
+                if (ch >= 32 && ch != 127)
+                    sb.Append(ch);
+            }
+            return sb.ToString().Trim();
+        }
+
         private static void AddQcpInfo(ReportSection section, byte[] data)
         {
             if (data.Length < 12)
@@ -248,6 +310,22 @@ namespace FileDentify
                 .ToArray();
             if (useful.Length > 0)
                 Add(section, "Visible RMF resources", string.Join("\r\n", useful));
+        }
+
+        private static void AddQseqInfo(ReportSection section, byte[] data)
+        {
+            Add(section, "Marker", "QSEQ");
+            if (data.Length >= 8)
+                Add(section, "Header values", ReadUInt16LittleEndian(data, 4).ToString(CultureInfo.InvariantCulture) + ", " + ReadUInt16LittleEndian(data, 6).ToString(CultureInfo.InvariantCulture));
+            var useful = FindAsciiStrings(data, 4, 16)
+                .Select(s => s.Value)
+                .Where(s => s.Length > 2 && !s.Equals("QSEQ", StringComparison.OrdinalIgnoreCase))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(16)
+                .ToArray();
+            if (useful.Length > 0)
+                Add(section, "Visible song/project strings", string.Join("\r\n", useful));
+            Add(section, "Notes", "QSEQ .QSQ files are old DOS MIDI sequencer song/project files. FileDentify reports the marker and visible strings; it does not convert the sequence to MIDI or play it.");
         }
 
         private static void AddRecomposerInfo(ReportSection section, byte[] data, string type)

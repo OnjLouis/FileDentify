@@ -277,6 +277,28 @@ namespace FileDentify
                     Add(section, "Dimensions", BitConverter.ToInt32(header, 18) + " x " + Math.Abs(BitConverter.ToInt32(header, 22)));
                     Add(section, "Bits per pixel", BitConverter.ToUInt16(header, 28).ToString(CultureInfo.InvariantCulture));
                 }
+                else if (header.Length >= 6 && header[0] == 0x00 && header[1] == 0x00 && (header[2] == 0x01 || header[2] == 0x02) && header[3] == 0x00)
+                {
+                    var section = AddSection(sections, "Image");
+                    var iconCount = BitConverter.ToUInt16(header, 4);
+                    Add(section, "Format", header[2] == 0x01 ? "Windows icon" : "Windows cursor");
+                    Add(section, "Images", iconCount.ToString(CultureInfo.InvariantCulture));
+                    var entries = new List<string>();
+                    var count = Math.Min(iconCount, (ushort)8);
+                    for (var i = 0; i < count; i++)
+                    {
+                        var offset = 6 + i * 16;
+                        if (offset + 16 > header.Length)
+                            break;
+                        var width = header[offset] == 0 ? 256 : header[offset];
+                        var height = header[offset + 1] == 0 ? 256 : header[offset + 1];
+                        var bitCount = BitConverter.ToUInt16(header, offset + 6);
+                        var bytes = BitConverter.ToUInt32(header, offset + 8);
+                        entries.Add(width.ToString(CultureInfo.InvariantCulture) + " x " + height.ToString(CultureInfo.InvariantCulture) + ", " + bitCount.ToString(CultureInfo.InvariantCulture) + " bpp, " + FormatBytes(bytes));
+                    }
+                    if (entries.Count > 0)
+                        Add(section, "Embedded images", string.Join("\r\n", entries.ToArray()));
+                }
                 else if (header.Length >= 4 && header[0] == 0xff && header[1] == 0xd8)
                 {
                     var dimensions = TryReadJpegDimensions(header);

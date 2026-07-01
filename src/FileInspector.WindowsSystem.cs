@@ -31,6 +31,7 @@ namespace FileDentify
             if (StartsWith(header, Encoding.ASCII.GetBytes("$SDI0001"))) return "Windows boot SDI image";
             if (ext == ".man" && LooksLikeWindowsInstrumentationManifest(header)) return "Windows instrumentation manifest";
             if (name.EndsWith(".manifest", StringComparison.OrdinalIgnoreCase) && LooksLikeText(header)) return "Windows application manifest";
+            if (ext == ".fon" && LooksLikeWindowsFon(header)) return "Windows bitmap font library";
             return null;
         }
 
@@ -74,8 +75,35 @@ namespace FileDentify
                 AddWindowsInstrumentationManifestInfo(section, header);
             else if ((Path.GetFileName(path) ?? string.Empty).EndsWith(".manifest", StringComparison.OrdinalIgnoreCase))
                 AddManifestInfo(section, header);
+            else if (Path.GetExtension(path).Equals(".fon", StringComparison.OrdinalIgnoreCase))
+                AddWindowsFonInfo(section, path, header);
 
             Add(section, "Notes", "Windows system files are reported from headers, filenames, and safe text/XML structure only. FileDentify does not install, import, execute, or modify them.");
+        }
+
+        private static bool LooksLikeWindowsFon(byte[] header)
+        {
+            if (header.Length < 0x40 || !StartsWith(header, Encoding.ASCII.GetBytes("MZ")))
+                return false;
+            var neOffset = (int)ReadUInt32LittleEndian(header, 0x3C);
+            return neOffset >= 0 && neOffset + 2 <= header.Length &&
+                header[neOffset] == (byte)'N' &&
+                header[neOffset + 1] == (byte)'E';
+        }
+
+        private static void AddWindowsFonInfo(ReportSection section, string path, byte[] header)
+        {
+            Add(section, "Role", "Legacy Windows bitmap font resource library.");
+            Add(section, "Font file", Path.GetFileName(path));
+            var neOffset = (int)ReadUInt32LittleEndian(header, 0x3C);
+            Add(section, "Executable wrapper", "MZ with NE header at 0x" + neOffset.ToString("X", CultureInfo.InvariantCulture));
+            if (neOffset + 0x40 <= header.Length)
+            {
+                Add(section, "NE linker version", header[neOffset + 2].ToString(CultureInfo.InvariantCulture) + "." + header[neOffset + 3].ToString(CultureInfo.InvariantCulture));
+                Add(section, "Entry table offset", "0x" + ReadUInt16LittleEndian(header, neOffset + 4).ToString("X", CultureInfo.InvariantCulture));
+                Add(section, "Resource table offset", "0x" + ReadUInt16LittleEndian(header, neOffset + 0x24).ToString("X", CultureInfo.InvariantCulture) + " from NE header");
+            }
+            Add(section, "Common location", @"%SystemRoot%\Fonts");
         }
 
         private static bool LooksLikeEvtx(byte[] header)

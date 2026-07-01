@@ -35,6 +35,11 @@ namespace FileDentify
             if (ext == ".svq" || StartsWith(header, Encoding.ASCII.GetBytes("RSVQ"))) return "Roland sequencer song";
             if (ext == ".smp" && StartsWith(header, Encoding.ASCII.GetBytes("RFWV"))) return "Roland FA sample data";
             if (ext == ".jgl" && StartsWith(header, Encoding.ASCII.GetBytes("JunoGLibrarianFile"))) return "Roland Juno-G Librarian data";
+            if (IsRolandFantomLibrarian(path, header)) return "Roland Fantom Librarian data";
+            if (IsYamahaSoftSynthTable(path, header)) return "Yamaha S-YXG software-synthesizer table";
+            if (IsOpenAlSpatialAudio(path, header)) return OpenAlSpatialAudioTypeName(path);
+            var productionResource = ProductionAudioResourceTypeName(path, header);
+            if (productionResource != null) return productionResource;
             if (LhaMethod(header) != null || ext == ".lha" || ext == ".lzh") return "LHA/LZH archive";
             if (ext == ".mogg") return "MOGG multitrack Ogg audio";
             if (ext == ".sfark") return "sfArk compressed SoundFont archive";
@@ -66,6 +71,9 @@ namespace FileDentify
             AddWwiseMediaInfo(sections, path, header);
             AddSpitfireAudioInfo(sections, path, header, stringSample, fileLength);
             AddAudioSampleResourceInfo(sections, path, header, stringSample, fileLength);
+            AddYamahaSoftSynthInfo(sections, path, header, stringSample, fileLength);
+            AddOpenAlSpatialAudioInfo(sections, path, header);
+            AddProductionAudioResourceInfo(sections, path, header, stringSample, fileLength);
         }
 
         private static string SpitfireAudioTypeName(string path, byte[] header)
@@ -500,6 +508,8 @@ namespace FileDentify
                 AddRolandSampleInfo(sections, header);
             else if (ext == ".jgl" && StartsWith(header, Encoding.ASCII.GetBytes("JunoGLibrarianFile")))
                 AddRolandJunoGLibrarianInfo(sections, header);
+            else if (IsRolandFantomLibrarian(path, header))
+                AddRolandFantomLibrarianInfo(sections, path, header);
         }
 
         private static void AddSysExInfo(List<ReportSection> sections, byte[] header)
@@ -621,6 +631,326 @@ namespace FileDentify
             if (names.Length > 0)
                 Add(section, "Visible patch or library names", string.Join("\r\n", names));
             Add(section, "Notes", "Juno-G Librarian files are Roland patch/library dumps. FileDentify reports visible names and markers only; it does not send SysEx or write data to hardware.");
+        }
+
+        private static bool IsRolandFantomLibrarian(string path, byte[] header)
+        {
+            var ext = Path.GetExtension(path);
+            if (StartsWith(header, Encoding.ASCII.GetBytes("FantomXLibrarianFile")) ||
+                StartsWith(header, Encoding.ASCII.GetBytes("FantomSLibrarianFile")))
+                return true;
+            return string.Equals(ext, ".fxl", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(ext, ".fsl", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static void AddRolandFantomLibrarianInfo(List<ReportSection> sections, string path, byte[] header)
+        {
+            if (!IsRolandFantomLibrarian(path, header))
+                return;
+
+            var marker = StartsWith(header, Encoding.ASCII.GetBytes("FantomSLibrarianFile"))
+                ? "FantomSLibrarianFile"
+                : StartsWith(header, Encoding.ASCII.GetBytes("FantomXLibrarianFile"))
+                    ? "FantomXLibrarianFile"
+                    : string.Empty;
+
+            var ext = Path.GetExtension(path);
+            var section = AddSection(sections, "Roland Fantom Librarian");
+            Add(section, "Format hint", string.Equals(ext, ".fsl", StringComparison.OrdinalIgnoreCase) || marker.StartsWith("FantomS", StringComparison.OrdinalIgnoreCase)
+                ? "Roland Fantom-S Librarian file"
+                : "Roland Fantom-X Librarian file");
+            if (!string.IsNullOrWhiteSpace(marker))
+                Add(section, "Marker", marker);
+            Add(section, "Likely target", string.Equals(ext, ".fsl", StringComparison.OrdinalIgnoreCase) || marker.StartsWith("FantomS", StringComparison.OrdinalIgnoreCase)
+                ? "Fantom-S / Fantom-S88 patch library"
+                : "Fantom-X / Fantom-XR patch library");
+            Add(section, "File role", "Patch, performance, rhythm, arpeggio, or librarian-bank data for Roland Fantom hardware.");
+
+            var names = FindReadableTextLines(header, 4, 40)
+                .Select(line => line.Trim())
+                .Where(LooksLikeRolandPatchName)
+                .Select(CleanRolandPatchName)
+                .Where(line => !string.IsNullOrWhiteSpace(line))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(24)
+                .ToArray();
+            if (names.Length > 0)
+                Add(section, "Visible patch or library names", string.Join("\r\n", names));
+            Add(section, "Notes", "Roland Fantom Librarian files are proprietary hardware patch/library dumps. FileDentify reports visible names and markers only; it does not decode synth parameters, send SysEx, or write data to hardware.");
+        }
+
+        private static bool IsYamahaSoftSynthTable(string path, byte[] header)
+        {
+            if (StartsWith(header, Encoding.ASCII.GetBytes("UTG VPRM")))
+                return true;
+
+            var name = Path.GetFileName(path) ?? string.Empty;
+            var ext = Path.GetExtension(path);
+            if (!string.Equals(ext, ".tbl", StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            var lower = path.ToLowerInvariant();
+            return lower.IndexOf("yamaha", StringComparison.OrdinalIgnoreCase) >= 0 &&
+                (lower.IndexOf("s-yxg", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 lower.IndexOf("syxg", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 name.StartsWith("sxg", StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static void AddYamahaSoftSynthInfo(List<ReportSection> sections, string path, byte[] header, byte[] stringSample, long fileLength)
+        {
+            if (!IsYamahaSoftSynthTable(path, header))
+                return;
+
+            var section = AddSection(sections, "Yamaha softsynth");
+            Add(section, "Format hint", "Yamaha S-YXG software-synthesizer table");
+            Add(section, "File role", YamahaSoftSynthRole(path, header));
+            Add(section, "File size", FormatBytes(fileLength));
+            if (StartsWith(header, Encoding.ASCII.GetBytes("UTG VPRM")))
+                Add(section, "Header marker", ReadAsciiUntil(header, 0, 24));
+            else if (IndexOfAscii(header, "XSCA") >= 0)
+                Add(section, "Header marker", "XSCA near file start");
+
+            var strings = FindAsciiStrings(stringSample, 4, 80)
+                .Select(item => item.Value.Trim())
+                .Where(value => value.Length > 0)
+                .Where(value => value.IndexOf("Yamaha", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    value.IndexOf("S-YXG", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    value.IndexOf("XG", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    value.IndexOf("MIDI", StringComparison.OrdinalIgnoreCase) >= 0)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(16)
+                .ToArray();
+            if (strings.Length > 0)
+                Add(section, "Visible strings", string.Join(Environment.NewLine, strings));
+            Add(section, "Notes", "Yamaha S-YXG table files are support data for older Yamaha software MIDI synthesizers. FileDentify reports file role, visible markers, and safe string clues only; it does not decode wavetable payloads or load the synthesizer.");
+        }
+
+        private static string YamahaSoftSynthRole(string path, byte[] header)
+        {
+            var name = Path.GetFileName(path) ?? string.Empty;
+            if (StartsWith(header, Encoding.ASCII.GetBytes("UTG VPRM")) || name.IndexOf("bnw", StringComparison.OrdinalIgnoreCase) >= 0)
+                return "Voice, program, or bank mapping table";
+            if (name.IndexOf("dat", StringComparison.OrdinalIgnoreCase) >= 0)
+                return "Large wavetable/support data table";
+            return "S-YXG software-synthesizer support table";
+        }
+
+        private static bool LooksLikeRolandPatchName(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return false;
+            if (value.IndexOf("LibrarianFile", StringComparison.OrdinalIgnoreCase) >= 0)
+                return false;
+            if (value.IndexOf('\\') >= 0 || value.IndexOf('%') >= 0)
+                return false;
+            if (value.Count(ch => ch == '@') > value.Length / 2)
+                return false;
+            var useful = value.Count(ch => char.IsLetterOrDigit(ch) || char.IsWhiteSpace(ch) || "-_+'/&().".IndexOf(ch) >= 0);
+            var lettersOrDigits = value.Count(char.IsLetterOrDigit);
+            return lettersOrDigits >= 4 && value.Any(char.IsLetterOrDigit) && useful >= Math.Max(3, value.Length - 2);
+        }
+
+        private static string CleanRolandPatchName(string value)
+        {
+            var text = (value ?? string.Empty).Trim();
+            if (text.Length > 4 && text[0] == 'O' && char.IsLetterOrDigit(text[1]))
+                text = text.Substring(1).Trim();
+            return text;
+        }
+
+        private static bool IsOpenAlSpatialAudio(string path, byte[] header)
+        {
+            var ext = Path.GetExtension(path);
+            return string.Equals(ext, ".mhr", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(ext, ".ambdec", StringComparison.OrdinalIgnoreCase) ||
+                StartsWith(header, Encoding.ASCII.GetBytes("MinPHR"));
+        }
+
+        private static string OpenAlSpatialAudioTypeName(string path)
+        {
+            var ext = Path.GetExtension(path);
+            if (string.Equals(ext, ".mhr", StringComparison.OrdinalIgnoreCase))
+                return "OpenAL Soft HRTF data";
+            if (string.Equals(ext, ".ambdec", StringComparison.OrdinalIgnoreCase))
+                return "Ambisonic decoder configuration";
+            return "OpenAL spatial audio data";
+        }
+
+        private static void AddOpenAlSpatialAudioInfo(List<ReportSection> sections, string path, byte[] header)
+        {
+            if (!IsOpenAlSpatialAudio(path, header))
+                return;
+
+            var ext = Path.GetExtension(path);
+            var section = AddSection(sections, "OpenAL spatial audio");
+            Add(section, "Format hint", OpenAlSpatialAudioTypeName(path));
+            if (StartsWith(header, Encoding.ASCII.GetBytes("MinPHR")))
+            {
+                Add(section, "Header marker", ReadAsciiUntil(header, 0, 16));
+                Add(section, "Common use", "Head-related transfer function data used by OpenAL Soft and games/tools that provide headphone spatialisation.");
+                var sampleRate = OpenAlSampleRateFromName(path);
+                if (!string.IsNullOrWhiteSpace(sampleRate))
+                    Add(section, "Filename sample rate", sampleRate);
+            }
+            else if (string.Equals(ext, ".ambdec", StringComparison.OrdinalIgnoreCase))
+            {
+                var text = DecodeTextSample(header);
+                Add(section, "Common use", "Ambisonic speaker decoder preset used by OpenAL Soft.");
+                AddAmbdecField(section, text, "/description", "Description");
+                AddAmbdecField(section, text, "/version", "Version");
+                AddAmbdecField(section, text, "/dec/chan_mask", "Channel mask");
+                Add(section, "Text format", "Line-oriented AmbDec configuration");
+            }
+            Add(section, "Notes", "Spatial audio support is identification-level. FileDentify reports header and configuration clues; it does not render HRTF filters or validate decoder matrices.");
+        }
+
+        private static string OpenAlSampleRateFromName(string path)
+        {
+            var name = Path.GetFileNameWithoutExtension(path) ?? string.Empty;
+            var match = Regex.Match(name, @"(?<!\d)(?<rate>44(?:100)?|48(?:000)?)(?!\d)", RegexOptions.CultureInvariant);
+            if (!match.Success)
+                return string.Empty;
+            var value = match.Groups["rate"].Value;
+            if (value == "44")
+                value = "44100";
+            if (value == "48")
+                value = "48000";
+            return value + " Hz";
+        }
+
+        private static void AddAmbdecField(ReportSection section, string text, string key, string label)
+        {
+            var match = Regex.Match(text ?? string.Empty, @"(?im)^\s*" + Regex.Escape(key) + @"\s+(?<value>.+?)\s*$");
+            if (match.Success)
+                Add(section, label, match.Groups["value"].Value.Trim());
+        }
+
+        private static string ProductionAudioResourceTypeName(string path, byte[] header)
+        {
+            var ext = Path.GetExtension(path).ToLowerInvariant();
+            if (StartsWith(header, Encoding.ASCII.GetBytes("FORM")) && header.Length >= 12 && Encoding.ASCII.GetString(header, 8, 4) == "PTCH")
+                return "Reason NN-XT sampler patch";
+            if (StartsWith(header, Encoding.ASCII.GetBytes("RIFF")) && header.Length >= 12)
+            {
+                var form = Encoding.ASCII.GetString(header, 8, 4);
+                if (form == "APRG") return "Akai sampler program";
+                if (form == "AMUL") return "Akai sampler multi";
+                if (form == "SEKD") return "MAGIX/SEK'D sample-library metadata";
+            }
+            if (StartsWith(header, Encoding.ASCII.GetBytes("CAT ")) && header.Length >= 12 && Encoding.ASCII.GetString(header, 8, 4) == "PRBM")
+                return "Propellerhead ReBirth mod";
+            if (StartsWith(header, Encoding.ASCII.GetBytes("gchT")))
+                return "GarageBand chord/tuning table";
+            if (StartsWith(header, Encoding.ASCII.GetBytes("GNOA")))
+                return "GN Audio container with embedded MIDI";
+            switch (ext)
+            {
+                case ".sxt": return "Reason NN-XT sampler patch";
+                case ".lso": return "Emagic Logic song/project";
+                case ".chtr": return "GarageBand chord/tuning table";
+                case ".nac": return "Native Instruments sample-add data";
+                case ".nov": return "Native Instruments sample-add instrument data";
+                case ".h0": return "MAGIX/SEK'D waveform overview";
+                case ".hdp": return "MAGIX/SEK'D sample-library metadata";
+                case ".ovm": return "MAGIX object/volume metadata";
+                case ".akp": return "Akai sampler program";
+                case ".akm": return "Akai sampler multi";
+                case ".rbm": return "Propellerhead ReBirth mod";
+                case ".mdd": return "GN Audio container with embedded MIDI";
+                default: return null;
+            }
+        }
+
+        private static void AddProductionAudioResourceInfo(List<ReportSection> sections, string path, byte[] header, byte[] sample, long fileLength)
+        {
+            var type = ProductionAudioResourceTypeName(path, header);
+            if (type == null)
+                return;
+
+            var ext = Path.GetExtension(path).ToLowerInvariant();
+            var section = AddSection(sections, "Production audio resource");
+            Add(section, "Format hint", type);
+            Add(section, "File size", FormatBytes(fileLength));
+            Add(section, "Role", ProductionAudioResourceRole(path));
+
+            if (StartsWith(header, Encoding.ASCII.GetBytes("FORM")) && header.Length >= 12)
+            {
+                Add(section, "Container", "IFF/FORM");
+                Add(section, "FORM type", Encoding.ASCII.GetString(header, 8, 4));
+            }
+            else if (StartsWith(header, Encoding.ASCII.GetBytes("RIFF")) && header.Length >= 12)
+            {
+                Add(section, "Container", "RIFF");
+                Add(section, "RIFF form", Encoding.ASCII.GetString(header, 8, 4));
+            }
+            else if (StartsWith(header, Encoding.ASCII.GetBytes("CAT ")) && header.Length >= 12)
+            {
+                Add(section, "Container", "IFF/CAT");
+                Add(section, "CAT type", Encoding.ASCII.GetString(header, 8, 4));
+            }
+            else if (StartsWith(header, Encoding.ASCII.GetBytes("gchT")))
+            {
+                Add(section, "Header marker", "gchT");
+                var utf16 = FindUtf16Strings(sample, 4, 12, true).Select(s => s.Value).Distinct(StringComparer.OrdinalIgnoreCase).Take(12).ToArray();
+                if (utf16.Length > 0)
+                    Add(section, "Visible Unicode strings", string.Join(Environment.NewLine, utf16));
+            }
+            else if (StartsWith(header, Encoding.ASCII.GetBytes("GNOA")))
+            {
+                Add(section, "Header marker", "GNOA");
+                if (IndexOfAscii(sample, "MThd") >= 0)
+                    Add(section, "Embedded MIDI", "MThd marker found in sampled bytes.");
+            }
+
+            if (ext == ".sxt" || ext == ".akp" || ext == ".akm" || ext == ".rbm" || ext == ".mdd")
+            {
+                var sizeField = HeaderSizeField(header);
+                if (!string.IsNullOrWhiteSpace(sizeField))
+                    Add(section, "Header size field", sizeField);
+            }
+
+            var strings = FindAsciiStrings(sample, 4, 80)
+                .Select(s => s.Value.Trim())
+                .Where(value => value.Length > 0)
+                .Where(value => value.Any(char.IsLetterOrDigit))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(20)
+                .ToArray();
+            if (strings.Length > 0)
+                Add(section, "Visible strings", string.Join(Environment.NewLine, strings));
+
+            Add(section, "Notes", "These are production-audio support files from DAWs, samplers, sample CDs, or bundled music tools. FileDentify reports container markers, file roles, visible sample/project strings, and embedded MIDI clues only; it does not load instruments or reconstruct projects.");
+        }
+
+        private static string ProductionAudioResourceRole(string path)
+        {
+            switch (Path.GetExtension(path).ToLowerInvariant())
+            {
+                case ".sxt": return "Reason NN-XT sampler patch, usually referencing external WAV samples.";
+                case ".lso": return "Classic Logic/Emagic song or loop project file.";
+                case ".chtr": return "GarageBand Smart Guitar chord/tuning table.";
+                case ".nac": return "Native Instruments sample-add analysis/support data.";
+                case ".nov": return "Native Instruments sample-add instrument or voice-support data.";
+                case ".h0": return "MAGIX/SEK'D waveform overview or analysis sidecar.";
+                case ".hdp": return "MAGIX/SEK'D RIFF metadata sidecar.";
+                case ".ovm": return "MAGIX object or volume/envelope metadata sidecar.";
+                case ".akp": return "Akai sampler program/preset data.";
+                case ".akm": return "Akai sampler multi data.";
+                case ".rbm": return "Propellerhead ReBirth mod/package.";
+                case ".mdd": return "GN Audio container, often accompanying WAV assets and capable of carrying MIDI data.";
+                default: return "Production-audio support data.";
+            }
+        }
+
+        private static string HeaderSizeField(byte[] header)
+        {
+            if (header.Length < 8)
+                return string.Empty;
+            if (StartsWith(header, Encoding.ASCII.GetBytes("FORM")) || StartsWith(header, Encoding.ASCII.GetBytes("CAT ")))
+                return FormatBytes(ReadUInt32BigEndian(header, 4));
+            if (StartsWith(header, Encoding.ASCII.GetBytes("RIFF")))
+                return FormatBytes(ReadUInt32LittleEndian(header, 4));
+            return string.Empty;
         }
 
         private static void AddJsonString(ReportSection section, Dictionary<string, object> root, string key, string label)
@@ -843,13 +1173,14 @@ namespace FileDentify
             if (IsProtrackerMod(header)) return "ProTracker/Amiga MOD module";
             if (StartsWith(header, Encoding.ASCII.GetBytes("Extended Module: "))) return "FastTracker XM module";
             if (header.Length >= 48 && Encoding.ASCII.GetString(header, 44, 4) == "SCRM") return "Scream Tracker 3 module";
-            if (StartsWith(header, Encoding.ASCII.GetBytes("IMPM"))) return "Impulse Tracker module";
+            if (StartsWith(header, Encoding.ASCII.GetBytes("IMPM"))) return ext == ".mptm" ? "OpenMPT module" : "Impulse Tracker module";
             switch (ext)
             {
                 case ".mod": return "Tracker module, likely ProTracker/Amiga MOD";
                 case ".xm": return "FastTracker XM module";
                 case ".s3m": return "Scream Tracker 3 module";
                 case ".it": return "Impulse Tracker module";
+                case ".mptm": return "OpenMPT module";
                 default: return null;
             }
         }

@@ -17,6 +17,8 @@ namespace FileDentify
             var ext = Path.GetExtension(path).ToLowerInvariant();
             if (expectation.AcceptedExtensions.Contains(ext))
                 return;
+            if (ext == ".fon" && WindowsSystemTypeName(path, header) == "Windows bitmap font library")
+                return;
             if (SpeechVoiceTypeName(path, header) != null)
                 return;
 

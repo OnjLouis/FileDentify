@@ -67,6 +67,119 @@ namespace FileDentify
             return label + ": " + text;
         }
 
+        private static void AddFileDentifyDatabaseInfo(List<ReportSection> sections, string path, byte[] header, long length)
+        {
+            AddFileDentifyDatabaseInfo(sections, path, header, length, FileDentifyDatabaseTypeName(path, header, length));
+        }
+
+        private static void AddFileDentifyDatabaseInfo(List<ReportSection> sections, string path, byte[] header, long length, string typeName)
+        {
+            if (string.IsNullOrWhiteSpace(typeName))
+                return;
+
+            var section = AddSection(sections, "FileDentify database");
+            Add(section, "Best match", typeName);
+            Add(section, "Source", "FileDentify built-in file-type database");
+            Add(section, "Detection basis", FileDentifyDatabaseDetectionBasis(path, header));
+            if (string.IsNullOrWhiteSpace(Path.GetExtension(path)))
+                Add(section, "Extensionless file", "The filename has no extension, so FileDentify relied on header, filename, path, or structure clues.");
+        }
+
+        private static string FileDentifyDatabaseTypeName(string path, byte[] header, long length)
+        {
+            if (IsWindowsShortcut(header)) return "Windows shortcut (.lnk)";
+            if (IsInternetShortcut(path, header)) return "Internet shortcut or web favorite (.url)";
+            var savedReportType = SavedReportTypeName(path, header);
+            if (savedReportType != null) return savedReportType;
+            var developerType = DeveloperFormatTypeName(path, header);
+            if (developerType != null) return developerType;
+            var developerAppResourceType = DeveloperAppResourceTypeName(path, header);
+            if (developerAppResourceType != null) return developerAppResourceType;
+            var backupConfigType = BackupConfigTypeName(path, header);
+            if (backupConfigType != null) return backupConfigType;
+            var legacySoundBankType = LegacySoundBankTypeName(path, header, length);
+            if (legacySoundBankType != null) return legacySoundBankType;
+            var ensoniqType = EnsoniqTypeName(path, header);
+            if (ensoniqType != null) return ensoniqType;
+            var qwsType = QwsTypeName(path, header);
+            if (qwsType != null) return qwsType;
+            var nvdaAddonType = NvdaAddonTypeName(path, header);
+            if (nvdaAddonType != null) return nvdaAddonType;
+            var gameType = GameFileTypeName(path, header);
+            if (gameType != null) return gameType;
+            var legacyMusicType = LegacyMusicTypeName(path, header);
+            if (legacyMusicType != null) return legacyMusicType;
+            if (header.Length >= 32 && AsciiPreview(header, 32).Contains("Roland SRX"))
+                return "Roland SRX expansion ROM image";
+            var mobileToneType = MobilePhoneToneTypeName(path, header);
+            if (mobileToneType != null) return mobileToneType;
+            var sampleLibraryType = SampleLibraryTypeName(path, header);
+            if (sampleLibraryType != null) return sampleLibraryType;
+            if (header.Length >= 4 && StartsWith(header, Encoding.ASCII.GetBytes("UFS2")))
+                return "UVI/Falcon UFS sample library container";
+            if (string.Equals(Path.GetExtension(path), ".ufs", StringComparison.OrdinalIgnoreCase))
+                return "UFS sample-library container";
+            if (string.Equals(Path.GetExtension(path), ".blob", StringComparison.OrdinalIgnoreCase))
+                return "Binary blob asset or metadata container";
+            var clipmanType = ClipmanTypeName(path, header);
+            if (clipmanType != null) return clipmanType;
+            var symbianAppType = SymbianAppResourceTypeName(path, header);
+            if (symbianAppType != null) return symbianAppType;
+            var midletType = JavaMidletTypeName(path, header);
+            if (midletType != null) return midletType;
+            var nativeInstrumentsType = NativeInstrumentsTypeName(path);
+            if (nativeInstrumentsType != null) return nativeInstrumentsType;
+            var steinbergType = SteinbergCubaseTypeName(path);
+            if (steinbergType != null) return steinbergType;
+            var rolandCloudType = RolandCloudTypeName(path, header);
+            if (rolandCloudType != null) return rolandCloudType;
+            var musicProjectType = MusicProjectFormatTypeName(path, header);
+            if (musicProjectType != null) return musicProjectType;
+            var projectSidecarType = ProjectSidecarTypeName(path, header);
+            if (projectSidecarType != null) return projectSidecarType;
+            var audioSupportType = AudioSupportTypeName(path, header);
+            if (audioSupportType != null) return audioSupportType;
+            var macAudioPluginType = MacAudioPluginTypeName(path, header);
+            if (macAudioPluginType != null) return macAudioPluginType;
+            var appleType = AppleFormatTypeName(path, header);
+            if (appleType != null) return appleType;
+            var firmwareType = FirmwareTypeName(path, header);
+            if (firmwareType != null) return firmwareType;
+            var hardwareIdType = HardwareIdDatabaseTypeName(path, header);
+            if (hardwareIdType != null) return hardwareIdType;
+            var accessibilityDataType = AccessibilityDataTypeName(path, header);
+            if (accessibilityDataType != null) return accessibilityDataType;
+            var legacyAppResourceType = LegacyAppResourceTypeName(path, header);
+            if (legacyAppResourceType != null) return legacyAppResourceType;
+            var personalDataType = PersonalDataTypeName(path, header);
+            if (personalDataType != null) return personalDataType;
+            var windowsSystemType = WindowsSystemTypeName(path, header);
+            if (windowsSystemType != null) return windowsSystemType;
+            var commonDataType = CommonDataTypeName(path, header);
+            if (commonDataType != null) return commonDataType;
+            var installerDataType = InstallerDataTypeName(path, header);
+            if (installerDataType != null) return installerDataType;
+            var virtualMachineMetadataType = VirtualMachineMetadataTypeName(path, header);
+            if (virtualMachineMetadataType != null) return virtualMachineMetadataType;
+            if (StartsWith(header, Encoding.ASCII.GetBytes("MThd")))
+                return "Standard MIDI file";
+            return null;
+        }
+
+        private static string FileDentifyDatabaseDetectionBasis(string path, byte[] header)
+        {
+            var parts = new List<string>();
+            var ext = Path.GetExtension(path);
+            if (string.IsNullOrWhiteSpace(ext))
+                parts.Add("no extension");
+            else
+                parts.Add("extension " + ext);
+            if (header.Length >= 4)
+                parts.Add("sampled header");
+            parts.Add("FileDentify rules");
+            return string.Join(", ", parts.ToArray());
+        }
+
         private static byte[] ReadPrefix(string path, int maxBytes)
         {
             using (var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
@@ -185,6 +298,9 @@ namespace FileDentify
             var projectSidecarType = ProjectSidecarTypeName(path, header);
             if (projectSidecarType != null)
                 return projectSidecarType;
+            var audioSupportType = AudioSupportTypeName(path, header);
+            if (audioSupportType != null)
+                return audioSupportType;
             var macAudioPluginType = MacAudioPluginTypeName(path, header);
             if (macAudioPluginType != null)
                 return macAudioPluginType;
@@ -209,6 +325,9 @@ namespace FileDentify
             var windowsSystemType = WindowsSystemTypeName(path, header);
             if (windowsSystemType != null)
                 return windowsSystemType;
+            var commonDataType = CommonDataTypeName(path, header);
+            if (commonDataType != null)
+                return commonDataType;
             var installerDataType = InstallerDataTypeName(path, header);
             if (installerDataType != null)
                 return installerDataType;
@@ -230,6 +349,12 @@ namespace FileDentify
             var transportStreamType = MpegTransportStreamTypeName(path, header);
             if (transportStreamType != null)
                 return transportStreamType;
+            var oggAudioType = OggAudioTypeName(header);
+            if (oggAudioType != null)
+                return oggAudioType;
+            var asfMediaType = AsfMediaTypeName(header);
+            if (asfMediaType != null)
+                return asfMediaType;
             if (string.Equals(Path.GetExtension(path), ".nrg", StringComparison.OrdinalIgnoreCase))
                 return "Nero Burning ROM disc image";
             if (IsZipHeader(header) && string.Equals(Path.GetExtension(path), ".ablbundle", StringComparison.OrdinalIgnoreCase))

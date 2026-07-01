@@ -12,7 +12,7 @@ namespace FileDentify
         private static string AccessibilityDataTypeName(string path, byte[] header)
         {
             var ext = Path.GetExtension(path).ToLowerInvariant();
-            if ((ext == ".ctb" || ext == ".utb" || ext == ".uti" || ext == ".cti" || ext == ".dis") && LooksLikeLiblouisTable(path, header))
+            if ((ext == ".ctb" || ext == ".utb" || ext == ".uti" || ext == ".cti" || ext == ".dis" || ext == ".tbl") && LooksLikeLiblouisTable(path, header))
                 return "liblouis braille translation table";
             return null;
         }
@@ -103,7 +103,7 @@ namespace FileDentify
                     Add(section, "Sample mappings", string.Join(Environment.NewLine, entries));
             }
 
-            Add(section, "Notes", "This is legacy application or plug-in support data. FileDentify reports visible structure and role clues only; it does not execute plug-ins, scripts, avatars, or speech mappings.");
+            Add(section, "Notes", "These are support files for older apps and devices such as Rockbox firmware plug-ins, Winamp/MilkDrop visualisation resources, Microsoft Chat avatar art, or HAL screen-reader speech mappings. FileDentify reports visible structure and role clues only; it does not execute plug-ins, scripts, avatars, or speech mappings.");
         }
 
         private static bool LooksLikeLiblouisTable(string path, byte[] header)

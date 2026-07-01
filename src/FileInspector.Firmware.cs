@@ -27,6 +27,8 @@ namespace FileDentify
                 return "Intel HEX firmware image";
             if (LooksLikeMotorolaSRecord(path, header))
                 return "Motorola S-record firmware image";
+            if (LooksLikeSynologyPat(path, header))
+                return "Synology DSM/SRM update PAT archive";
             if (StartsWith(header, Encoding.ASCII.GetBytes("_PT_")))
                 return "PC BIOS/UEFI firmware image";
             if (StartsWith(header, Encoding.ASCII.GetBytes("Roland SRX")))
@@ -70,6 +72,8 @@ namespace FileDentify
                 AddIntelHexInfo(section, header);
             else if (LooksLikeMotorolaSRecord(path, header))
                 AddMotorolaSRecordInfo(section, header);
+            else if (LooksLikeSynologyPat(path, header))
+                AddSynologyPatInfo(section, path, header);
             else if (StartsWith(header, Encoding.ASCII.GetBytes("Roland SRX")) || PathLooksRolandExpansion(path))
                 AddRolandExpansionInfo(section, path, header);
             else if (StartsWith(header, Encoding.ASCII.GetBytes("XMVh")))
@@ -113,6 +117,58 @@ namespace FileDentify
             }
             if (IndexOfAscii(header, "XMVf") >= 0)
                 Add(section, "Frame marker", "XMVf found in header sample");
+        }
+
+        private static bool LooksLikeSynologyPat(string path, byte[] header)
+        {
+            if (!string.Equals(Path.GetExtension(path), ".pat", StringComparison.OrdinalIgnoreCase))
+                return false;
+            return LooksLikeSynologyTarPat(header) || LooksLikeSynologyEncryptedArchive(header);
+        }
+
+        private static bool LooksLikeSynologyTarPat(byte[] header)
+        {
+            if (header.Length < 265)
+                return false;
+            var name = ReadNullTerminated(header, 0, Math.Min(100, header.Length));
+            return (name.Equals("VERSION", StringComparison.OrdinalIgnoreCase) ||
+                    name.Equals("GRUB_VER", StringComparison.OrdinalIgnoreCase) ||
+                    name.EndsWith(".tgz", StringComparison.OrdinalIgnoreCase) ||
+                    name.EndsWith(".bin", StringComparison.OrdinalIgnoreCase)) &&
+                Encoding.ASCII.GetString(header, 257, Math.Min(8, header.Length - 257)).StartsWith("ustar", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool LooksLikeSynologyEncryptedArchive(byte[] header)
+        {
+            return header.Length >= 4 &&
+                ((header[1] == 0xAD && header[2] == 0xBE && header[3] == 0xEF) ||
+                 (header[1] == 0xBF && header[2] == 0xBA && header[3] == 0xAD) ||
+                 (header[0] == 0xAD && header[1] == 0xBE && header[2] == 0xEF) ||
+                 (header[0] == 0xBF && header[1] == 0xBA && header[2] == 0xAD));
+        }
+
+        private static void AddSynologyPatInfo(ReportSection section, string path, byte[] header)
+        {
+            Add(section, "Common use", "Synology DiskStation/Router Manager operating-system install or update package");
+            var name = Path.GetFileName(path) ?? string.Empty;
+            var match = Regex.Match(name, @"^(DSM|SRM|BSM)_([^_]+)_([0-9]+)(?:\.pat)?$", RegexOptions.IgnoreCase);
+            if (match.Success)
+            {
+                Add(section, "Product family", match.Groups[1].Value.ToUpperInvariant());
+                Add(section, "Model/platform", match.Groups[2].Value);
+                Add(section, "Build", match.Groups[3].Value);
+            }
+            if (LooksLikeSynologyTarPat(header))
+            {
+                Add(section, "Container style", "tar-style Synology PAT bundle");
+                Add(section, "First archive entry", ReadNullTerminated(header, 0, Math.Min(100, header.Length)));
+            }
+            else if (LooksLikeSynologyEncryptedArchive(header))
+            {
+                Add(section, "Container style", "Synology encrypted archive wrapper");
+                Add(section, "Magic bytes", BitConverter.ToString(header, 0, Math.Min(4, header.Length)).Replace("-", " "));
+            }
+            Add(section, "Notes", "Synology .pat files share their extension with unrelated pattern and instrument formats. FileDentify only reports Synology PAT when the update-package wrapper is visible; it does not decrypt, unpack, or install firmware.");
         }
 
         private static bool PathLooksRolandExpansion(string path)

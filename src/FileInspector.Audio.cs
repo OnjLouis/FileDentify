@@ -24,6 +24,7 @@ namespace FileDentify
                 AddFlacHeaderInfo(sections, header);
             if (header.Length >= 4 && StartsWith(header, Encoding.ASCII.GetBytes("OggS")))
                 AddOggHeaderInfo(sections, header);
+            AddAsfMediaInfo(sections, path, header, fileLength);
             if (header.Length >= 10 && StartsWith(header, Encoding.ASCII.GetBytes("ID3")))
                 AddId3HeaderInfo(sections, path, header, fileLength);
             AddSunAuInfo(sections, path, header, fileLength);
@@ -41,6 +42,79 @@ namespace FileDentify
             if (string.Equals(ext, ".ts", StringComparison.OrdinalIgnoreCase) || string.Equals(ext, ".mts", StringComparison.OrdinalIgnoreCase))
                 return "MPEG-2 transport stream";
             return null;
+        }
+
+        private static string OggAudioTypeName(byte[] header)
+        {
+            if (header.Length < 27 || !StartsWith(header, Encoding.ASCII.GetBytes("OggS")))
+                return null;
+            var sample = Encoding.ASCII.GetString(header.Take(Math.Min(header.Length, 4096)).ToArray());
+            if (sample.Contains("OpusHead")) return "Ogg Opus audio";
+            if (sample.Contains("vorbis")) return "Ogg Vorbis audio";
+            if (sample.Contains("Speex")) return "Ogg Speex audio";
+            return "Ogg media container";
+        }
+
+        private static string AsfMediaTypeName(byte[] header)
+        {
+            return LooksLikeAsfHeader(header) ? "Windows Media ASF/WMA container" : null;
+        }
+
+        private static bool LooksLikeAsfHeader(byte[] header)
+        {
+            return MatchesGuid(header, 0, new byte[] { 0x30, 0x26, 0xB2, 0x75, 0x8E, 0x66, 0xCF, 0x11, 0xA6, 0xD9, 0x00, 0xAA, 0x00, 0x62, 0xCE, 0x6C });
+        }
+
+        private static void AddAsfMediaInfo(List<ReportSection> sections, string path, byte[] header, long fileLength)
+        {
+            if (!LooksLikeAsfHeader(header))
+                return;
+
+            var section = AddSection(sections, "Windows Media");
+            Add(section, "Format hint", "Advanced Systems Format / Windows Media");
+            Add(section, "Common extensions", ".asf, .wma, .wmv");
+            Add(section, "File size", FormatBytes(fileLength));
+            if (header.Length >= 30)
+            {
+                Add(section, "Header object size", FormatBytes((long)ReadUInt64LittleEndian(header, 16)));
+                Add(section, "Header objects", ReadUInt32LittleEndian(header, 24).ToString(CultureInfo.InvariantCulture));
+            }
+
+            var objectNames = FindAsfObjectNames(header).Take(16).ToArray();
+            if (objectNames.Length > 0)
+                Add(section, "Visible ASF objects", string.Join("\r\n", objectNames));
+            Add(section, "Notes", "FileDentify reports ASF/WMA container headers only. Place ffprobe.exe beside FileDentify for codec, duration, bitrate, and tag details.");
+        }
+
+        private static IEnumerable<string> FindAsfObjectNames(byte[] header)
+        {
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            for (var offset = 0; offset + 16 <= header.Length; offset++)
+            {
+                var name = AsfObjectName(header, offset);
+                if (!string.IsNullOrWhiteSpace(name) && seen.Add(name))
+                    yield return name + " at 0x" + offset.ToString("X", CultureInfo.InvariantCulture);
+            }
+        }
+
+        private static string AsfObjectName(byte[] data, int offset)
+        {
+            if (MatchesGuid(data, offset, new byte[] { 0x30, 0x26, 0xB2, 0x75, 0x8E, 0x66, 0xCF, 0x11, 0xA6, 0xD9, 0x00, 0xAA, 0x00, 0x62, 0xCE, 0x6C })) return "Header object";
+            if (MatchesGuid(data, offset, new byte[] { 0xA1, 0xDC, 0xAB, 0x8C, 0x47, 0xA9, 0xCF, 0x11, 0x8E, 0xE4, 0x00, 0xC0, 0x0C, 0x20, 0x53, 0x65 })) return "File properties object";
+            if (MatchesGuid(data, offset, new byte[] { 0x91, 0x07, 0xDC, 0xB7, 0xB7, 0xA9, 0xCF, 0x11, 0x8E, 0xE6, 0x00, 0xC0, 0x0C, 0x20, 0x53, 0x65 })) return "Stream properties object";
+            if (MatchesGuid(data, offset, new byte[] { 0x33, 0x26, 0xB2, 0x75, 0x8E, 0x66, 0xCF, 0x11, 0xA6, 0xD9, 0x00, 0xAA, 0x00, 0x62, 0xCE, 0x6C })) return "Data object";
+            if (MatchesGuid(data, offset, new byte[] { 0x40, 0xA4, 0xD0, 0xD2, 0x07, 0xE3, 0xD2, 0x11, 0x97, 0xF0, 0x00, 0xA0, 0xC9, 0x5E, 0xA8, 0x50 })) return "Extended stream properties";
+            return string.Empty;
+        }
+
+        private static bool MatchesGuid(byte[] data, int offset, byte[] guid)
+        {
+            if (data == null || guid == null || offset < 0 || offset + guid.Length > data.Length)
+                return false;
+            for (var i = 0; i < guid.Length; i++)
+                if (data[offset + i] != guid[i])
+                    return false;
+            return true;
         }
 
         private static void AddMpegTransportStreamInfo(List<ReportSection> sections, string path, byte[] header, long fileLength)
@@ -262,9 +336,37 @@ namespace FileDentify
             Add(section, "Page sequence", BitConverter.ToUInt32(header, 18).ToString(CultureInfo.InvariantCulture));
             Add(section, "Page segments", header[26].ToString(CultureInfo.InvariantCulture));
             var sample = Encoding.ASCII.GetString(header.Take(Math.Min(header.Length, 4096)).ToArray());
-            if (sample.Contains("OpusHead")) Add(section, "Codec hint", "Opus");
+            if (sample.Contains("OpusHead"))
+            {
+                Add(section, "Codec hint", "Opus");
+                AddOpusInfo(section, header);
+            }
             else if (sample.Contains("vorbis")) Add(section, "Codec hint", "Vorbis");
             else if (sample.Contains("Speex")) Add(section, "Codec hint", "Speex");
+        }
+
+        private static void AddOpusInfo(ReportSection section, byte[] header)
+        {
+            var head = IndexOfAscii(header, "OpusHead");
+            if (head >= 0 && head + 19 <= header.Length)
+            {
+                Add(section, "Opus version", header[head + 8].ToString(CultureInfo.InvariantCulture));
+                Add(section, "Channels", header[head + 9].ToString(CultureInfo.InvariantCulture));
+                Add(section, "Pre-skip", ReadUInt16LittleEndian(header, head + 10).ToString(CultureInfo.InvariantCulture) + " samples");
+                Add(section, "Input sample rate", ReadUInt32LittleEndian(header, head + 12).ToString(CultureInfo.InvariantCulture) + " Hz");
+                Add(section, "Output gain", ((short)ReadUInt16LittleEndian(header, head + 16)).ToString(CultureInfo.InvariantCulture));
+                Add(section, "Channel mapping family", header[head + 18].ToString(CultureInfo.InvariantCulture));
+            }
+
+            var tags = IndexOfAscii(header, "OpusTags");
+            if (tags >= 0 && tags + 16 <= header.Length)
+            {
+                var comments = ParseVorbisComments(header, tags + 8, Math.Min(header.Length - (tags + 8), 64 * 1024));
+                if (comments.Count > 0)
+                    Add(section, "Opus tags", string.Join("\r\n", comments.Take(16).ToArray()));
+            }
+
+            Add(section, "Container note", "Opus audio is usually stored in an Ogg container. FileDentify reports the Ogg page header plus safe OpusHead and OpusTags metadata when visible.");
         }
 
         private static void AddId3HeaderInfo(List<ReportSection> sections, string path, byte[] header, long fileLength)

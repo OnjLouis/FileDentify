@@ -24,6 +24,7 @@ namespace FileDentify
             if (ext == ".entitlements") return "Apple code-signing entitlements";
             if (ext == ".xcprivacy") return "Apple privacy manifest";
             if (ext == ".mobileconfig") return "Apple configuration profile";
+            if (Path.GetFileName(path).Equals(".DS_Store", StringComparison.OrdinalIgnoreCase) && LooksLikeDsStore(header)) return "macOS Finder .DS_Store metadata";
             if (ext == ".ipa" && IsZipHeader(header)) return "iOS application archive";
             if (ext == ".ipsw" && IsZipHeader(header)) return "Apple device firmware restore package";
             if (ext == ".pkg" && StartsWith(header, Encoding.ASCII.GetBytes("xar!"))) return "macOS installer package";
@@ -135,6 +136,23 @@ namespace FileDentify
         private static void AddAppleResourceInfo(List<ReportSection> sections, string path, byte[] header)
         {
             var ext = Path.GetExtension(path).ToLowerInvariant();
+            if (Path.GetFileName(path).Equals(".DS_Store", StringComparison.OrdinalIgnoreCase) && LooksLikeDsStore(header))
+            {
+                var section = AddSection(sections, "Apple Finder metadata");
+                Add(section, "Format hint", "macOS Finder .DS_Store metadata");
+                Add(section, "Header marker", "Bud1");
+                Add(section, "Folder", Path.GetDirectoryName(path) ?? string.Empty);
+                if (header.Length >= 32)
+                {
+                    Add(section, "Store version field", ReadUInt32BigEndian(header, 0).ToString(CultureInfo.InvariantCulture));
+                    Add(section, "Block size-like field", FormatBytes(ReadUInt32BigEndian(header, 12)));
+                    Add(section, "Root block-like field", "0x" + ReadUInt32BigEndian(header, 16).ToString("X", CultureInfo.InvariantCulture));
+                }
+                Add(section, "Common use", "Finder stores per-folder view settings, icon positions, comments, and other desktop metadata in .DS_Store files.");
+                Add(section, "Notes", "FileDentify reports the .DS_Store container marker and safe header fields only; it does not interpret every Finder record.");
+                return;
+            }
+
             if (ext == ".strings")
             {
                 var section = AddSection(sections, "Apple localization");
@@ -251,6 +269,19 @@ namespace FileDentify
                 }
                 return;
             }
+        }
+
+        private static bool LooksLikeDsStore(byte[] header)
+        {
+            return header.Length >= 8 &&
+                header[0] == 0x00 &&
+                header[1] == 0x00 &&
+                header[2] == 0x00 &&
+                header[3] == 0x01 &&
+                header[4] == (byte)'B' &&
+                header[5] == (byte)'u' &&
+                header[6] == (byte)'d' &&
+                header[7] == (byte)'1';
         }
 
         private static void AddAppleZipPackageInfo(List<ReportSection> sections, string path, byte[] header)

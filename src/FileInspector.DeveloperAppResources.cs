@@ -19,6 +19,16 @@ namespace FileDentify
                 return "Electron ASAR application archive";
             if (ext == ".nupkg" && IsZipHeader(header))
                 return "NuGet package";
+            if (IsChromiumHyphenationDictionary(path, header))
+                return "Chromium hyphenation dictionary";
+            if (IsLibreOfficeResource(path))
+                return "LibreOffice application resource";
+            if (IsWinampWasabiPlugin(path, header))
+                return "Winamp system plug-in";
+            if (IsWinampLanguagePack(path, header))
+                return "Winamp language pack";
+            if (IsWinampDspPreset(path, header))
+                return "Winamp DSP preset";
             return null;
         }
 
@@ -36,6 +46,125 @@ namespace FileDentify
                 AddElectronAsarInfo(section, path, header);
             else if (Path.GetExtension(path).Equals(".nupkg", StringComparison.OrdinalIgnoreCase))
                 AddNuGetPackageInfo(section, path);
+            else if (IsChromiumHyphenationDictionary(path, header))
+                AddChromiumHyphenationInfo(section, path, header);
+            else if (IsLibreOfficeResource(path))
+                AddLibreOfficeResourceInfo(section, path, header);
+            else if (IsWinampWasabiPlugin(path, header))
+                AddWinampWasabiPluginInfo(section, path, header);
+            else if (IsWinampLanguagePack(path, header))
+                AddWinampLanguagePackInfo(section, path, header);
+            else if (IsWinampDspPreset(path, header))
+                AddWinampDspPresetInfo(section, path, header);
+        }
+
+        private static bool IsChromiumHyphenationDictionary(string path, byte[] header)
+        {
+            return string.Equals(Path.GetExtension(path), ".hyb", StringComparison.OrdinalIgnoreCase) &&
+                (StartsWith(header, new byte[] { 0x68, 0x79, 0xAD, 0x62 }) ||
+                 path.IndexOf("\\hyphen-data\\", StringComparison.OrdinalIgnoreCase) >= 0);
+        }
+
+        private static bool IsLibreOfficeResource(string path)
+        {
+            var ext = Path.GetExtension(path).ToLowerInvariant();
+            if (ext != ".soc" && ext != ".sod" && ext != ".soe" && ext != ".sog" && ext != ".soh" && ext != ".sor" && ext != ".sdg" && ext != ".sdv" && ext != ".rdb" && ext != ".xdl")
+                return false;
+            return path.IndexOf("\\LibreOfficePortable\\", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                path.IndexOf("\\libreoffice\\", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                path.IndexOf("\\openoffice", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static bool IsWinampWasabiPlugin(string path, byte[] header)
+        {
+            return string.Equals(Path.GetExtension(path), ".w5s", StringComparison.OrdinalIgnoreCase) &&
+                (StartsWith(header, Encoding.ASCII.GetBytes("MZ")) ||
+                 path.IndexOf("\\Winamp\\System\\", StringComparison.OrdinalIgnoreCase) >= 0);
+        }
+
+        private static bool IsWinampLanguagePack(string path, byte[] header)
+        {
+            return string.Equals(Path.GetExtension(path), ".wlz", StringComparison.OrdinalIgnoreCase) &&
+                (IsZipHeader(header) || path.IndexOf("\\Winamp\\Lang\\", StringComparison.OrdinalIgnoreCase) >= 0);
+        }
+
+        private static bool IsWinampDspPreset(string path, byte[] header)
+        {
+            return string.Equals(Path.GetExtension(path), ".sps", StringComparison.OrdinalIgnoreCase) &&
+                DecodeTextSample(header, 4096).IndexOf("[SPS PRESET]", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static void AddChromiumHyphenationInfo(ReportSection section, string path, byte[] header)
+        {
+            Add(section, "Role", "Hyphenation dictionary used by Chromium-based browsers and Electron apps.");
+            Add(section, "Language", ChromiumHyphenLanguageFromName(path));
+            if (StartsWith(header, new byte[] { 0x68, 0x79, 0xAD, 0x62 }))
+                Add(section, "Header marker", "hy AD 62");
+            Add(section, "Notes", "Chromium .hyb files are browser/app text-layout dictionaries. FileDentify identifies their role and language clue only; it does not expand or validate the dictionary data.");
+        }
+
+        private static string ChromiumHyphenLanguageFromName(string path)
+        {
+            var name = Path.GetFileNameWithoutExtension(path) ?? string.Empty;
+            if (name.StartsWith("hyph-", StringComparison.OrdinalIgnoreCase))
+                return name.Substring(5);
+            return string.Empty;
+        }
+
+        private static void AddLibreOfficeResourceInfo(ReportSection section, string path, byte[] header)
+        {
+            Add(section, "Role", LibreOfficeResourceRole(path));
+            Add(section, "File name", Path.GetFileName(path));
+            if (LooksLikeText(header))
+                Add(section, "First line", FirstNonEmptyLine(DecodeTextSample(header, 8192)));
+            Add(section, "Notes", "LibreOffice and OpenOffice support-resource files describe palettes, galleries, hatches, gradients, styles, and number-text rules. FileDentify reports the resource role and sampled text only; it does not import the resource into an office suite.");
+        }
+
+        private static string LibreOfficeResourceRole(string path)
+        {
+            switch (Path.GetExtension(path).ToLowerInvariant())
+            {
+                case ".soc": return "Color palette";
+                case ".sod": return "Drawing/style resource";
+                case ".soe": return "Line-end or arrowhead resource";
+                case ".sog": return "Gradient resource";
+                case ".soh": return "Hatch pattern resource";
+                case ".sor": return "Number-text spelling/rules resource";
+                case ".sdg": return "Gallery binary data";
+                case ".sdv": return "Gallery index or preview data";
+                case ".rdb": return "UNO component registry";
+                case ".xdl": return "LibreOffice Basic dialog";
+                default: return "LibreOffice/OpenOffice resource";
+            }
+        }
+
+        private static void AddWinampWasabiPluginInfo(ReportSection section, string path, byte[] header)
+        {
+            Add(section, "Role", "Winamp 5 / Wasabi system plug-in module");
+            Add(section, "Module", Path.GetFileName(path));
+            if (StartsWith(header, Encoding.ASCII.GetBytes("MZ")))
+                Add(section, "Container", "Windows executable/DLL-style module");
+            Add(section, "Notes", "Winamp .w5s files are application plug-in modules. FileDentify reports module identity and PE-style container clues only; it does not load or execute the plug-in.");
+        }
+
+        private static void AddWinampLanguagePackInfo(ReportSection section, string path, byte[] header)
+        {
+            Add(section, "Role", "Winamp language/localization package");
+            Add(section, "Language clue", Path.GetFileNameWithoutExtension(path));
+            if (IsZipHeader(header))
+                Add(section, "Container", "ZIP-compatible package");
+            Add(section, "Notes", "Winamp .wlz files are localization packages. FileDentify identifies package role and container clues only; it does not install or load language resources.");
+        }
+
+        private static void AddWinampDspPresetInfo(ReportSection section, string path, byte[] header)
+        {
+            Add(section, "Role", "Winamp Signal Processing Studio DSP preset");
+            Add(section, "Preset", Path.GetFileNameWithoutExtension(path));
+            var text = DecodeTextSample(header, 16384);
+            Add(section, "Header", FirstNonEmptyLine(text));
+            Add(section, "Slider fields", Regex.Matches(text ?? string.Empty, @"(?im)^slider\d+=", RegexOptions.CultureInvariant).Count.ToString(CultureInfo.InvariantCulture));
+            Add(section, "Code blocks", Regex.Matches(text ?? string.Empty, @"(?im)^code\d+_data=", RegexOptions.CultureInvariant).Count.ToString(CultureInfo.InvariantCulture));
+            Add(section, "Notes", "Winamp SPS files are text DSP presets/scripts. FileDentify reports preset structure only; it does not run DSP code.");
         }
 
         private static bool LooksLikeElectronAsar(byte[] header)

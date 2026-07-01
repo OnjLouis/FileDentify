@@ -42,7 +42,7 @@ namespace FileDentify
                 AddVisibleKeyValuePairs(section, Encoding.UTF8.GetString(sample.Take(Math.Min(sample.Length, 256 * 1024)).ToArray()), "Visible metadata", 18);
             else
                 Add(section, "Header note", "Binary/proprietary payload");
-            Add(section, "Notes", "Universal Audio LUNA component files are proprietary instrument/effect resources. FileDentify reports component context, role, size, and visible metadata only.");
+            Add(section, "Notes", "Universal Audio LUNA is Universal Audio's recording system and plug-in platform. These component files belong to LUNA instruments, effects, reverbs, or model data. FileDentify reports component context, role, size, and visible metadata only.");
         }
 
         private static string AirMusicTechnologyTypeName(string path, byte[] header)
@@ -92,7 +92,7 @@ namespace FileDentify
                 AddXmlAttributes(section, text, "Sample", "File", "Referenced samples", 24);
             }
 
-            Add(section, "Notes", "AIR Music Technology files can contain proprietary sampler patches and large sound-data archives. FileDentify reports patch XML and visible archive paths without unpacking payloads.");
+            Add(section, "Notes", "AIR Music Technology instruments such as Structure and Transfuser use patch files and large content archives for sampler/synth libraries. FileDentify reports patch XML and visible archive paths without unpacking proprietary payloads.");
         }
 
         private static string MaizeSamplerTypeName(string path, byte[] header)
@@ -124,7 +124,7 @@ namespace FileDentify
             if (visible.Length > 0)
                 Add(section, "Visible names", string.Join(Environment.NewLine, visible));
 
-            Add(section, "Notes", "MSE files are exported Maize Sampler instruments used by several small sample-library developers. They are usually proprietary/encrypted; FileDentify reports visible names and context only.");
+            Add(section, "Notes", "Maize Sampler lets small developers package sample instruments as plug-ins or players. .mse files are exported instrument payloads and are often proprietary or encrypted; FileDentify reports visible names and context only.");
         }
 
         private static string AppliedAcousticsSystemsTypeName(string path, byte[] header)
@@ -164,7 +164,7 @@ namespace FileDentify
                 Add(section, "Visible name fields", nameCount.ToString(CultureInfo.InvariantCulture));
             if (Path.GetExtension(path).Equals(".lbin", StringComparison.OrdinalIgnoreCase) && text.IndexOf("Lua", StringComparison.OrdinalIgnoreCase) >= 0)
                 Add(section, "Script marker", "Lua bytecode/resource strings visible in sample");
-            Add(section, "Notes", "Applied Acoustics Systems files are proprietary synth and player banks, packs, presets, and resources. FileDentify reports visible metadata and does not decode protected sound data.");
+            Add(section, "Notes", "Applied Acoustics Systems makes modeled instruments and sound-player libraries such as Lounge Lizard, Chromaphone, Strum, and Ultra Analog. FileDentify reports visible bank, preset, pack, and resource metadata without decoding protected sound data.");
         }
 
         private static string AudioModelingTypeName(string path, byte[] header)
@@ -242,7 +242,7 @@ namespace FileDentify
             Add(section, "File size", FormatBytes(fileLength));
             if (LooksLikeText(header))
                 AddVisibleKeyValuePairs(section, Encoding.UTF8.GetString(sample.Take(Math.Min(sample.Length, 512 * 1024)).ToArray()), "Visible metadata", 20);
-            Add(section, "Notes", "Audio Modeling SWAM content often appears as NKS presets, preview audio, metadata, and artwork. FileDentify reports product and visible metadata while Native Instruments sections handle generic NKS details.");
+            Add(section, "Notes", "Audio Modeling SWAM instruments are modeled solo-instrument plug-ins. Their support files can include NKS presets, preview audio, metadata, and artwork. FileDentify reports product and visible metadata while Native Instruments sections handle generic NKS details.");
         }
 
         private static void AddUjamInfo(List<ReportSection> sections, string path, byte[] header, byte[] sample, long fileLength)
@@ -275,7 +275,7 @@ namespace FileDentify
                 AddJsonArrayCount(section, text, "dsp_settings", "DSP settings");
             }
 
-            Add(section, "Notes", "UJAM files are plug-in content, preset, NKS, and metadata files. FileDentify reports product context, visible preset/build metadata, and blob identity without decoding proprietary payloads.");
+            Add(section, "Notes", "UJAM products include virtual guitarists, beatmakers, drummers, bassists, and effect plug-ins. Their files can be presets, NKS metadata, settings, or large .blob content payloads. FileDentify reports product context, visible preset/build metadata, and blob identity without decoding proprietary payloads.");
         }
 
         private static void AddUjamStyleBlobInfo(List<ReportSection> sections, string path, byte[] header, long fileLength)
@@ -295,7 +295,7 @@ namespace FileDentify
             if (Regex.IsMatch(id ?? string.Empty, "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", RegexOptions.IgnoreCase))
                 Add(section, "Leading UUID", id);
             Add(section, "Header note", LooksLikeText(header) ? "Text-like header" : "Binary/proprietary payload");
-            Add(section, "Notes", "Some sample-library vendors use UJAM-style .blob payloads without being UJAM products. FileDentify reports the vendor and product path context, but does not decode the proprietary payload.");
+            Add(section, "Notes", "Some vendors use UJAM-style .blob payload containers for sound or model content even when the product is not made by UJAM. FileDentify reports vendor and product path context, but does not decode the proprietary payload.");
         }
 
         private static void AddValhallaDspInfo(List<ReportSection> sections, string path, byte[] header, byte[] sample, long fileLength)
@@ -353,7 +353,7 @@ namespace FileDentify
             if (visible.Length > 0)
                 Add(section, "Visible instrument or preset text", string.Join(Environment.NewLine, visible));
 
-            Add(section, "Notes", "Modartt/Pianoteq files include physical-model add-ons, presets, and preferences. FileDentify reports visible instrument, version, preset, and package text only.");
+            Add(section, "Notes", "Modartt Pianoteq is a physically modeled piano/instrument platform. These files can be instrument add-ons, presets, or preferences. FileDentify reports visible instrument, version, preset, and package text only.");
         }
 
         private static bool IsUniversalAudioLunaPath(string path)

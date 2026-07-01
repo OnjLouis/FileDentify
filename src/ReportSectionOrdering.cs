@@ -9,6 +9,7 @@ namespace FileDentify
         private static readonly string[] DefaultPrioritySections =
         {
             "Safety hints",
+            "FileDentify database",
             "FileDentify saved report",
             "Clipman",
             "Backup/config data",
@@ -18,6 +19,8 @@ namespace FileDentify
             "NVDA add-on",
             "Accessibility data",
             "Speech voice",
+            "Roland Fantom Librarian",
+            "Yamaha softsynth",
             "Roland sample data",
             "Roland sequencer song",
             "Roland sound data",
@@ -50,6 +53,7 @@ namespace FileDentify
             "Apple mobile backup",
             "Apple mobile backup file",
             "Apple bundle",
+            "Apple Finder metadata",
             "Apple firmware package",
             "iOS application archive",
             "Ableton",
@@ -58,8 +62,13 @@ namespace FileDentify
             "Cakewalk project",
             "Sampler instrument",
             "Audio sample resource",
+            "Legacy audio resource",
+            "Audio session",
+            "OpenAL spatial audio",
+            "Production audio resource",
             "Nintendo Switch content",
             "Game/ROM data",
+            "Gravis Ultrasound patch",
             "Legacy music/game audio",
             "MoonShell/R4",
             "Mobile phone tone",
@@ -70,6 +79,10 @@ namespace FileDentify
             "Hardware ID database",
             "Message/contact data",
             "Windows/system data",
+            "Rich Text Format",
+            "Dictionary / wordlist",
+            "Database",
+            "COM type library",
             "Installer data",
             "Virtual machine metadata",
             "Developer/app resources",
@@ -85,6 +98,8 @@ namespace FileDentify
             "Image",
             "Windows property metadata",
             "Audio metadata",
+            "Windows Media",
+            "MPEG audio",
             "QuickTime metadata",
             "ISO base media",
             "Media details",
@@ -115,7 +130,7 @@ namespace FileDentify
                 return;
 
             var order = (configuredOrder ?? new List<string>())
-                .Where(title => !IsPinnedSection(title))
+                .Where(title => !IsPinnedSection(title) && !IsFixedPrioritySection(title))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
@@ -135,6 +150,11 @@ namespace FileDentify
             return string.Equals(title, "Summary", StringComparison.OrdinalIgnoreCase);
         }
 
+        private static bool IsFixedPrioritySection(string title)
+        {
+            return string.Equals(title, "FileDentify database", StringComparison.OrdinalIgnoreCase);
+        }
+
         private static IEnumerable<ReportSection> OrderedSections(IEnumerable<ReportSection> sections, List<string> configuredOrder)
         {
             var list = sections == null ? new List<ReportSection>() : sections.ToList();
@@ -142,6 +162,12 @@ namespace FileDentify
             foreach (var section in list.Where(section => IsPinnedSection(section.Title)))
             {
                 yielded.Add(section);
+                    yield return section;
+            }
+
+            foreach (var section in list.Where(section => IsFixedPrioritySection(section.Title)))
+            {
+                if (yielded.Add(section))
                     yield return section;
             }
 
@@ -153,7 +179,7 @@ namespace FileDentify
 
             foreach (var title in DefaultPrioritySections.Where(title => !IsGenericEvidenceSection(title)))
             {
-                foreach (var section in list.Where(item => string.Equals(item.Title, title, StringComparison.OrdinalIgnoreCase) && !IsPinnedSection(item.Title)))
+                foreach (var section in list.Where(item => string.Equals(item.Title, title, StringComparison.OrdinalIgnoreCase) && !IsPinnedSection(item.Title) && !IsFixedPrioritySection(item.Title)))
                 {
                     if (yielded.Add(section))
                         yield return section;

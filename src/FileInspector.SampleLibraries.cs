@@ -114,7 +114,7 @@ namespace FileDentify
                     Add(section, "Installed banks", string.Join(Environment.NewLine, banks));
             }
 
-            Add(section, "Notes", "XLN Audio packages are proprietary. FileDentify reports product, pack, size, and visible bank names where available; it does not unpack sample payloads.");
+            Add(section, "Notes", "XLN Audio packages are sound-library assets for products such as Addictive Drums, Addictive Keys, Addictive Trigger, and XO. FileDentify reports product, pack, size, and visible bank names where available; it does not unpack sample payloads.");
         }
 
         private static string SpectrasonicsTypeName(string path, byte[] header)
@@ -159,7 +159,7 @@ namespace FileDentify
                 AddSpectrasonicsXmlInfo(section, header);
             }
 
-            Add(section, "Notes", "Spectrasonics STEAM/SAGE files are proprietary sample-library and preset data. FileDentify reports visible index, product, and preset clues only.");
+            Add(section, "Notes", "Spectrasonics STEAM/SAGE files belong to instruments such as Omnisphere, Keyscape, Trilian, and Stylus RMX. They can be presets, multis, indexes, or large sample containers. FileDentify reports visible index, product, and preset clues only.");
         }
 
         private static void AddSpectrasonicsFileSystemEntries(ReportSection section, byte[] sample)
@@ -259,7 +259,7 @@ namespace FileDentify
 
             if (Path.GetExtension(path).Length == 0)
                 Add(section, "Object id", Path.GetFileName(path));
-            Add(section, "Notes", "Korg sample and synth-library files are proprietary. FileDentify reports folder role, header markers, object names, and visible identifiers; it does not decode the sample payload.");
+            Add(section, "Notes", "Korg sample and synth-library files can belong to wavestate, KORG Collection, Triton, or other Korg instrument libraries. FileDentify reports folder role, header markers, object names, and visible identifiers; it does not decode the sample payload.");
         }
 
         private static string GForceTypeName(string path)
@@ -286,7 +286,7 @@ namespace FileDentify
             Add(section, "Bank name", CleanSampleLibraryName(Path.GetFileNameWithoutExtension(path)));
             Add(section, "File size", FormatBytes(fileLength));
             Add(section, "Header note", LooksLikeText(header) ? "Text-like header" : "Binary/proprietary tape-bank payload");
-            Add(section, "Notes", "GForce M-Tron tape banks are large proprietary library containers. FileDentify identifies the bank and context without unpacking or decoding the sample data.");
+            Add(section, "Notes", "GForce M-Tron libraries emulate Mellotron/Chamberlin tape banks. These files are large proprietary tape-bank containers; FileDentify identifies the bank and context without unpacking or decoding the sample data.");
         }
 
         private static string ToontrackTypeName(string path, byte[] header)
@@ -342,7 +342,7 @@ namespace FileDentify
                     Add(section, "Visible preset or kit entries", string.Join(Environment.NewLine, textLines));
             }
 
-            Add(section, "Notes", "Toontrack library files are proprietary drum-library data. FileDentify reports product, role, RIFF/container clues, and visible kit or microphone names where available.");
+            Add(section, "Notes", "Toontrack files belong to drum and production libraries such as EZdrummer, Superior Drummer, EZX, SDX, and related MIDI/sound packs. FileDentify reports product, role, RIFF/container clues, and visible kit or microphone names where available.");
         }
 
         private static string DecentSamplerTypeName(string path, byte[] header)
@@ -394,7 +394,7 @@ namespace FileDentify
                 AddDecentSamplerXmlAttribute(section, text, "ui", "bgImage", "Background image");
             }
 
-            Add(section, "Notes", "Decent Sampler presets are XML-based sampler instruments. FileDentify reports sample references, note ranges, UI metadata, and counts without loading audio.");
+            Add(section, "Notes", "Decent Sampler presets are portable XML-based sample instruments. FileDentify reports sample references, note ranges, UI metadata, and counts without loading audio.");
         }
 
         private static bool IsXlnAudioPath(string path)

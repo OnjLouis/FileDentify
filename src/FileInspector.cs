@@ -55,11 +55,18 @@ namespace FileDentify
             AddWindowsPropertyMetadata(sections, path);
             AddDmgInfo(sections, path, file.Length);
 
-            var signatures = AddSection(sections, "Signature matches");
-            foreach (var match in SignatureMatcher.Match(header, path))
-                Add(signatures, match.Title, match.Detail);
-            if (signatures.Items.Count == 0)
-                Add(signatures, "No common signature match", "The first bytes do not match the built-in signature list.");
+            var fileDentifyDatabaseType = FileDentifyDatabaseTypeName(path, header, file.Length);
+
+            var signatureMatches = SignatureMatcher.Match(header, path).ToArray();
+            if (signatureMatches.Length > 0 || string.IsNullOrWhiteSpace(fileDentifyDatabaseType))
+            {
+                var signatures = AddSection(sections, "Signature matches");
+                foreach (var match in signatureMatches)
+                    Add(signatures, match.Title, match.Detail);
+                if (signatureMatches.Length == 0)
+                    Add(signatures, "No common signature match", "The first bytes do not match the built-in signature list.");
+            }
+            AddFileDentifyDatabaseInfo(sections, path, header, file.Length, fileDentifyDatabaseType);
             AddLibmagicInfo(sections, libmagic);
             AddSafetyHintInfo(sections, path, header);
 
@@ -109,6 +116,7 @@ namespace FileDentify
             AddLegacyAppResourceInfo(sections, path, header, stringSample, file.Length);
             AddPersonalDataInfo(sections, path, stringSample);
             AddWindowsSystemInfo(sections, path, header, file.Length);
+            AddCommonDataInfo(sections, path, header, stringSample, file.Length);
             AddInstallerDataInfo(sections, path, header, file.Length);
             AddVirtualMachineMetadataInfo(sections, path, header, file.Length);
             AddNativeInstrumentsInfo(sections, path, stringSample);
@@ -119,6 +127,7 @@ namespace FileDentify
             AddSampleLibraryInfo(sections, path, header, stringSample, file.Length);
             AddMusicProjectFormatInfo(sections, path, header, stringSample, file.Length);
             AddProjectSidecarInfo(sections, path, header, stringSample, file.Length);
+            AddAudioSupportInfo(sections, path, header, file.Length);
             AddGameFileInfo(sections, path, header);
             AddLegacyMusicInfo(sections, path, header, stringSample, file.Length);
             AddPropertyListInfo(sections, header);

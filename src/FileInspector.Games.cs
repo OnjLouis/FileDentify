@@ -44,6 +44,7 @@ namespace FileDentify
             if (IsNintendoSwitchSaveFile(path)) return "Nintendo Switch save data";
             if (LooksLikeUnityAsset(path, header)) return "Unity asset data file";
             if (LooksLikeSteamVdf(path, header)) return ext == ".acf" ? "Steam app manifest" : "Valve Data Format text";
+            if (LooksLikeBbcMicroMedia(path, header)) return BbcMicroMediaTypeName(path, header);
             if (LooksLikeRolandMt32Rom(path)) return "Roland MT-32/CM-32L ROM image";
             if (LooksLikeFruitMachineBpak(path)) return "Protected fruit-machine game package";
             if (LooksLikeDuke3dSave(path)) return "Duke Nukem 3D saved game";
@@ -91,6 +92,8 @@ namespace FileDentify
                 case ".ips": return "IPS binary patch";
                 case ".bps": return "BPS binary patch";
                 case ".bpak": return "Protected game package";
+                case ".ssd": return "BBC Micro single-sided disk image";
+                case ".uef": return "BBC Micro UEF tape/state file";
                 default: return null;
             }
         }
@@ -148,6 +151,8 @@ namespace FileDentify
                 Add(section, "Archive version", ReadAsciiUntil(header, 0, 32).Trim());
             else if (LooksLikeSteamVdf(path, header))
                 AddSteamVdfInfo(section, header);
+            else if (LooksLikeBbcMicroMedia(path, header))
+                AddBbcMicroMediaInfo(section, path, header);
             else if (LooksLikeRolandMt32Rom(path))
                 AddRolandMt32RomInfo(section, path);
             else if (IsNintendoSwitchNcaConcatSegment(path))
@@ -192,6 +197,7 @@ namespace FileDentify
             if (IsNintendoSwitchNcaConcatSegment(path)) parts.Add("Nintendo Contents registered .nca.CONCAT segment path");
             if (IsNintendoSwitchSaveFile(path)) parts.Add("Nintendo save folder path");
             if (LooksLikeUnityAsset(path, header)) parts.Add("Unity version string");
+            if (LooksLikeBbcMicroMedia(path, header)) parts.Add("BBC Micro/BeebEm extension, path, or UEF marker");
             if (LooksLikeRolandMt32Rom(path)) parts.Add("Roland MT-32/CM-32L filename");
             if (LooksLikeFruitMachineBpak(path)) parts.Add(".bpak extension and fruit-machine/game-package filename context");
             if (LooksLikeDuke3dSave(path)) parts.Add("Duke 3D path/name context and .sav extension");
@@ -212,6 +218,46 @@ namespace FileDentify
             var siblingRom = FindSiblingRomForSave(path);
             if (!string.IsNullOrWhiteSpace(siblingRom))
                 Add(section, "Matching ROM nearby", Path.GetFileName(siblingRom));
+        }
+
+        private static bool LooksLikeBbcMicroMedia(string path, byte[] header)
+        {
+            var ext = Path.GetExtension(path);
+            if (string.Equals(ext, ".ssd", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(ext, ".uef", StringComparison.OrdinalIgnoreCase))
+                return true;
+            if (StartsWith(header, Encoding.ASCII.GetBytes("UEF File!")))
+                return true;
+            var name = Path.GetFileName(path) ?? string.Empty;
+            return name.StartsWith("PHROM", StringComparison.OrdinalIgnoreCase) &&
+                path.IndexOf("\\BeebEm\\", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static string BbcMicroMediaTypeName(string path, byte[] header)
+        {
+            var ext = Path.GetExtension(path);
+            if (string.Equals(ext, ".ssd", StringComparison.OrdinalIgnoreCase))
+                return "BBC Micro single-sided disk image";
+            if (string.Equals(ext, ".uef", StringComparison.OrdinalIgnoreCase) || StartsWith(header, Encoding.ASCII.GetBytes("UEF File!")))
+                return "BBC Micro UEF tape/state file";
+            if ((Path.GetFileName(path) ?? string.Empty).StartsWith("PHROM", StringComparison.OrdinalIgnoreCase))
+                return "BeebEm PHROM ROM image";
+            return "BBC Micro / BeebEm data";
+        }
+
+        private static void AddBbcMicroMediaInfo(ReportSection section, string path, byte[] header)
+        {
+            Add(section, "Computer family", "BBC Micro / Acorn 8-bit emulator media");
+            if (StartsWith(header, Encoding.ASCII.GetBytes("UEF File!")))
+                Add(section, "Header marker", "UEF File!");
+            if (string.Equals(Path.GetExtension(path), ".ssd", StringComparison.OrdinalIgnoreCase))
+            {
+                Add(section, "Disk image type", "Single-sided DFS-style disk image");
+                Add(section, "Common size", SafeLength(path) == 64000 ? "64,000 bytes, common BBC DFS 40-track SSD size" : FormatBytes(SafeLength(path)));
+            }
+            if ((Path.GetFileName(path) ?? string.Empty).StartsWith("PHROM", StringComparison.OrdinalIgnoreCase))
+                Add(section, "BeebEm role", "PHROM ROM image used by the BeebEm emulator.");
+            Add(section, "Notes", "BBC Micro media support is identification-level. FileDentify reports emulator/media clues and safe header information; it does not mount disks, run ROMs, or extract catalogue entries.");
         }
 
         private static string FindSiblingRomForSave(string path)

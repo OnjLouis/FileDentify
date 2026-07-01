@@ -30,6 +30,19 @@ namespace FileDentify
                 yield return new ReportItem { Title = "RIFF form", Detail = fourcc };
             }
 
+            if (data.Length >= 8 && data[0] == 0x00 && data[1] == 0x00 && data[2] == 0x00 && data[3] == 0x01 && data[4] == (byte)'B' && data[5] == (byte)'u' && data[6] == (byte)'d' && data[7] == (byte)'1')
+                yield return new ReportItem { Title = "Apple Finder metadata", Detail = "macOS .DS_Store folder metadata" };
+            if (data.Length >= 6 && data[0] == 0x00 && data[1] == 0x00 && data[2] == 0x01 && data[3] == 0x00)
+                yield return new ReportItem { Title = "Windows icon", Detail = "Windows ICO icon resource" };
+            if (data.Length >= 6 && data[0] == 0x00 && data[1] == 0x00 && data[2] == 0x02 && data[3] == 0x00)
+                yield return new ReportItem { Title = "Windows cursor", Detail = "Windows CUR cursor resource" };
+            if (data.Length >= 0x40 && StartsWith(data, Encoding.ASCII.GetBytes("MZ")))
+            {
+                var neOffset = (int)ReadUInt32LittleEndian(data, 0x3C);
+                if (neOffset >= 0 && neOffset + 2 <= data.Length && data[neOffset] == (byte)'N' && data[neOffset + 1] == (byte)'E')
+                    yield return new ReportItem { Title = "Windows NE executable", Detail = "Windows New Executable resource/application file" };
+            }
+
             if (data.Length >= 32 && Ascii(data, 0, Math.Min(64, data.Length)).Contains("Roland SRX"))
                 yield return new ReportItem { Title = "Roland SRX", Detail = "Roland SRX expansion ROM marker found at file start." };
             if (data.Length >= 4 && BitConverter.ToUInt32(data, 0) == 0x10201A7A)
@@ -68,10 +81,40 @@ namespace FileDentify
                 yield return new ReportItem { Title = "Roland SVD", Detail = "Roland sound/backup data" };
             if (StartsWith(data, Encoding.ASCII.GetBytes("RFWV")))
                 yield return new ReportItem { Title = "Roland sample", Detail = "Roland FA sample waveform data" };
+            if (StartsWith(data, Encoding.ASCII.GetBytes("FantomXLibrarianFile")))
+                yield return new ReportItem { Title = "Roland Fantom Librarian", Detail = "Roland Fantom-X Librarian patch/library data" };
+            if (StartsWith(data, Encoding.ASCII.GetBytes("FantomSLibrarianFile")))
+                yield return new ReportItem { Title = "Roland Fantom Librarian", Detail = "Roland Fantom-S Librarian patch/library data" };
+            if (StartsWith(data, Encoding.ASCII.GetBytes("UTG VPRM")))
+                yield return new ReportItem { Title = "Yamaha S-YXG table", Detail = "Yamaha S-YXG software-synthesizer voice/program table" };
             if (StartsWith(data, Encoding.ASCII.GetBytes("vawt")))
                 yield return new ReportItem { Title = "Surge wavetable", Detail = "Surge wavetable file" };
+            if (StartsWith(data, Encoding.ASCII.GetBytes("MinPHR")))
+                yield return new ReportItem { Title = "OpenAL Soft HRTF", Detail = "OpenAL Soft minimum-phase HRTF data" };
             if (StartsWith(data, Encoding.ASCII.GetBytes("CcnK")))
                 yield return new ReportItem { Title = "VST preset chunk", Detail = "VST FXP/FXB preset or bank" };
+            if (data.Length >= 12 && StartsWith(data, Encoding.ASCII.GetBytes("FORM")) && Encoding.ASCII.GetString(data, 8, 4) == "PTCH")
+                yield return new ReportItem { Title = "Reason NN-XT patch", Detail = "Reason NN-XT sampler patch" };
+            if (data.Length >= 12 && StartsWith(data, Encoding.ASCII.GetBytes("RIFF")))
+            {
+                var musicForm = Encoding.ASCII.GetString(data, 8, 4);
+                if (musicForm == "APRG")
+                    yield return new ReportItem { Title = "Akai sampler program", Detail = "Akai RIFF APRG program data" };
+                else if (musicForm == "AMUL")
+                    yield return new ReportItem { Title = "Akai sampler multi", Detail = "Akai RIFF AMUL multi data" };
+                else if (musicForm == "SEKD")
+                    yield return new ReportItem { Title = "MAGIX/SEK'D", Detail = "MAGIX/SEK'D RIFF metadata" };
+            }
+            if (data.Length >= 12 && StartsWith(data, Encoding.ASCII.GetBytes("CAT ")) && Encoding.ASCII.GetString(data, 8, 4) == "PRBM")
+                yield return new ReportItem { Title = "ReBirth mod", Detail = "Propellerhead ReBirth mod/package" };
+            if (StartsWith(data, Encoding.ASCII.GetBytes("gchT")))
+                yield return new ReportItem { Title = "GarageBand chord table", Detail = "GarageBand chord/tuning table" };
+            if (StartsWith(data, Encoding.ASCII.GetBytes("GNOA")))
+                yield return new ReportItem { Title = "GN Audio", Detail = "GN Audio container, often with embedded MIDI" };
+            if (Ascii(data, 0, Math.Min(data.Length, 64)).IndexOf("Barrcode AA", StringComparison.OrdinalIgnoreCase) >= 0)
+                yield return new ReportItem { Title = "Barrcode AA", Detail = "Barrcode broadcast playout audio resource marker" };
+            if (data.Length >= 4 && data[0] == 0xff && (data[1] & 0xe0) == 0xe0)
+                yield return new ReportItem { Title = "MPEG audio frame", Detail = "MPEG audio stream frame" };
             if (Ascii(data, 0, Math.Min(4096, data.Length)).IndexOf("\"Format\":\"FileDentify report\"", StringComparison.OrdinalIgnoreCase) >= 0)
                 yield return new ReportItem { Title = "FileDentify report", Detail = "Native FileDentify saved report" };
             if (StartsWith(data, Encoding.ASCII.GetBytes("ITOLITLS")))
@@ -82,6 +125,8 @@ namespace FileDentify
                 yield return new ReportItem { Title = "MIDI SysEx", Detail = "MIDI System Exclusive data" };
             if (StartsWith(data, Encoding.ASCII.GetBytes("NESM\x1A")))
                 yield return new ReportItem { Title = "NES Sound Format", Detail = "Nintendo Entertainment System music file" };
+            if (StartsWith(data, Encoding.ASCII.GetBytes("UEF File!")))
+                yield return new ReportItem { Title = "UEF", Detail = "BBC Micro UEF tape/state file" };
             if (StartsWith(data, Encoding.ASCII.GetBytes("Vgm ")))
                 yield return new ReportItem { Title = "VGM", Detail = "Video Game Music chiptune log" };
             if (StartsWith(data, Encoding.ASCII.GetBytes("PSID")))
@@ -90,6 +135,8 @@ namespace FileDentify
                 yield return new ReportItem { Title = "RSID", Detail = "Real C64 SID music" };
             if (StartsWith(data, Encoding.ASCII.GetBytes("S98")))
                 yield return new ReportItem { Title = "S98", Detail = "S98 chiptune sound log" };
+            if (StartsWith(data, Encoding.ASCII.GetBytes("GF1PATCH110")))
+                yield return new ReportItem { Title = "Gravis UltraSound patch", Detail = "GF1 instrument patch/sample file" };
             if (StartsWith(data, Encoding.ASCII.GetBytes("XMF_")))
                 yield return new ReportItem { Title = "XMF", Detail = "Extensible Music Format container" };
             if (StartsWith(data, Encoding.ASCII.GetBytes("melo")))
@@ -101,7 +148,7 @@ namespace FileDentify
             if (StartsWith(data, Encoding.ASCII.GetBytes("IREZ")))
                 yield return new ReportItem { Title = "Beatnik RMF", Detail = "Beatnik Rich Music Format" };
             if (StartsWith(data, Encoding.ASCII.GetBytes("QSEQ")))
-                yield return new ReportItem { Title = "QSEQ", Detail = "Korg i-series sequencer song" };
+                yield return new ReportItem { Title = "QSEQ", Detail = "QSEQ DOS MIDI sequencer song/project" };
             if (StartsWith(data, Encoding.ASCII.GetBytes("RCM-PC98")))
                 yield return new ReportItem { Title = "Recomposer RCP", Detail = "COME ON MUSIC Recomposer sequence" };
             if (StartsWith(data, Encoding.ASCII.GetBytes("COME ON MUSIC RECOMPOSER")))
@@ -148,6 +195,9 @@ namespace FileDentify
                 yield return new ReportItem { Title = "OPML", Detail = "OPML outline/subscription list" };
             if (headText.IndexOf("<WMEncoder", StringComparison.OrdinalIgnoreCase) >= 0)
                 yield return new ReportItem { Title = "Windows Media Encoder", Detail = "Windows Media Encoder session XML" };
+            if (string.Equals(Path.GetExtension(path), ".wpl", StringComparison.OrdinalIgnoreCase) &&
+                (headText.IndexOf("<?wpl", StringComparison.OrdinalIgnoreCase) >= 0 || headText.IndexOf("<smil", StringComparison.OrdinalIgnoreCase) >= 0))
+                yield return new ReportItem { Title = "Windows Media playlist", Detail = "Windows Media Player playlist" };
             if (data.Length >= 18 && headText.StartsWith("[InternetShortcut]", StringComparison.OrdinalIgnoreCase))
                 yield return new ReportItem { Title = "Internet Shortcut", Detail = "Windows Internet shortcut (.url)" };
             else if (string.Equals(Path.GetExtension(path), ".url", StringComparison.OrdinalIgnoreCase) &&
@@ -158,6 +208,8 @@ namespace FileDentify
 
             if (string.Equals(Path.GetExtension(path), ".ufs", StringComparison.OrdinalIgnoreCase))
                 yield return new ReportItem { Title = "UFS extension", Detail = "Sample-library container using .ufs extension" };
+            if (string.Equals(Path.GetExtension(path), ".pat", StringComparison.OrdinalIgnoreCase) && LooksLikeSynologyPat(data))
+                yield return new ReportItem { Title = "Synology PAT", Detail = "Synology DSM/SRM update package" };
             if (string.Equals(Path.GetExtension(path), ".blob", StringComparison.OrdinalIgnoreCase))
                 yield return new ReportItem { Title = "Blob extension", Detail = "Binary blob asset or metadata container" };
             if (StartsWith(data, Encoding.ASCII.GetBytes("CLIPDB1")))
@@ -305,6 +357,8 @@ namespace FileDentify
                 case ".gdi": return "Dreamcast GDI disc layout";
                 case ".sav": return "Game save data";
                 case ".srm": return "SRAM game save data";
+                case ".ssd": return "BBC Micro single-sided disk image";
+                case ".uef": return "BBC Micro UEF tape/state file";
                 case ".pak": return "Game/resource package";
                 case ".vpk": return "Valve package";
                 case ".pk3": return "Quake 3 package";
@@ -365,7 +419,7 @@ namespace FileDentify
                 case ".lyc": return "Roland/Karaoke lyric sidecar";
                 case ".zel": return "Text music macro/source file";
                 case ".gmc": return "Text music macro/source file";
-                case ".qsq": return "Korg i-series QSEQ song";
+                case ".qsq": return "QSEQ DOS MIDI sequencer song/project";
                 case ".ovw": return "Cubase waveform overview sidecar";
                 case ".sfk": return "Sound Forge waveform overview sidecar";
                 case ".peak": return "Audio waveform peak sidecar";
@@ -469,18 +523,23 @@ namespace FileDentify
                 case ".nki": return "Kontakt instrument";
                 case ".nkm": return "Kontakt multi";
                 case ".nkb": return "Kontakt bank";
+                case ".nkp": return "Kontakt preset";
+                case ".nka": return "Kontakt script array or sample-add data";
                 case ".nkr": return "Kontakt resource container";
                 case ".nkx": return "Kontakt sample/library container";
                 case ".nkc": return "Kontakt cache/index";
                 case ".ncw": return "Kontakt compressed wave sample";
                 case ".nicnt": return "Kontakt library metadata";
+                case ".nkl": return "Kontakt Leap kit";
                 case ".nksf": return "Native Kontrol Standard preset";
                 case ".nksfx": return "Native Kontrol Standard effect preset";
-                case ".nksn": return "Native Kontrol Standard snapshot";
+                case ".nksn": return "Kontakt snapshot";
+                case ".nksr": return "Reaktor rack / NKS rack preset";
                 case ".ens": return "Reaktor ensemble";
                 case ".ism": return "Reaktor instrument or structure";
                 case ".mdl": return "Reaktor module";
                 case ".rcc": return "Reaktor core cell";
+                case ".rkplr": return "Reaktor Player file";
                 case ".kt3": return "Battery kit";
                 case ".nbkt": return "Battery kit";
                 case ".ksd": return "Kore/FM8/Massive/Absynth sound preset";
@@ -491,6 +550,13 @@ namespace FileDentify
                 case ".mxprj": return "Maschine project";
                 case ".mxgrp": return "Maschine group";
                 case ".mxsnd": return "Maschine sound";
+                case ".mxfx": return "Maschine effect preset";
+                case ".mxinst": return "Maschine instrument preset";
+                case ".mprj": return "Maschine 1 project";
+                case ".mgrp": return "Maschine 1 group";
+                case ".msnd": return "Maschine 1 sound";
+                case ".ngrr": return "Guitar Rig rack preset";
+                case ".ndx": return "Native Instruments sample index/support data";
                 default: return null;
             }
         }
@@ -527,6 +593,15 @@ namespace FileDentify
                 case ".vop": return "Legacy JLW/VOP sound bank or voice data";
                 case ".svd": return "Roland sound/backup data";
                 case ".svq": return "Roland sequencer song";
+                case ".fxl": return "Roland Fantom-X Librarian patch/library data";
+                case ".fsl": return "Roland Fantom-S Librarian patch/library data";
+                case ".tbl":
+                    if (path.IndexOf("\\yamaha\\", StringComparison.OrdinalIgnoreCase) >= 0 &&
+                        (path.IndexOf("s-yxg", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                         path.IndexOf("syxg", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                         Path.GetFileName(path).StartsWith("sxg", StringComparison.OrdinalIgnoreCase)))
+                        return "Yamaha S-YXG software-synthesizer table";
+                    return null;
                 case ".smp": return "Sampler or device sample data";
                 case ".efe": return "Ensoniq EPS instrument file";
                 case ".eda": return "Ensoniq ASR-10 disk image";
@@ -584,6 +659,19 @@ namespace FileDentify
                 case ".maki": return "Winamp Modern skin MAKI script";
                 case ".avb": return "Microsoft Chat Comic Art avatar";
                 case ".jgl": return "Roland Juno-G Librarian file";
+                case ".mhr": return "OpenAL Soft HRTF data";
+                case ".ambdec": return "Ambisonic decoder configuration";
+                case ".lso": return "Emagic Logic song/project";
+                case ".chtr": return "GarageBand chord/tuning table";
+                case ".nac": return "Native Instruments sample-add data";
+                case ".nov": return "Native Instruments sample-add instrument data";
+                case ".h0": return "MAGIX/SEK'D waveform overview";
+                case ".hdp": return "MAGIX/SEK'D sample-library metadata";
+                case ".ovm": return "MAGIX object/volume metadata";
+                case ".akp": return "Akai sampler program";
+                case ".akm": return "Akai sampler multi";
+                case ".rbm": return "Propellerhead ReBirth mod";
+                case ".mdd": return "GN Audio container with embedded MIDI";
                 default: return null;
             }
         }
@@ -650,6 +738,22 @@ namespace FileDentify
                             return "Chromium/Electron resource pack";
                     }
                     return null;
+                case ".hyb":
+                    if (data.Length >= 4 && data[0] == 0x68 && data[1] == 0x79 && data[2] == 0xAD && data[3] == 0x62)
+                        return "Chromium hyphenation dictionary";
+                    return null;
+                case ".w5s":
+                    return path.IndexOf("\\Winamp\\", StringComparison.OrdinalIgnoreCase) >= 0 ? "Winamp 5 / Wasabi system plug-in module" : null;
+                case ".soc":
+                case ".sod":
+                case ".soe":
+                case ".sog":
+                case ".soh":
+                case ".sor":
+                    return path.IndexOf("libreoffice", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                        path.IndexOf("openoffice", StringComparison.OrdinalIgnoreCase) >= 0
+                        ? "LibreOffice/OpenOffice application resource"
+                        : null;
                 default: return null;
             }
         }
@@ -683,6 +787,25 @@ namespace FileDentify
             return null;
         }
 
+        private static bool LooksLikeSynologyPat(byte[] data)
+        {
+            if (data.Length >= 265)
+            {
+                var name = Ascii(data, 0, Math.Min(100, data.Length)).TrimEnd('.');
+                if ((name.Equals("VERSION", StringComparison.OrdinalIgnoreCase) ||
+                     name.Equals("GRUB_VER", StringComparison.OrdinalIgnoreCase) ||
+                     name.EndsWith(".tgz", StringComparison.OrdinalIgnoreCase) ||
+                     name.EndsWith(".bin", StringComparison.OrdinalIgnoreCase)) &&
+                    Ascii(data, 257, Math.Min(8, data.Length - 257)).StartsWith("ustar", StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+            return data.Length >= 4 &&
+                ((data[1] == 0xAD && data[2] == 0xBE && data[3] == 0xEF) ||
+                 (data[1] == 0xBF && data[2] == 0xBA && data[3] == 0xAD) ||
+                 (data[0] == 0xAD && data[1] == 0xBE && data[2] == 0xEF) ||
+                 (data[0] == 0xBF && data[1] == 0xBA && data[2] == 0xAD));
+        }
+
         private static readonly Signature[] Signatures =
         {
             new Signature("%PDF-", "PDF header", "PDF document"),
@@ -698,12 +821,15 @@ namespace FileDentify
             new Signature("GIF89a", "GIF89a header", "GIF image"),
             new Signature("RIFF", "RIFF header", "RIFF container"),
             new Signature("OggS", "OggS header", "Ogg media container"),
+            new Signature(new byte[] { 0x30, 0x26, 0xB2, 0x75, 0x8E, 0x66, 0xCF, 0x11, 0xA6, 0xD9, 0x00, 0xAA, 0x00, 0x62, 0xCE, 0x6C }, "ASF header", "Windows Media/ASF container"),
             new Signature("fLaC", "FLAC marker", "FLAC audio"),
             new Signature("ID3", "ID3 tag", "MP3 audio with ID3 tag"),
             new Signature("MThd", "MIDI header", "Standard MIDI file"),
             new Signature("MZ", "MZ executable header", "Windows executable or DLL"),
             new Signature("\x7FELF", "ELF header", "ELF executable"),
             new Signature("SQLite format 3\0", "SQLite header", "SQLite database"),
+            new Signature(@"{\rtf", "RTF header", "Rich Text Format document"),
+            new Signature("Standard Jet DB", "Jet database marker", "Microsoft Access/Jet database", 4),
             new Signature(new byte[] { 0x00, 0x61, 0x73, 0x6D }, "WebAssembly header", "WebAssembly binary module"),
             new Signature("FORM", "FORM header", "IFF/AIFF-style container"),
             new Signature("BM", "BMP header", "BMP image"),
@@ -759,6 +885,13 @@ namespace FileDentify
             for (var i = offset; i < offset + count && i < data.Length; i++)
                 sb.Append(data[i] >= 32 && data[i] < 127 ? (char)data[i] : '.');
             return sb.ToString();
+        }
+
+        private static uint ReadUInt32LittleEndian(byte[] data, int offset)
+        {
+            if (offset < 0 || offset + 4 > data.Length)
+                return 0;
+            return (uint)(data[offset] | (data[offset + 1] << 8) | (data[offset + 2] << 16) | (data[offset + 3] << 24));
         }
 
         private sealed class Signature

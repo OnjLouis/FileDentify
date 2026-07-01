@@ -20,6 +20,7 @@ namespace FileDentify
             if (LooksLikeOpml(ext, text)) return "OPML subscription list";
             if (LooksLikeEmailMessage(ext, text)) return "Email message";
             if (LooksLikeWindowsMediaEncoder(ext, text)) return "Windows Media Encoder session";
+            if (LooksLikeWindowsMediaPlaylist(ext, text)) return "Windows Media Player playlist";
             return null;
         }
 
@@ -39,6 +40,8 @@ namespace FileDentify
                 AddEmailInfo(sections, text);
             else if (LooksLikeWindowsMediaEncoder(ext, text))
                 AddWindowsMediaEncoderInfo(sections, text);
+            else if (LooksLikeWindowsMediaPlaylist(ext, text))
+                AddWindowsMediaPlaylistInfo(sections, text);
         }
 
         private static bool LooksLikeNokiaVmg(string ext, string text)
@@ -149,6 +152,12 @@ namespace FileDentify
             return ext == ".wme" && text.IndexOf("<WMEncoder", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
+        private static bool LooksLikeWindowsMediaPlaylist(string ext, string text)
+        {
+            return ext == ".wpl" && (text.IndexOf("<?wpl", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                text.IndexOf("<smil", StringComparison.OrdinalIgnoreCase) >= 0);
+        }
+
         private static void AddWindowsMediaEncoderInfo(List<ReportSection> sections, string text)
         {
             var section = AddSection(sections, "Message/contact data");
@@ -161,6 +170,24 @@ namespace FileDentify
             Add(section, "Encoder profiles", Regex.Matches(text, "<EncoderProfile\\b|<WMEncoder_Profile\\b", RegexOptions.IgnoreCase).Count.ToString(CultureInfo.InvariantCulture));
             Add(section, "Broadcast port", ValueOrNotReported(FirstXmlAttribute(text, "Broadcast", "Http")));
             Add(section, "Privacy note", "Windows Media Encoder sessions can contain device names, paths, URLs, and broadcast settings.");
+        }
+
+        private static void AddWindowsMediaPlaylistInfo(List<ReportSection> sections, string text)
+        {
+            var section = AddSection(sections, "Message/contact data");
+            Add(section, "Format", "Windows Media Player playlist");
+            Add(section, "Generator", ValueOrNotReported(FirstXmlMetaContent(text, "Generator")));
+            Add(section, "Title", ValueOrNotReported(FirstXmlText(text, "title")));
+            Add(section, "Media entries", Regex.Matches(text ?? string.Empty, "<media\\b", RegexOptions.IgnoreCase).Count.ToString(CultureInfo.InvariantCulture));
+            var sources = Regex.Matches(text ?? string.Empty, "<media\\b[^>]*\\bsrc\\s*=\\s*\"(?<value>[^\"]+)\"", RegexOptions.IgnoreCase | RegexOptions.Singleline)
+                .Cast<Match>()
+                .Select(match => CleanMetadataText(match.Groups["value"].Value))
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .Take(12)
+                .ToArray();
+            if (sources.Length > 0)
+                Add(section, "Media sources", string.Join("\r\n", sources));
+            Add(section, "Privacy note", "Playlists can contain local paths, network URLs, and library names. Review reports before sharing them.");
         }
 
         private static string DecodePersonalText(byte[] data)
@@ -214,6 +241,12 @@ namespace FileDentify
         private static string FirstXmlAttribute(string text, string tag, string attribute)
         {
             var match = Regex.Match(text ?? string.Empty, "<" + Regex.Escape(tag) + @"\b[^>]*\b" + Regex.Escape(attribute) + "\\s*=\\s*\"(?<value>[^\"]*)\"", RegexOptions.IgnoreCase | RegexOptions.Singleline);
+            return match.Success ? CleanMetadataText(match.Groups["value"].Value) : string.Empty;
+        }
+
+        private static string FirstXmlMetaContent(string text, string name)
+        {
+            var match = Regex.Match(text ?? string.Empty, @"<meta\b(?=[^>]*\bname\s*=\s*""" + Regex.Escape(name) + @""")(?=[^>]*\bcontent\s*=\s*""(?<value>[^""]*)"")[^>]*>", RegexOptions.IgnoreCase | RegexOptions.Singleline);
             return match.Success ? CleanMetadataText(match.Groups["value"].Value) : string.Empty;
         }
     }

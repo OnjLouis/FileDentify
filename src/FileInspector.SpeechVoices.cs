@@ -121,7 +121,7 @@ namespace FileDentify
             if (LooksLikeAcapelaVoicePath(path))
             {
                 Add(section, "Voice family", SegmentAfter(path, "Engines"));
-                Add(section, "Notes", "Acapela voice packages use large proprietary voice-data files. FileDentify reports the voice folder, role, and size so large speech-engine assets are easier to recognise without decoding them.");
+                Add(section, "Notes", "Acapela voice packages are commercial text-to-speech voice assets used by screen readers, assistive software, and embedded speech products. FileDentify reports the voice folder, role, and size so large speech-engine assets are easier to recognise without decoding them.");
                 return;
             }
 
@@ -196,7 +196,7 @@ namespace FileDentify
             AddXmlishTag(section, header, "BROKERSTRING", "Broker string");
             AddXmlishTag(section, header, "ENGINE", "Engine");
             AddXmlishTag(section, header, "VERSION", "Version");
-            Add(section, "Notes", "RealSpeak Mobile speech files are reported from small text headers and safe metadata only. FileDentify does not load the TTS engine or decode proprietary voice payloads.");
+            Add(section, "Notes", "ScanSoft RealSpeak Mobile was a compact embedded/mobile text-to-speech engine, later associated with Nuance speech technology. FileDentify reports small text headers and safe metadata only; it does not load the TTS engine or decode proprietary voice payloads.");
         }
 
         private static void AddXmlishTag(ReportSection section, byte[] header, string tag, string label)
@@ -263,7 +263,7 @@ namespace FileDentify
             Add(section, "Package voice hint", IvonaVoiceNameFromPath(path));
             Add(section, "Container role", IvonaSpeechRole(path, header));
             AddSpeechPackageIndexSummary(section, path, header);
-            Add(section, "Notes", "IVONA voice installers can be very large self-extracting packages. FileDentify reports filename, container, and safe package-index clues only; it does not run installers or extract voice payloads.");
+            Add(section, "Notes", "IVONA was a commercial text-to-speech voice family, later acquired by Amazon. Its voice installers can be very large self-extracting packages. FileDentify reports filename, container, and safe package-index clues only; it does not run installers or extract voice payloads.");
         }
 
         private static string IvonaVoiceNameFromPath(string path)
@@ -307,7 +307,7 @@ namespace FileDentify
             Add(section, "Container role", LoquendoSpeechRole(path, header));
             Add(section, "Distribution folder", LoquendoDistributionFolder(path));
             AddSpeechPackageIndexSummary(section, path, header);
-            Add(section, "Notes", "Loquendo TTS packages are reported from distribution filenames, archive indexes, and safe header metadata only. FileDentify does not install voices or load speech engines.");
+            Add(section, "Notes", "Loquendo TTS was a commercial speech engine used in accessibility, telephony, and embedded systems. FileDentify reports distribution filenames, archive indexes, and safe header metadata only; it does not install voices or load speech engines.");
         }
 
         private static string LoquendoNameFromPath(string path)
@@ -401,7 +401,7 @@ namespace FileDentify
                 Add(section, "Executable note", "Likely self-extracting AT&T Natural Voices installer.");
             }
 
-            Add(section, "Notes", "AT&T Natural Voices packages often contain very large voice-data cabinets. FileDentify reports package structure and sizes only; it does not run installers or extract voice payloads.");
+            Add(section, "Notes", "AT&T Natural Voices was a commercial TTS voice family from AT&T Labs. Packages often contain very large voice-data cabinets. FileDentify reports package structure and sizes only; it does not run installers or extract voice payloads.");
         }
 
         private static string AttVoiceNameFromPath(string path)
@@ -735,7 +735,7 @@ namespace FileDentify
             else if (LooksLikeText(header))
                 AddSpeechTextClues(section, header);
 
-            Add(section, "Notes", "NVDA speech-engine files are reported from known add-on paths, package manifests, filenames, and safe text/header metadata. FileDentify does not load synthesizers, run engine components, or decode proprietary voice payloads.");
+            Add(section, "Notes", "NVDA speech-engine files can be open-source voice data, neural models, dictionaries, or wrappers around commercial engines such as Eloquence, IBM TTS, RHVoice, eSpeak, Orpheus, and SuperTonic. FileDentify reports known add-on paths, package manifests, filenames, and safe text/header metadata; it does not load synthesizers, run engine components, or decode proprietary voice payloads.");
         }
 
         private static string NvdaSpeechFamily(string path)
@@ -1032,7 +1032,7 @@ namespace FileDentify
                 }
             }
 
-            Add(section, "Notes", "Dolphin speech files are reported from known speech-component paths and safe text metadata. FileDentify does not load synthesizer engines or install screen-reader components.");
+            Add(section, "Notes", "Dolphin speech files come from Dolphin screen-reader and assistive-technology components. Depending on the folder, they may be Dolphin Orpheus data, Nuance Vocalizer Expressive voice resources, application maps, or voice-selection tables. FileDentify reports known component paths and safe text metadata; it does not load synthesizer engines or install screen-reader components.");
         }
 
         private static string DolphinComponentFromPath(string path)
@@ -1189,7 +1189,7 @@ namespace FileDentify
                     Add(section, "Referenced domain files", string.Join(Environment.NewLine, domainFiles));
             }
 
-            Add(section, "Notes", "Microsoft speech voice files are reported from package indexes, names, and safe text metadata only. FileDentify does not install voices or load speech models.");
+            Add(section, "Notes", "Microsoft speech voice files can be Windows AppX/MSIX voice packages, text-normalization data, lexicons, or neural model payloads. FileDentify reports package indexes, names, and safe text metadata only; it does not install voices or load speech models.");
         }
 
         private static void AddIniValue(ReportSection section, string text, string sectionName, string key, string label)
