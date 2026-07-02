@@ -25,9 +25,20 @@ namespace FileDentify
             if (ext == ".rpp" || ext == ".rpp-bak")
                 return;
             var extensionHint = NativeInstrumentsTypeName(path);
+            if (extensionHint == null && !PathContainsNativeInstrumentsContext(path) && WindowsSystemTypeName(path, sample) != null)
+                return;
+            var headerMarker = NativeHeaderMarker(sample);
+            if (extensionHint == null &&
+                IsSqliteDatabaseExtension(ext) &&
+                string.IsNullOrWhiteSpace(headerMarker))
+                return;
+            if (extensionHint == null &&
+                ext == ".db" &&
+                !PathContainsNativeInstrumentsContext(path) &&
+                string.IsNullOrWhiteSpace(headerMarker))
+                return;
             var readable = FindReadableTextLines(sample, 4, 2000);
             var evidence = FindNativeInstrumentsEvidence(readable).ToArray();
-            var headerMarker = NativeHeaderMarker(sample);
 
             if (extensionHint == null && string.IsNullOrWhiteSpace(headerMarker) && BackupConfigTypeName(path, sample) != null)
                 return;
@@ -208,6 +219,8 @@ namespace FileDentify
             if (PathContainsNativeInstrumentsContext(path))
                 return true;
             var list = evidence == null ? new List<string>() : evidence.ToList();
+            if (list.Count == 1 && string.Equals(list[0], "NKS", StringComparison.OrdinalIgnoreCase))
+                return false;
             if (list.Count >= 2)
                 return true;
             return list.Any(item => !string.Equals(item, "Native Instruments", StringComparison.OrdinalIgnoreCase));

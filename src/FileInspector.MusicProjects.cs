@@ -44,6 +44,7 @@ namespace FileDentify
             if (ext == ".mogg") return "MOGG multitrack Ogg audio";
             if (ext == ".sfark") return "sfArk compressed SoundFont archive";
             if ((ext == ".rpp" || ext == ".rpp-bak") && IsReaperProject(header)) return ext == ".rpp-bak" ? "REAPER project backup" : "REAPER project";
+            if (ext == ".reaperthemezip") return "REAPER theme package";
             if (ext == ".wrk") return "Cakewalk WRK project";
             if (ext == ".cwp") return "Cakewalk/Sonar CWP project";
             if (ext == ".sfz") return "SFZ sampler instrument";
@@ -64,6 +65,7 @@ namespace FileDentify
             AddMoggInfo(sections, path, header, fileLength);
             AddSfArkInfo(sections, path, header);
             AddReaperProjectInfo(sections, path, stringSample, fileLength);
+            AddReaperThemeInfo(sections, path, header, fileLength);
             AddCakewalkInfo(sections, path, stringSample);
             AddSamplerInstrumentInfo(sections, path, stringSample);
             AddCreativeEcwInfo(sections, path, header);
@@ -1353,6 +1355,41 @@ namespace FileDentify
             }
 
             Add(section, "Notes", "REAPER RPP files are text project files. FileDentify reports bounded project structure, plug-in markers, and visible media references; it does not load or validate the arrangement.");
+        }
+
+        private static void AddReaperThemeInfo(List<ReportSection> sections, string path, byte[] header, long fileLength)
+        {
+            if (!Path.GetExtension(path).Equals(".reaperthemezip", StringComparison.OrdinalIgnoreCase))
+                return;
+
+            var section = AddSection(sections, "REAPER project");
+            Add(section, "Format hint", "REAPER theme package");
+            Add(section, "File size", FormatBytes(fileLength));
+            Add(section, "Container", IsZipHeader(header) ? "ZIP-compatible theme package" : "Theme package by extension");
+
+            if (IsZipHeader(header))
+            {
+                try
+                {
+                    using (var archive = ZipFile.OpenRead(path))
+                    {
+                        Add(section, "Archive entries", archive.Entries.Count.ToString(CultureInfo.InvariantCulture));
+                        var entries = archive.Entries
+                            .Select(entry => entry.FullName)
+                            .Where(name => !string.IsNullOrWhiteSpace(name))
+                            .Take(20)
+                            .ToArray();
+                        if (entries.Length > 0)
+                            Add(section, "First entries", string.Join(Environment.NewLine, entries));
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Add(section, "Archive read note", ex.Message);
+                }
+            }
+
+            Add(section, "Notes", "REAPER theme ZIP files package UI themes, images, and configuration resources for REAPER. FileDentify reports package structure without installing or applying the theme.");
         }
 
         private static void AddReaperTempoInfo(ReportSection section, IEnumerable<string> lines)

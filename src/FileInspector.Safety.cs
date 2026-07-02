@@ -49,7 +49,7 @@ namespace FileDentify
             if (StartsWith(header, Encoding.ASCII.GetBytes("GIF87a")) || StartsWith(header, Encoding.ASCII.GetBytes("GIF89a")))
                 return HeaderExpectation.For("a GIF image", ".gif");
             if (StartsWith(header, Encoding.ASCII.GetBytes("SQLite format 3\0")))
-                return HeaderExpectation.For("a SQLite database", ".sqlite", ".sqlite3", ".db");
+                return HeaderExpectation.For("a SQLite database", ".sqlite", ".sqlite3", ".db", ".db3");
             if (IsOleCompoundFile(header))
                 return HeaderExpectation.For("an OLE compound document", ".doc", ".xls", ".ppt", ".msi", ".msg", ".vsd");
             if (IsWindowsShortcut(header))

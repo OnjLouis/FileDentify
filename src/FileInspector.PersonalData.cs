@@ -21,6 +21,7 @@ namespace FileDentify
             if (LooksLikeEmailMessage(ext, text)) return "Email message";
             if (LooksLikeWindowsMediaEncoder(ext, text)) return "Windows Media Encoder session";
             if (LooksLikeWindowsMediaPlaylist(ext, text)) return "Windows Media Player playlist";
+            if (LooksLikeM3uPlaylist(ext, text)) return "M3U/M3U8 media playlist";
             return null;
         }
 
@@ -42,6 +43,8 @@ namespace FileDentify
                 AddWindowsMediaEncoderInfo(sections, text);
             else if (LooksLikeWindowsMediaPlaylist(ext, text))
                 AddWindowsMediaPlaylistInfo(sections, text);
+            else if (LooksLikeM3uPlaylist(ext, text))
+                AddM3uPlaylistInfo(sections, path, text);
         }
 
         private static bool LooksLikeNokiaVmg(string ext, string text)
@@ -158,6 +161,15 @@ namespace FileDentify
                 text.IndexOf("<smil", StringComparison.OrdinalIgnoreCase) >= 0);
         }
 
+        private static bool LooksLikeM3uPlaylist(string ext, string text)
+        {
+            if (ext != ".m3u" && ext != ".m3u8")
+                return false;
+            if (text.IndexOf("#EXTM3U", StringComparison.OrdinalIgnoreCase) >= 0)
+                return true;
+            return PlaylistSourceLines(text).Any();
+        }
+
         private static void AddWindowsMediaEncoderInfo(List<ReportSection> sections, string text)
         {
             var section = AddSection(sections, "Message/contact data");
@@ -188,6 +200,33 @@ namespace FileDentify
             if (sources.Length > 0)
                 Add(section, "Media sources", string.Join("\r\n", sources));
             Add(section, "Privacy note", "Playlists can contain local paths, network URLs, and library names. Review reports before sharing them.");
+        }
+
+        private static void AddM3uPlaylistInfo(List<ReportSection> sections, string path, string text)
+        {
+            var section = AddSection(sections, "Message/contact data");
+            var ext = Path.GetExtension(path).ToLowerInvariant();
+            Add(section, "Format", ext == ".m3u8" ? "M3U8 media playlist" : "M3U media playlist");
+            Add(section, "Encoding hint", ext == ".m3u8" ? "UTF-8 by convention" : "M3U text playlist; encoding varies in older files");
+            Add(section, "Extended marker", text.IndexOf("#EXTM3U", StringComparison.OrdinalIgnoreCase) >= 0 ? "Present" : "Not seen in sample");
+            Add(section, "EXTINF entries", Regex.Matches(text ?? string.Empty, @"(?im)^\s*#EXTINF\b", RegexOptions.CultureInvariant).Count.ToString(CultureInfo.InvariantCulture));
+            var sources = PlaylistSourceLines(text).Take(20).ToArray();
+            Add(section, "Media entries in sample", sources.Length.ToString(CultureInfo.InvariantCulture));
+            if (sources.Length > 0)
+                Add(section, "Media sources", string.Join(Environment.NewLine, sources));
+            Add(section, "Privacy note", "M3U/M3U8 playlists can contain local paths, network shares, URLs, and track titles. FileDentify lists a bounded sample so reports remain readable.");
+        }
+
+        private static IEnumerable<string> PlaylistSourceLines(string text)
+        {
+            return (text ?? string.Empty)
+                .Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(line => CleanMetadataText(line.Trim('\uFEFF', ' ', '\t')))
+                .Where(line => line.Length > 0 && !line.StartsWith("#", StringComparison.Ordinal))
+                .Where(line => line.IndexOf("://", StringComparison.Ordinal) > 0 ||
+                    line.IndexOf('\\') >= 0 ||
+                    line.IndexOf('/') >= 0 ||
+                    Path.HasExtension(line));
         }
 
         private static string DecodePersonalText(byte[] data)

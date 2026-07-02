@@ -32,6 +32,7 @@ namespace FileDentify
             if (ext == ".cbz") return "Comic Book ZIP archive";
             if (StartsWith(header, Encoding.ASCII.GetBytes("ITSF")) || ext == ".chm") return "Compiled HTML Help file";
             if (ext == ".hlp") return "WinHelp help file";
+            if (LooksLikeHtmlHelpContents(path, header)) return "HTML Help table of contents";
             return null;
         }
 
@@ -60,6 +61,8 @@ namespace FileDentify
                 AddChmInfo(section, header);
             else if (ext == ".hlp")
                 AddWinHelpInfo(section, header);
+            else if (LooksLikeHtmlHelpContents(path, header))
+                AddHtmlHelpContentsInfo(section, header);
 
             Add(section, "Notes", "Ebook and help files are reported from headers, package markers, and visible metadata only. FileDentify does not remove DRM, render pages, or extract book text.");
         }
@@ -142,6 +145,33 @@ namespace FileDentify
             if (strings.Length > 0)
                 Add(section, "Visible help strings", string.Join("\r\n", strings));
             Add(section, "Compatibility note", "WinHelp is a legacy help format. Modern Windows versions may not open it without optional old components.");
+        }
+
+        private static void AddHtmlHelpContentsInfo(ReportSection section, byte[] header)
+        {
+            var text = DecodeWindowsText(header);
+            Add(section, "Role", "HTML Help contents/index sidecar used by Microsoft HTML Help projects.");
+            Add(section, "Sitemap objects in sample", Regex.Matches(text ?? string.Empty, @"<object\b[^>]*type\s*=\s*""text/sitemap""", RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.CultureInvariant).Count.ToString(CultureInfo.InvariantCulture));
+            Add(section, "Local entries in sample", Regex.Matches(text ?? string.Empty, @"<param\b[^>]*name\s*=\s*""Local""", RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.CultureInvariant).Count.ToString(CultureInfo.InvariantCulture));
+            var names = Regex.Matches(text ?? string.Empty, @"<param\b(?=[^>]*name\s*=\s*""Name"")(?=[^>]*value\s*=\s*""(?<value>[^""]*)"")[^>]*>", RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.CultureInvariant)
+                .Cast<Match>()
+                .Select(match => CleanMetadataText(match.Groups["value"].Value))
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .Take(16)
+                .ToArray();
+            if (names.Length > 0)
+                Add(section, "Contents labels", string.Join(Environment.NewLine, names));
+            Add(section, "Compatibility note", ".hhc files are project/source sidecars for compiled HTML Help. They are useful for identifying help content, but are not the compiled .chm container by themselves.");
+        }
+
+        private static bool LooksLikeHtmlHelpContents(string path, byte[] header)
+        {
+            if (!Path.GetExtension(path).Equals(".hhc", StringComparison.OrdinalIgnoreCase))
+                return false;
+            var text = DecodeWindowsText(header);
+            return text.IndexOf("<!DOCTYPE HTML", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                text.IndexOf("text/sitemap", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                text.IndexOf("<param", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         private static bool LooksLikePalmMobi(byte[] header)

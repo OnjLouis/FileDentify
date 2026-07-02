@@ -79,6 +79,39 @@ namespace FileDentify
             return results;
         }
 
+        private static List<FoundString> FindHighBitAsciiStrings(byte[] data, int minLength, int maxResults)
+        {
+            var results = new List<FoundString>();
+            var i = 0;
+            while (i < data.Length && results.Count < maxResults)
+            {
+                if (!IsHighBitPrintableAscii(data[i]))
+                {
+                    i++;
+                    continue;
+                }
+
+                var start = i;
+                var chars = new List<byte>();
+                chars.Add((byte)(data[i] & 0x7f));
+                i++;
+                while (i < data.Length && data[i] >= 32 && data[i] < 127)
+                {
+                    chars.Add(data[i]);
+                    i++;
+                    if (chars.Count >= 160)
+                        break;
+                }
+
+                if (chars.Count >= minLength)
+                {
+                    var value = Encoding.ASCII.GetString(chars.ToArray());
+                    results.Add(new FoundString { Offset = start, Value = value });
+                }
+            }
+            return results;
+        }
+
         private static void AddReadableTextInfo(List<ReportSection> sections, byte[] data)
         {
             const int maxLines = 200;
@@ -101,9 +134,12 @@ namespace FileDentify
         {
             var lines = new List<string>();
             var seen = new HashSet<string>(StringComparer.Ordinal);
-            AddReadableLines(lines, seen, FindAsciiStrings(data, minLength, maxResults * 2).Select(s => s.Value), maxResults);
-            AddReadableLines(lines, seen, FindUtf16Strings(data, minLength, maxResults, true).Select(s => s.Value), maxResults);
-            AddReadableLines(lines, seen, FindUtf16Strings(data, minLength, maxResults, false).Select(s => s.Value), maxResults);
+            var candidates = new List<FoundString>();
+            candidates.AddRange(FindAsciiStrings(data, minLength, maxResults * 2));
+            candidates.AddRange(FindHighBitAsciiStrings(data, minLength, maxResults * 2));
+            candidates.AddRange(FindUtf16Strings(data, minLength, maxResults, true));
+            candidates.AddRange(FindUtf16Strings(data, minLength, maxResults, false));
+            AddReadableLines(lines, seen, candidates.OrderBy(item => item.Offset).ThenByDescending(item => item.Value.Length).Select(s => s.Value), maxResults);
             return lines;
         }
 
@@ -130,7 +166,7 @@ namespace FileDentify
         private static bool IsReadableFragmentOfExistingLine(List<string> lines, string candidate)
         {
             var normalizedCandidate = NormalizeReadableLineForFragmentMatch(candidate);
-            if (normalizedCandidate.Length < 8)
+            if (normalizedCandidate.Length < 6)
                 return false;
 
             foreach (var existing in lines)
@@ -148,7 +184,7 @@ namespace FileDentify
         private static void RemoveExistingReadableFragments(List<string> lines, HashSet<string> seen, string candidate)
         {
             var normalizedCandidate = NormalizeReadableLineForFragmentMatch(candidate);
-            if (normalizedCandidate.Length < 8)
+            if (normalizedCandidate.Length < 6)
                 return;
 
             for (var i = lines.Count - 1; i >= 0; i--)
@@ -173,7 +209,7 @@ namespace FileDentify
                 return false;
             if (possibleFragment.Length >= possibleFullLine.Length)
                 return false;
-            if (possibleFragment.Length < 8)
+            if (possibleFragment.Length < 6)
                 return false;
             if (possibleFullLine.Length - possibleFragment.Length < 1)
                 return false;
@@ -244,13 +280,23 @@ namespace FileDentify
                 return false;
 
             var extendedChars = value.Count(ch => ch > 127);
+            if (extendedChars > 0 && extendedChars > value.Length / 5)
+                return false;
+            if (extendedChars >= 2 && symbols >= 4)
+                return false;
             if (!value.Any(char.IsWhiteSpace) && (extendedChars >= 2 || (extendedChars > 0 && value.Length > 10)))
                 return false;
 
             if (!value.Any(char.IsWhiteSpace) && symbols >= 4)
                 return false;
 
+            if (!value.Any(char.IsWhiteSpace) && symbols >= 2 && value.IndexOfAny(new[] { ':', '\\', '/', '.' }) < 0)
+                return false;
+
             if (!value.Any(char.IsWhiteSpace) && value.Length >= 10 && symbols >= 2 && NaturalWordCount(value) <= 1)
+                return false;
+
+            if (LooksLikeLeadingTailFragment(value))
                 return false;
 
             if (HasLongAscendingAsciiLetterRun(value, 5))
@@ -278,6 +324,35 @@ namespace FileDentify
                 return true;
 
             return false;
+        }
+
+        private static bool LooksLikeLeadingTailFragment(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return false;
+
+            var match = Regex.Match(value.Trim(), @"^(?<first>[a-z]{2,5})\s+(?<second>[A-Z][A-Za-z0-9]{2,})(?:\s|$)", RegexOptions.CultureInvariant);
+            if (!match.Success)
+                return false;
+
+            if (value.IndexOfAny(new[] { ',', ':', ';', '.', '\\', '/', '-' }) >= 0)
+                return false;
+
+            switch (match.Groups["first"].Value)
+            {
+                case "ical":
+                case "tion":
+                case "ment":
+                case "able":
+                case "ible":
+                case "ance":
+                case "ence":
+                case "ing":
+                case "ed":
+                    return true;
+                default:
+                    return false;
+            }
         }
 
         private static bool HasLongAscendingAsciiLetterRun(string value, int minRunLength)
@@ -374,6 +449,12 @@ namespace FileDentify
             if (ch == '\t' || ch == '\r' || ch == '\n')
                 return true;
             return ch >= 32 && ch != 0x7f && !char.IsSurrogate(ch);
+        }
+
+        private static bool IsHighBitPrintableAscii(byte value)
+        {
+            var masked = value & 0x7f;
+            return value >= 0xa0 && masked >= 32 && masked < 127 && char.IsLetterOrDigit((char)masked);
         }
 
         private static bool IsReadableUtf16TextChar(char ch)

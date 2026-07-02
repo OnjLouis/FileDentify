@@ -110,6 +110,7 @@ namespace FileDentify
             var candidates = new List<ReadableCandidate>();
             var seen = new HashSet<string>(StringComparer.Ordinal);
             AddReadable(candidates, seen, ExtractAsciiStrings(data, 4), false, 10000);
+            AddReadable(candidates, seen, ExtractHighBitAsciiStrings(data, 4), false, 10000);
             AddReadable(candidates, seen, ExtractUtf16Strings(data, 4, true), true, 10000);
             AddReadable(candidates, seen, ExtractUtf16Strings(data, 4, false), true, 10000);
             if (candidates.Count == 0)
@@ -240,6 +241,12 @@ namespace FileDentify
                 var clean = CleanReadableText(value);
                 if (!IsUsefulReadableLine(clean) || seen.Contains(clean))
                     continue;
+
+                if (IsReadableFragmentOfExistingLine(candidates, clean))
+                    continue;
+
+                RemoveExistingReadableFragments(candidates, seen, clean);
+
                 seen.Add(clean);
                 candidates.Add(new ReadableCandidate
                 {
@@ -250,6 +257,73 @@ namespace FileDentify
                 if (candidates.Count >= max)
                     return;
             }
+        }
+
+        private static bool IsReadableFragmentOfExistingLine(List<ReadableCandidate> candidates, string candidate)
+        {
+            var normalizedCandidate = NormalizeReadableLineForFragmentMatch(candidate);
+            if (normalizedCandidate.Length < 6)
+                return false;
+
+            foreach (var existing in candidates)
+            {
+                var normalizedExisting = NormalizeReadableLineForFragmentMatch(existing.Value);
+                if (string.Equals(normalizedCandidate, normalizedExisting, StringComparison.Ordinal))
+                    return true;
+                if (IsReadableFragment(normalizedCandidate, normalizedExisting))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static void RemoveExistingReadableFragments(List<ReadableCandidate> candidates, HashSet<string> seen, string candidate)
+        {
+            var normalizedCandidate = NormalizeReadableLineForFragmentMatch(candidate);
+            if (normalizedCandidate.Length < 6)
+                return;
+
+            for (var i = candidates.Count - 1; i >= 0; i--)
+            {
+                var normalizedExisting = NormalizeReadableLineForFragmentMatch(candidates[i].Value);
+                if (string.Equals(normalizedExisting, normalizedCandidate, StringComparison.Ordinal) ||
+                    IsReadableFragment(normalizedExisting, normalizedCandidate))
+                {
+                    seen.Remove(candidates[i].Value);
+                    candidates.RemoveAt(i);
+                }
+            }
+        }
+
+        private static bool IsReadableFragment(string possibleFragment, string possibleFullLine)
+        {
+            if (string.IsNullOrEmpty(possibleFragment) || string.IsNullOrEmpty(possibleFullLine))
+                return false;
+            if (possibleFragment.Length >= possibleFullLine.Length)
+                return false;
+            if (possibleFragment.Length < 6)
+                return false;
+            if (possibleFullLine.IndexOf(possibleFragment, StringComparison.Ordinal) < 0)
+                return false;
+
+            var ratio = (double)possibleFragment.Length / possibleFullLine.Length;
+            return ratio >= 0.55;
+        }
+
+        private static string NormalizeReadableLineForFragmentMatch(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return string.Empty;
+
+            var sb = new StringBuilder(value.Length);
+            foreach (var ch in value.Trim())
+            {
+                if (ch > 127)
+                    continue;
+                if (char.IsLetterOrDigit(ch))
+                    sb.Append(char.ToLowerInvariant(ch));
+            }
+            return sb.ToString();
         }
 
         private static IEnumerable<string> ExtractAsciiStrings(byte[] data, int minLength)
@@ -267,6 +341,31 @@ namespace FileDentify
                 }
                 else
                     i++;
+            }
+        }
+
+        private static IEnumerable<string> ExtractHighBitAsciiStrings(byte[] data, int minLength)
+        {
+            var i = 0;
+            while (i < data.Length)
+            {
+                if (!IsHighBitPrintableAscii(data[i]))
+                {
+                    i++;
+                    continue;
+                }
+
+                var chars = new List<byte>();
+                chars.Add((byte)(data[i] & 0x7f));
+                i++;
+                while (i < data.Length && data[i] >= 32 && data[i] < 127)
+                {
+                    chars.Add(data[i]);
+                    i++;
+                }
+
+                if (chars.Count >= minLength)
+                    yield return Encoding.ASCII.GetString(chars.ToArray());
             }
         }
 
@@ -349,6 +448,9 @@ namespace FileDentify
             if (naturalWords == 0)
                 return false;
 
+            if (LooksLikeLeadingTailFragment(value))
+                return false;
+
             if (value.Any(char.IsWhiteSpace) && value.Length >= 8 && naturalWords >= 2)
                 return true;
 
@@ -360,6 +462,35 @@ namespace FileDentify
                 return true;
 
             return false;
+        }
+
+        private static bool LooksLikeLeadingTailFragment(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return false;
+
+            var match = System.Text.RegularExpressions.Regex.Match(value.Trim(), @"^(?<first>[a-z]{2,5})\s+(?<second>[A-Z][A-Za-z0-9]{2,})(?:\s|$)", System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+            if (!match.Success)
+                return false;
+
+            if (value.IndexOfAny(new[] { ',', ':', ';', '.', '\\', '/', '-' }) >= 0)
+                return false;
+
+            switch (match.Groups["first"].Value)
+            {
+                case "ical":
+                case "tion":
+                case "ment":
+                case "able":
+                case "ible":
+                case "ance":
+                case "ence":
+                case "ing":
+                case "ed":
+                    return true;
+                default:
+                    return false;
+            }
         }
 
         private static int ScoreReadableLine(string value, bool preferStructuredText)
@@ -404,6 +535,12 @@ namespace FileDentify
                     return false;
             }
             return true;
+        }
+
+        private static bool IsHighBitPrintableAscii(byte value)
+        {
+            var masked = value & 0x7f;
+            return value >= 0xa0 && masked >= 32 && masked < 127 && char.IsLetterOrDigit((char)masked);
         }
 
         private static int NaturalWordCount(string value)

@@ -16,6 +16,7 @@ namespace FileDentify
             var ext = Path.GetExtension(path).ToLowerInvariant();
             var name = Path.GetFileName(path) ?? string.Empty;
             if (LooksLikeEvtx(header)) return "Windows Event Log";
+            if (LooksLikeWindowsMinidump(path, header)) return "Windows minidump crash dump";
             if (ext == ".pnf") return "Windows precompiled INF";
             if (ext == ".inf_loc") return "Windows driver INF localization data";
             if (ext == ".gpd") return "Windows printer GPD description";
@@ -32,6 +33,33 @@ namespace FileDentify
             if (ext == ".man" && LooksLikeWindowsInstrumentationManifest(header)) return "Windows instrumentation manifest";
             if (name.EndsWith(".manifest", StringComparison.OrdinalIgnoreCase) && LooksLikeText(header)) return "Windows application manifest";
             if (ext == ".fon" && LooksLikeWindowsFon(header)) return "Windows bitmap font library";
+            if (ext == ".mui") return "Windows MUI language resource";
+            if (ext == ".mun") return "Windows MUN system resource";
+            if (ext == ".etl") return "Windows Event Trace Log";
+            if (ext == ".wer") return "Windows Error Reporting report";
+            if (ext == ".mof") return "WMI Managed Object Format";
+            if (ext == ".mfl") return "WMI MOF localization";
+            if (ext == ".cdxml") return "PowerShell CDXML cmdlet definition";
+            if (ext == ".psd1") return "PowerShell module manifest/data file";
+            if (ext == ".psm1") return "PowerShell script module";
+            if (ext == ".ps1xml") return "PowerShell type/format XML";
+            if (ext == ".msc") return "Microsoft Management Console snap-in";
+            if (ext == ".winmd") return "Windows Runtime metadata";
+            if (ext == ".xbf") return "compiled XAML binary file";
+            if (ext == ".pri") return "Windows package resource index";
+            if (ext == ".nls") return "Windows National Language Support data";
+            if (ext == ".ttc" && StartsWith(header, Encoding.ASCII.GetBytes("ttcf"))) return "TrueType font collection";
+            if (ext == ".acm") return "Windows Audio Compression Manager codec";
+            if (ext == ".ax") return "DirectShow filter module";
+            if (ext == ".grxml") return "Speech Recognition Grammar XML";
+            if (ext == ".wprp") return "Windows Performance Recorder profile";
+            if (ext == ".ppkg") return "Windows provisioning package";
+            if (ext == ".provxml") return "Windows provisioning XML";
+            if (ext == ".devicemetadata-ms") return "Windows device metadata package";
+            if (ext == ".cip") return "Windows Code Integrity policy";
+            if (ext == ".ppd") return "PostScript printer description";
+            if (ext == ".regtrans-ms") return "Windows registry transaction log";
+            if (ext == ".blf") return "Windows Common Log File System base log";
             return null;
         }
 
@@ -47,6 +75,8 @@ namespace FileDentify
 
             if (LooksLikeEvtx(header))
                 AddEvtxInfo(section, header);
+            else if (LooksLikeWindowsMinidump(path, header))
+                AddWindowsMinidumpInfo(section, path, header, fileLength);
             else if (Path.GetExtension(path).Equals(".pnf", StringComparison.OrdinalIgnoreCase))
                 AddPnfInfo(section, path, header);
             else if (Path.GetExtension(path).Equals(".inf_loc", StringComparison.OrdinalIgnoreCase))
@@ -77,8 +107,327 @@ namespace FileDentify
                 AddManifestInfo(section, header);
             else if (Path.GetExtension(path).Equals(".fon", StringComparison.OrdinalIgnoreCase))
                 AddWindowsFonInfo(section, path, header);
+            else
+                AddModernWindowsSystemInfo(section, path, header, fileLength);
 
             Add(section, "Notes", "Windows system files are reported from headers, filenames, and safe text/XML structure only. FileDentify does not install, import, execute, or modify them.");
+        }
+
+        private static void AddModernWindowsSystemInfo(ReportSection section, string path, byte[] header, long fileLength)
+        {
+            var ext = Path.GetExtension(path).ToLowerInvariant();
+            switch (ext)
+            {
+                case ".mui":
+                case ".mun":
+                    AddWindowsResourceModuleInfo(section, path, header, ext == ".mui" ? "localized user-interface strings and resources" : "Windows system resources split from executable modules");
+                    break;
+                case ".etl":
+                    AddWindowsTraceInfo(section, path, fileLength);
+                    break;
+                case ".wer":
+                    AddWerInfo(section, header);
+                    break;
+                case ".mof":
+                case ".mfl":
+                    AddMofInfo(section, path, header);
+                    break;
+                case ".cdxml":
+                    AddCdxmlInfo(section, header);
+                    break;
+                case ".psd1":
+                    AddPowerShellDataFileInfo(section, header);
+                    break;
+                case ".psm1":
+                    AddPowerShellModuleInfo(section, header);
+                    break;
+                case ".ps1xml":
+                    AddPowerShellXmlInfo(section, path, header);
+                    break;
+                case ".msc":
+                    AddMmcInfo(section, header);
+                    break;
+                case ".winmd":
+                    AddWinMdInfo(section, path, header);
+                    break;
+                case ".xbf":
+                    Add(section, "Role", "Compiled XAML binary produced for Windows UI resources.");
+                    Add(section, "Resource", Path.GetFileName(path));
+                    break;
+                case ".pri":
+                    AddPriInfo(section, path, header);
+                    break;
+                case ".nls":
+                    AddNlsInfo(section, path);
+                    break;
+                case ".ttc":
+                    AddTrueTypeCollectionInfo(section, path, header);
+                    break;
+                case ".acm":
+                    AddWindowsResourceModuleInfo(section, path, header, "Audio Compression Manager codec module");
+                    break;
+                case ".ax":
+                    AddWindowsResourceModuleInfo(section, path, header, "DirectShow filter module");
+                    break;
+                case ".grxml":
+                    AddSpeechGrammarInfo(section, header);
+                    break;
+                case ".wprp":
+                    AddWprProfileInfo(section, header);
+                    break;
+                case ".ppkg":
+                    AddProvisioningPackageInfo(section, path, header);
+                    break;
+                case ".provxml":
+                    AddProvisioningXmlInfo(section, header);
+                    break;
+                case ".devicemetadata-ms":
+                    AddDeviceMetadataInfo(section, path, header);
+                    break;
+                case ".cip":
+                    Add(section, "Role", "Windows Code Integrity policy data.");
+                    Add(section, "Policy file", Path.GetFileName(path));
+                    Add(section, "Safety note", "FileDentify does not validate or apply code-integrity policies.");
+                    break;
+                case ".ppd":
+                    AddPostScriptPrinterInfo(section, header);
+                    break;
+                case ".regtrans-ms":
+                    Add(section, "Role", "Windows registry transaction log sidecar.");
+                    Add(section, "Common companion", Path.GetFileNameWithoutExtension(path));
+                    break;
+                case ".blf":
+                    Add(section, "Role", "Common Log File System base log used by Windows transaction logs.");
+                    Add(section, "Log file", Path.GetFileName(path));
+                    break;
+            }
+        }
+
+        private static void AddWindowsResourceModuleInfo(ReportSection section, string path, byte[] header, string role)
+        {
+            Add(section, "Role", role + ".");
+            Add(section, "Module", Path.GetFileName(path));
+            if (StartsWith(header, Encoding.ASCII.GetBytes("MZ")))
+                Add(section, "Container", "Windows PE/resource module");
+            var strings = FindReadableTextLines(header, 4, 80)
+                .Where(line => line.IndexOf("Microsoft", StringComparison.OrdinalIgnoreCase) >= 0 || line.IndexOf("Windows", StringComparison.OrdinalIgnoreCase) >= 0)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(8)
+                .ToArray();
+            if (strings.Length > 0)
+                Add(section, "Visible resource strings", string.Join("\r\n", strings));
+        }
+
+        private static void AddWindowsTraceInfo(ReportSection section, string path, long fileLength)
+        {
+            Add(section, "Role", "Event Trace Log captured by Event Tracing for Windows.");
+            Add(section, "Trace file", Path.GetFileName(path));
+            Add(section, "Trace size", FormatBytes(fileLength));
+            Add(section, "Common producers", "Windows Performance Recorder, boot tracing, update diagnostics, setup, and application diagnostics");
+        }
+
+        private static bool LooksLikeWindowsMinidump(string path, byte[] header)
+        {
+            var ext = Path.GetExtension(path).ToLowerInvariant();
+            return (ext == ".dmp" || ext == ".mdmp") && StartsWith(header, Encoding.ASCII.GetBytes("MDMP"));
+        }
+
+        private static void AddWindowsMinidumpInfo(ReportSection section, string path, byte[] header, long fileLength)
+        {
+            Add(section, "Role", "Windows minidump crash dump.");
+            Add(section, "Dump file", Path.GetFileName(path));
+            Add(section, "Dump size", FormatBytes(fileLength));
+            Add(section, "Header marker", "MDMP");
+            if (header.Length >= 16)
+            {
+                Add(section, "Stream count", ReadUInt32LittleEndian(header, 8).ToString(CultureInfo.InvariantCulture));
+                Add(section, "Stream directory RVA", "0x" + ReadUInt32LittleEndian(header, 12).ToString("X", CultureInfo.InvariantCulture));
+            }
+            Add(section, "Privacy note", "Crash dumps can contain local paths, module names, command lines, and fragments of process memory. Share minidump reports carefully.");
+        }
+
+        private static void AddWerInfo(ReportSection section, byte[] header)
+        {
+            var text = DecodeWindowsText(header);
+            Add(section, "Role", "Windows Error Reporting text report.");
+            Add(section, "Event type", ValueOrNotReported(FirstKeyValue(text, "EventType")));
+            Add(section, "Application", ValueOrNotReported(FirstKeyValue(text, "AppName")));
+            Add(section, "Friendly event name", ValueOrNotReported(FirstKeyValue(text, "FriendlyEventName")));
+            Add(section, "Signature fields", Regex.Matches(text, @"(?im)^Sig\[\d+\]\.", RegexOptions.CultureInvariant).Count.ToString(CultureInfo.InvariantCulture));
+            AddExampleLines(section, "Useful report lines", text, @"(?im)^(EventType|AppName|FriendlyEventName|LoadedModule\[\d+\]|OsInfo\[\d+\]\.(Name|Value))=.*$", 12);
+            Add(section, "Privacy note", "WER reports may contain local paths, module names, bucket identifiers, and diagnostic metadata.");
+        }
+
+        private static void AddMofInfo(ReportSection section, string path, byte[] header)
+        {
+            var text = DecodeWindowsText(header);
+            Add(section, "Role", Path.GetExtension(path).Equals(".mfl", StringComparison.OrdinalIgnoreCase) ? "Localized WMI MOF resource." : "WMI Managed Object Format schema/source file.");
+            Add(section, "Class declarations", Regex.Matches(text, @"(?im)^\s*class\s+\w+", RegexOptions.CultureInvariant).Count.ToString(CultureInfo.InvariantCulture));
+            Add(section, "Instance declarations", Regex.Matches(text, @"(?im)^\s*instance\s+of\s+\w+", RegexOptions.CultureInvariant).Count.ToString(CultureInfo.InvariantCulture));
+            Add(section, "Pragmas", Regex.Matches(text, @"(?im)^\s*#pragma\b", RegexOptions.CultureInvariant).Count.ToString(CultureInfo.InvariantCulture));
+            AddExampleLines(section, "Example declarations", text, @"(?im)^\s*(class\s+\w+|instance\s+of\s+\w+|#pragma\s+\w+)[^\r\n]*$", 10);
+        }
+
+        private static void AddCdxmlInfo(ReportSection section, byte[] header)
+        {
+            var text = DecodeWindowsText(header);
+            Add(section, "Role", "PowerShell cmdlet definition over CIM/WMI.");
+            Add(section, "Cmdlet elements", Regex.Matches(text, "<Cmdlet\\b", RegexOptions.IgnoreCase).Count.ToString(CultureInfo.InvariantCulture));
+            Add(section, "Class name", ValueOrNotReported(FirstXmlAttribute(text, "Class", "ClassName")));
+            Add(section, "Cmdlet adapter", ValueOrNotReported(FirstXmlAttribute(text, "PowerShellMetadata", "CmdletAdapter")));
+            AddExampleLines(section, "Example cmdlets", text, @"(?im)<Cmdlet\b[^>]*>", 10);
+        }
+
+        private static void AddPowerShellDataFileInfo(ReportSection section, byte[] header)
+        {
+            var text = DecodeWindowsText(header);
+            Add(section, "Role", "PowerShell data file or module manifest.");
+            Add(section, "Module version", ValueOrNotReported(FirstPowerShellAssignment(text, "ModuleVersion")));
+            Add(section, "Root module", ValueOrNotReported(FirstPowerShellAssignment(text, "RootModule")));
+            Add(section, "GUID", ValueOrNotReported(FirstPowerShellAssignment(text, "GUID")));
+            Add(section, "Assignments", Regex.Matches(text, @"(?im)^\s*[A-Za-z_][A-Za-z0-9_]*\s*=", RegexOptions.CultureInvariant).Count.ToString(CultureInfo.InvariantCulture));
+        }
+
+        private static void AddPowerShellModuleInfo(ReportSection section, byte[] header)
+        {
+            var text = DecodeWindowsText(header);
+            Add(section, "Role", "PowerShell script module.");
+            Add(section, "Functions", Regex.Matches(text, @"(?im)^\s*function\s+[\w:-]+", RegexOptions.CultureInvariant).Count.ToString(CultureInfo.InvariantCulture));
+            Add(section, "Classes", Regex.Matches(text, @"(?im)^\s*class\s+\w+", RegexOptions.CultureInvariant).Count.ToString(CultureInfo.InvariantCulture));
+            Add(section, "Workflows", Regex.Matches(text, @"(?im)^\s*workflow\s+[\w:-]+", RegexOptions.CultureInvariant).Count.ToString(CultureInfo.InvariantCulture));
+            AddExampleLines(section, "Example declarations", text, @"(?im)^\s*(function|class|workflow)\s+[\w:-]+", 12);
+            Add(section, "Safety note", "PowerShell code is summarized as text only. FileDentify does not run scripts or load modules.");
+        }
+
+        private static void AddPowerShellXmlInfo(ReportSection section, string path, byte[] header)
+        {
+            var text = DecodeWindowsText(header);
+            Add(section, "Role", (Path.GetFileName(path) ?? string.Empty).IndexOf("format", StringComparison.OrdinalIgnoreCase) >= 0 ? "PowerShell formatting XML." : "PowerShell type/extended data XML.");
+            Add(section, "View elements", Regex.Matches(text, "<View\\b", RegexOptions.IgnoreCase).Count.ToString(CultureInfo.InvariantCulture));
+            Add(section, "Type elements", Regex.Matches(text, "<Type\\b", RegexOptions.IgnoreCase).Count.ToString(CultureInfo.InvariantCulture));
+            Add(section, "Selection sets", Regex.Matches(text, "<SelectionSet\\b", RegexOptions.IgnoreCase).Count.ToString(CultureInfo.InvariantCulture));
+        }
+
+        private static void AddMmcInfo(ReportSection section, byte[] header)
+        {
+            var text = DecodeWindowsText(header);
+            Add(section, "Role", "Microsoft Management Console saved console/snap-in file.");
+            Add(section, "Snap-in markers", Regex.Matches(text, "SnapIn|Snap-in|Snapin", RegexOptions.IgnoreCase).Count.ToString(CultureInfo.InvariantCulture));
+            Add(section, "Console file marker", text.IndexOf("MMC_ConsoleFile", StringComparison.OrdinalIgnoreCase) >= 0 ? "Present" : "Not seen in sample");
+        }
+
+        private static void AddWinMdInfo(ReportSection section, string path, byte[] header)
+        {
+            Add(section, "Role", "Windows Runtime metadata assembly.");
+            Add(section, "Metadata file", Path.GetFileName(path));
+            if (StartsWith(header, Encoding.ASCII.GetBytes("MZ")))
+                Add(section, "Container", "PE/CLR metadata file");
+            Add(section, "Notes", "WinMD files describe Windows Runtime APIs. FileDentify identifies the metadata container and safe visible strings only; it does not load the assembly.");
+        }
+
+        private static void AddPriInfo(ReportSection section, string path, byte[] header)
+        {
+            Add(section, "Role", "Windows packaged resource index used by UWP/MSIX resources.");
+            Add(section, "Resource index", Path.GetFileName(path));
+            var visible = FindReadableTextLines(header, 4, 60)
+                .Where(line => line.IndexOf("mrm", StringComparison.OrdinalIgnoreCase) >= 0 || line.IndexOf("resource", StringComparison.OrdinalIgnoreCase) >= 0)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(8)
+                .ToArray();
+            if (visible.Length > 0)
+                Add(section, "Visible markers", string.Join("\r\n", visible));
+        }
+
+        private static void AddNlsInfo(ReportSection section, string path)
+        {
+            Add(section, "Role", "Windows National Language Support data table.");
+            Add(section, "Data file", Path.GetFileName(path));
+            var name = Path.GetFileNameWithoutExtension(path) ?? string.Empty;
+            var match = Regex.Match(name, @"^c_(\d+)$", RegexOptions.IgnoreCase);
+            if (match.Success)
+                Add(section, "Code page hint", match.Groups[1].Value);
+        }
+
+        private static void AddTrueTypeCollectionInfo(ReportSection section, string path, byte[] header)
+        {
+            Add(section, "Role", "TrueType/OpenType font collection containing multiple font faces.");
+            Add(section, "Font collection", Path.GetFileName(path));
+            if (header.Length >= 12)
+            {
+                Add(section, "TTC version", ReadUInt16BigEndian(header, 4).ToString(CultureInfo.InvariantCulture) + "." + ReadUInt16BigEndian(header, 6).ToString(CultureInfo.InvariantCulture));
+                Add(section, "Font count", ReadUInt32BigEndian(header, 8).ToString(CultureInfo.InvariantCulture));
+            }
+        }
+
+        private static void AddSpeechGrammarInfo(ReportSection section, byte[] header)
+        {
+            var text = DecodeWindowsText(header);
+            Add(section, "Role", "Speech Recognition Grammar Specification XML.");
+            Add(section, "Rules", Regex.Matches(text, "<rule\\b", RegexOptions.IgnoreCase).Count.ToString(CultureInfo.InvariantCulture));
+            Add(section, "Items", Regex.Matches(text, "<item\\b", RegexOptions.IgnoreCase).Count.ToString(CultureInfo.InvariantCulture));
+            Add(section, "Choices", Regex.Matches(text, "<one-of\\b", RegexOptions.IgnoreCase).Count.ToString(CultureInfo.InvariantCulture));
+        }
+
+        private static void AddWprProfileInfo(ReportSection section, byte[] header)
+        {
+            var text = DecodeWindowsText(header);
+            Add(section, "Role", "Windows Performance Recorder profile XML.");
+            Add(section, "Profiles", Regex.Matches(text, "<Profile\\b", RegexOptions.IgnoreCase).Count.ToString(CultureInfo.InvariantCulture));
+            Add(section, "Collectors", Regex.Matches(text, "<SystemCollector\\b|<EventCollector\\b", RegexOptions.IgnoreCase).Count.ToString(CultureInfo.InvariantCulture));
+            Add(section, "Providers", Regex.Matches(text, "<EventProvider\\b", RegexOptions.IgnoreCase).Count.ToString(CultureInfo.InvariantCulture));
+        }
+
+        private static void AddProvisioningPackageInfo(ReportSection section, string path, byte[] header)
+        {
+            Add(section, "Role", "Windows provisioning package for applying device/account/settings configuration.");
+            Add(section, "Package", Path.GetFileName(path));
+            if (IsZipHeader(header))
+                Add(section, "Container", "ZIP-compatible package");
+            Add(section, "Safety note", "Provisioning packages can change Windows settings when applied. FileDentify only identifies the package.");
+        }
+
+        private static void AddProvisioningXmlInfo(ReportSection section, byte[] header)
+        {
+            var text = DecodeWindowsText(header);
+            Add(section, "Role", "Windows provisioning XML configuration.");
+            Add(section, "Characteristic elements", Regex.Matches(text, "<characteristic\\b", RegexOptions.IgnoreCase).Count.ToString(CultureInfo.InvariantCulture));
+            Add(section, "Parm elements", Regex.Matches(text, "<parm\\b", RegexOptions.IgnoreCase).Count.ToString(CultureInfo.InvariantCulture));
+        }
+
+        private static void AddDeviceMetadataInfo(ReportSection section, string path, byte[] header)
+        {
+            Add(section, "Role", "Windows device metadata package.");
+            Add(section, "Package", Path.GetFileName(path));
+            if (IsZipHeader(header))
+                Add(section, "Container", "ZIP-compatible metadata package");
+            Add(section, "Common contents", "DeviceInformation.xml, PackageInfo.xml, icons, and device experience metadata");
+        }
+
+        private static void AddPostScriptPrinterInfo(ReportSection section, byte[] header)
+        {
+            var text = DecodeWindowsText(header);
+            Add(section, "Role", "PostScript Printer Description text file.");
+            Add(section, "Product", ValueOrNotReported(FirstPpdValue(text, "Product")));
+            Add(section, "Language level", ValueOrNotReported(FirstPpdValue(text, "LanguageLevel")));
+            Add(section, "Nick name", ValueOrNotReported(FirstPpdValue(text, "NickName")));
+        }
+
+        private static string FirstKeyValue(string text, string key)
+        {
+            var match = Regex.Match(text ?? string.Empty, @"(?im)^" + Regex.Escape(key) + @"=(.*)$", RegexOptions.CultureInvariant);
+            return match.Success ? CleanMetadataText(match.Groups[1].Value.Trim()) : string.Empty;
+        }
+
+        private static string FirstPowerShellAssignment(string text, string key)
+        {
+            var match = Regex.Match(text ?? string.Empty, @"(?im)^\s*" + Regex.Escape(key) + @"\s*=\s*['""]?([^'"",\r\n#]+)", RegexOptions.CultureInvariant);
+            return match.Success ? CleanMetadataText(match.Groups[1].Value.Trim()) : string.Empty;
+        }
+
+        private static string FirstPpdValue(string text, string key)
+        {
+            var match = Regex.Match(text ?? string.Empty, @"(?im)^\*" + Regex.Escape(key) + @":\s*(.*)$", RegexOptions.CultureInvariant);
+            return match.Success ? CleanMetadataText(match.Groups[1].Value.Trim().Trim('"')) : string.Empty;
         }
 
         private static bool LooksLikeWindowsFon(byte[] header)

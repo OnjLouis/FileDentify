@@ -63,27 +63,35 @@ namespace FileDentify
             if (type == null && !hasSteinbergText)
                 return;
 
-            var section = AddSection(sections, "Steinberg Cubase");
-            Add(section, "Format hint", type ?? "Steinberg/Cubase-related readable markers found");
-            Add(section, "Detection basis", type != null ? "Known Steinberg/Cubase-related extension, plus sampled readable strings where available." : "Steinberg/Cubase-related readable strings found in sampled data.");
-            Add(section, "Compatibility note", ".all and .arr are classic Cubase song/arrangement formats. They usually need an old Cubase conversion path before modern Cubase project formats can use them.");
+            var isKnownProjectOrPreset = type != null;
+            var isVstDll = type == null && ext == ".dll" && strings.Any(s => s.IndexOf("VST", StringComparison.OrdinalIgnoreCase) >= 0);
+            var section = AddSection(sections, isVstDll ? "Steinberg/VST" : "Steinberg Cubase");
+            Add(section, "Format hint", type ?? (isVstDll ? "Windows VST plug-in or Steinberg SDK marker" : "Steinberg/Cubase-related readable markers found"));
+            Add(section, "Detection basis", type != null ? "Known Steinberg/Cubase-related extension, plus sampled readable strings where available." : (isVstDll ? "VST/Steinberg SDK readable strings found in sampled data." : "Steinberg/Cubase-related readable strings found in sampled data."));
+            if (ext == ".all" || ext == ".arr")
+                Add(section, "Compatibility note", ".all and .arr are classic Cubase song/arrangement formats. They usually need an old Cubase conversion path before modern Cubase project formats can use them.");
 
             AddVstPresetHeaderInfo(section, path, data);
 
             AddCategory(section, "Driver or audio system strings", strings, "ASIO", "DirectX", "MME", "MIDI", "VST");
-            AddCategory(section, "Cubase or Steinberg markers", strings, "Cubase", "Nuendo", "Steinberg", "VST", "ASIO");
-            AddCategory(section, "MIDI edit commands", strings, "Delete Notes", "DelShrtNotes", "Random Notes", "Fix Velocity", "Random Velo", "FadeOutVelo", "Push Forward", "Push Back", "Double Tempo", "Half Tempo");
-            AddCategory(section, "Drum map names", strings, "BassDrum", "Bass Drum", "Snare", "HiHat", "Tom", "Conga", "Bongo", "Agogo", "Cuica", "Guiro", "Cymbl", "Ride", "Hand Clap", "Side Stick");
-            AddCategory(section, "Effect and room preset names", strings, "Chorus", "Flanger", "Leslie", "Hall", "Room", "Delay", "Reverb", "Flimmer", "12-String");
-            AddCategory(section, "Groove or quantize names", strings, "Groove", "Tuplet", "Shuf", "Randm", "Tlet");
-            AddCategory(section, "Font or UI strings", strings, "Courier", "Times New Roman", "Arial", "Font");
-            AddCategory(section, "Possible track or part names", strings, "*", "Melodie", "Cue", "Master", "VOL", "pan");
+            AddCategory(section, isVstDll ? "VST or Steinberg markers" : "Cubase or Steinberg markers", strings, "Cubase", "Nuendo", "Steinberg", "VST", "ASIO");
+            if (isKnownProjectOrPreset)
+            {
+                AddCategory(section, "MIDI edit commands", strings, "Delete Notes", "DelShrtNotes", "Random Notes", "Fix Velocity", "Random Velo", "FadeOutVelo", "Push Forward", "Push Back", "Double Tempo", "Half Tempo");
+                AddCategory(section, "Drum map names", strings, "BassDrum", "Bass Drum", "Snare", "HiHat", "Tom", "Conga", "Bongo", "Agogo", "Cuica", "Guiro", "Cymbl", "Ride", "Hand Clap", "Side Stick");
+                AddCategory(section, "Effect and room preset names", strings, "Chorus", "Flanger", "Leslie", "Hall", "Room", "Delay", "Reverb", "Flimmer", "12-String");
+                AddCategory(section, "Groove or quantize names", strings, "Groove", "Tuplet", "Shuf", "Randm", "Tlet");
+                AddCategory(section, "Font or UI strings", strings, "Courier", "Times New Roman", "Arial", "Font");
+                AddCategory(section, "Possible track or part names", strings, "Melodie", "Cue", "Master", "VOL", "pan");
+            }
 
             var markers = strings.Where(IsCubaseMarker).Distinct(StringComparer.OrdinalIgnoreCase).Take(40).ToArray();
             if (markers.Length > 0)
                 Add(section, "Internal marker preview", string.Join("\r\n", markers));
 
-            Add(section, "Notes", "Steinberg project formats are proprietary. FileDentify reports extension-level identity and readable project clues from sampled strings, not a full project parse.");
+            Add(section, "Notes", isKnownProjectOrPreset
+                ? "Steinberg project and preset formats are proprietary. FileDentify reports extension-level identity and readable project or preset clues from sampled strings, not a full project parse."
+                : "Many Windows audio plug-ins contain Steinberg VST SDK strings. FileDentify reports those visible markers only; it does not load the plug-in or treat the DLL as a Cubase project.");
         }
 
         private static void AddVstPresetHeaderInfo(ReportSection section, string path, byte[] data)

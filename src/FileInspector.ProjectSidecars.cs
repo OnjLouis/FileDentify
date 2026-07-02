@@ -17,6 +17,8 @@ namespace FileDentify
             if (IsProToolsOverview(path)) return "Pro Tools waveform overview sidecar";
             if (IsMoonShellAsset(path, header)) return MoonShellTypeName(path, header);
             if (IsIKaossilatorFile(path)) return "Korg iKaossilator project/index data";
+            if (IsAbletonAnalysisFile(path)) return "Ableton audio analysis sidecar";
+            if (IsLogicUndoFile(path)) return "Logic Pro undo history sidecar";
             if (ext == ".logikcs") return "Logic Pro key commands";
             return null;
         }
@@ -29,6 +31,10 @@ namespace FileDentify
                 AddMoonShellInfo(sections, path, header, stringSample, fileLength);
             if (IsIKaossilatorFile(path))
                 AddIKaossilatorInfo(sections, path, stringSample, fileLength);
+            if (IsAbletonAnalysisFile(path))
+                AddAbletonAnalysisInfo(sections, path, header, stringSample, fileLength);
+            if (IsLogicUndoFile(path))
+                AddLogicUndoInfo(sections, path, header, stringSample, fileLength);
             if (Path.GetExtension(path).Equals(".logikcs", StringComparison.OrdinalIgnoreCase))
                 AddLogicKeyCommandsInfo(sections, path, stringSample);
         }
@@ -184,6 +190,82 @@ namespace FileDentify
             if (commandCount > 0)
                 Add(section, "Visible plist key count", commandCount.ToString(CultureInfo.InvariantCulture));
             Add(section, "Notes", "Logic key-command files are property-list based shortcut/configuration exports. FileDentify reports structure only; it does not import or change Logic settings.");
+        }
+
+        private static bool IsAbletonAnalysisFile(string path)
+        {
+            return Path.GetExtension(path).Equals(".asd", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static void AddAbletonAnalysisInfo(List<ReportSection> sections, string path, byte[] header, byte[] stringSample, long fileLength)
+        {
+            var section = AddSection(sections, "Ableton");
+            Add(section, "Format hint", "Ableton audio analysis sidecar");
+            Add(section, "Companion audio", AbletonAnalysisCompanionName(path));
+            Add(section, "File size", FormatBytes(fileLength));
+            var projectContext = ProjectContextFolder(path, ".als", ".ablbundle", ".logicx");
+            if (!string.IsNullOrWhiteSpace(projectContext))
+                Add(section, "Project context", projectContext);
+            var strings = FindAsciiStrings(stringSample, 4, 80)
+                .Select(item => item.Value.Trim())
+                .Where(value => value.IndexOf("Ableton", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    value.EndsWith(".wav", StringComparison.OrdinalIgnoreCase) ||
+                    value.EndsWith(".aif", StringComparison.OrdinalIgnoreCase) ||
+                    value.EndsWith(".aiff", StringComparison.OrdinalIgnoreCase))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(12)
+                .ToArray();
+            if (strings.Length > 0)
+                Add(section, "Visible sidecar strings", string.Join(Environment.NewLine, strings));
+            Add(section, "Notes", "Ableton .asd files are analysis/warp/cache sidecars generated beside audio used by Live projects. They are useful project metadata, but the original audio is normally the file name before .asd. FileDentify reports role and visible references only.");
+        }
+
+        private static string AbletonAnalysisCompanionName(string path)
+        {
+            var name = Path.GetFileName(path);
+            return name.EndsWith(".asd", StringComparison.OrdinalIgnoreCase)
+                ? name.Substring(0, name.Length - 4)
+                : name;
+        }
+
+        private static bool IsLogicUndoFile(string path)
+        {
+            return Path.GetExtension(path).Equals(".undo", StringComparison.OrdinalIgnoreCase) &&
+                (path.IndexOf(".logicx", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 path.IndexOf("\\Undo Data", StringComparison.OrdinalIgnoreCase) >= 0);
+        }
+
+        private static void AddLogicUndoInfo(List<ReportSection> sections, string path, byte[] header, byte[] stringSample, long fileLength)
+        {
+            var section = AddSection(sections, "Logic Pro");
+            Add(section, "Format hint", "Logic Pro undo history sidecar");
+            Add(section, "File size", FormatBytes(fileLength));
+            Add(section, "Project context", ProjectContextFolder(path, ".logicx"));
+            var strings = FindAsciiStrings(stringSample, 4, 80)
+                .Select(item => item.Value.Trim())
+                .Where(value => value.IndexOf("Logic", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    value.IndexOf("Track", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    value.IndexOf("Region", StringComparison.OrdinalIgnoreCase) >= 0)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(12)
+                .ToArray();
+            if (strings.Length > 0)
+                Add(section, "Visible undo strings", string.Join(Environment.NewLine, strings));
+            Add(section, "Notes", "Logic Pro .undo files are internal undo-history sidecars inside a .logicx package. They help Logic restore editing state; FileDentify identifies the role without attempting to replay or parse the project edit history.");
+        }
+
+        private static string ProjectContextFolder(string path, params string[] markers)
+        {
+            var parts = path.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            for (var i = parts.Length - 1; i >= 0; i--)
+            {
+                foreach (var marker in markers ?? new string[0])
+                {
+                    if (parts[i].EndsWith(marker, StringComparison.OrdinalIgnoreCase))
+                        return string.Join(Path.DirectorySeparatorChar.ToString(), parts.Take(i + 1).ToArray());
+                }
+            }
+            return string.Empty;
         }
 
         private static string NearestNamedFolder(string path, string folderName)

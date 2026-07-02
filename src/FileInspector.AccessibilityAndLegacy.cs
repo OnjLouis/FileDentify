@@ -14,6 +14,8 @@ namespace FileDentify
             var ext = Path.GetExtension(path).ToLowerInvariant();
             if ((ext == ".ctb" || ext == ".utb" || ext == ".uti" || ext == ".cti" || ext == ".dis" || ext == ".tbl") && LooksLikeLiblouisTable(path, header))
                 return "liblouis braille translation table";
+            if (LooksLikeLegacyJawsFile(path, header))
+                return "Legacy JAWS for DOS support file";
             return null;
         }
 
@@ -21,6 +23,12 @@ namespace FileDentify
         {
             if (AccessibilityDataTypeName(path, header) == null)
                 return;
+
+            if (LooksLikeLegacyJawsFile(path, header))
+            {
+                AddLegacyJawsInfo(sections, path, header);
+                return;
+            }
 
             var text = DecodeTextSample(header, 512 * 1024);
             var lines = text.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
@@ -41,6 +49,34 @@ namespace FileDentify
             Add(section, "Notes", "liblouis tables define braille translation, display, contraction, and include rules. FileDentify reports table identity and sampled structure only; it does not compile or validate the table.");
         }
 
+        private static bool LooksLikeLegacyJawsFile(string path, byte[] header)
+        {
+            var ext = Path.GetExtension(path).ToLowerInvariant();
+            if (ext != ".jnf" && ext != ".jrf")
+                return false;
+            var text = DecodeTextSample(header, 8192);
+            return path.IndexOf("\\JAWS\\", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                text.IndexOf("JAWS NAME FILE", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                text.IndexOf("Freeware", StringComparison.OrdinalIgnoreCase) >= 0 && text.IndexOf("JAWS", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static void AddLegacyJawsInfo(List<ReportSection> sections, string path, byte[] header)
+        {
+            var section = AddSection(sections, "Accessibility data");
+            var ext = Path.GetExtension(path).ToLowerInvariant();
+            Add(section, "Format hint", ext == ".jnf" ? "Legacy JAWS for DOS name file" : "Legacy JAWS for DOS resource/freeware file");
+            Add(section, "File name", Path.GetFileName(path));
+            Add(section, "Role", ext == ".jnf" ? "Name/label support file used by old JAWS configurations." : "Legacy support/resource text used by old JAWS environments.");
+            var visible = FindReadableTextLines(header, 4, 80)
+                .Where(line => line.Any(char.IsLetterOrDigit))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(16)
+                .ToArray();
+            if (visible.Length > 0)
+                Add(section, "Visible strings", string.Join(Environment.NewLine, visible));
+            Add(section, "Notes", "These files belong to old JAWS screen-reader environments, especially DOS-era setups. FileDentify reports visible labels and role clues only; it does not load scripts or change screen-reader settings.");
+        }
+
         private static string LegacyAppResourceTypeName(string path, byte[] header)
         {
             var ext = Path.GetExtension(path).ToLowerInvariant();
@@ -54,6 +90,8 @@ namespace FileDentify
                 return "Microsoft Chat Comic Art avatar";
             if (ext == ".hal" && DecodeTextSample(header, 4096).IndexOf("\\013", StringComparison.OrdinalIgnoreCase) >= 0)
                 return "HAL speech mapping data";
+            if (LooksLikeVlcSkinCatalog(path, header))
+                return "VLC skin catalog";
             return null;
         }
 
@@ -102,8 +140,24 @@ namespace FileDentify
                 if (entries.Length > 0)
                     Add(section, "Sample mappings", string.Join(Environment.NewLine, entries));
             }
+            else if (type == "VLC skin catalog")
+            {
+                var text = DecodeTextSample(header, 128 * 1024);
+                Add(section, "Application", "VLC media player");
+                Add(section, "Catalog entries in sample", CountToken(text, "<Theme").ToString(CultureInfo.InvariantCulture));
+                Add(section, "DTD marker", text.IndexOf("VLC Skins V2.0", StringComparison.OrdinalIgnoreCase) >= 0 ? "VLC Skins V2.0" : "Not seen in sample");
+            }
 
             Add(section, "Notes", "These are support files for older apps and devices such as Rockbox firmware plug-ins, Winamp/MilkDrop visualisation resources, Microsoft Chat avatar art, or HAL screen-reader speech mappings. FileDentify reports visible structure and role clues only; it does not execute plug-ins, scripts, avatars, or speech mappings.");
+        }
+
+        private static bool LooksLikeVlcSkinCatalog(string path, byte[] header)
+        {
+            if (!Path.GetExtension(path).Equals(".catalog", StringComparison.OrdinalIgnoreCase))
+                return false;
+            var text = DecodeTextSample(header, 8192);
+            return text.IndexOf("VideoLAN", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                text.IndexOf("VLC Skins", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         private static bool LooksLikeLiblouisTable(string path, byte[] header)

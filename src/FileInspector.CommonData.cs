@@ -14,7 +14,12 @@ namespace FileDentify
         {
             var ext = Path.GetExtension(path).ToLowerInvariant();
             if (LooksLikeRtf(header)) return "Rich Text Format document";
+            if (LooksLikeSqliteDatabase(path, header)) return "SQLite database";
             if (LooksLikeMicrosoftJetDatabase(header)) return "Microsoft Access/Jet database";
+            if (LooksLikeFirebirdDatabase(path, header)) return "Firebird database";
+            if (LooksLikeFits(path, header)) return "FITS scientific data file";
+            if (LooksLikeIccProfile(path, header)) return "ICC color profile";
+            if (LooksLikeEmbeddedOpenType(path, header)) return "Embedded OpenType web font";
             if (ext == ".aff" && LooksLikeText(header)) return "Hunspell/MySpell affix dictionary";
             if (ext == ".dic" && LooksLikeText(header)) return DictionaryFormatHint(path, header);
             if (ext == ".dic" && PathLooksWindowsInputMethodDictionary(path)) return "Windows input-method dictionary";
@@ -27,7 +32,12 @@ namespace FileDentify
         {
             AddRtfInfo(sections, path, header, sample, fileLength);
             AddDictionaryInfo(sections, path, header, sample, fileLength);
+            AddSqliteDatabaseInfo(sections, path, header, sample, fileLength);
             AddJetDatabaseInfo(sections, path, header, sample, fileLength);
+            AddFirebirdDatabaseInfo(sections, path, header, sample, fileLength);
+            AddFitsInfo(sections, path, header, sample, fileLength);
+            AddIccProfileInfo(sections, path, header, fileLength);
+            AddEmbeddedOpenTypeInfo(sections, path, header, fileLength);
             AddTypeLibraryInfo(sections, path, header, sample, fileLength);
             AddPostScriptFontSupportInfo(sections, path, header, sample, fileLength);
         }
@@ -127,6 +137,73 @@ namespace FileDentify
             return header.Length >= 20 && Encoding.ASCII.GetString(header, 4, 15).Equals("Standard Jet DB", StringComparison.Ordinal);
         }
 
+        private static bool LooksLikeSqliteDatabase(string path, byte[] header)
+        {
+            if (StartsWith(header, Encoding.ASCII.GetBytes("SQLite format 3\0")))
+                return true;
+
+            var ext = Path.GetExtension(path).ToLowerInvariant();
+            return ext == ".sqlite" || ext == ".sqlite3" || ext == ".db3";
+        }
+
+        private static bool IsSqliteDatabaseExtension(string extension)
+        {
+            var ext = (extension ?? string.Empty).ToLowerInvariant();
+            return ext == ".sqlite" || ext == ".sqlite3" || ext == ".db" || ext == ".db3";
+        }
+
+        private static void AddSqliteDatabaseInfo(List<ReportSection> sections, string path, byte[] header, byte[] sample, long fileLength)
+        {
+            if (!LooksLikeSqliteDatabase(path, header))
+                return;
+
+            var section = AddSection(sections, "Database");
+            Add(section, "Format hint", "SQLite database");
+            Add(section, "Header marker", StartsWith(header, Encoding.ASCII.GetBytes("SQLite format 3\0")) ? "SQLite format 3" : "Extension-level SQLite family hint");
+            Add(section, "File size", FormatBytes(fileLength));
+            Add(section, "Likely role", SqliteDatabaseRole(path));
+
+            var visible = FindReadableTextLines(sample, 3, 120)
+                .Where(IsUsefulSqliteVisibleString)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(24)
+                .ToArray();
+            if (visible.Length > 0)
+                Add(section, "Visible schema or metadata strings", string.Join("\r\n", visible));
+
+            Add(section, "Notes", "SQLite files commonly use .sqlite, .sqlite3, .db, or .db3 extensions. FileDentify reports the database container and visible schema strings only; it does not open tables, run queries, or extract records.");
+        }
+
+        private static string SqliteDatabaseRole(string path)
+        {
+            var lower = path.ToLowerInvariant();
+            if (lower.Contains("favorites"))
+                return "Favorites/bookmark catalogue or application preference database";
+            if (lower.Contains("cache"))
+                return "Application cache database";
+            if (lower.Contains("history"))
+                return "History database";
+            if (lower.Contains("cookies"))
+                return "Cookie database";
+            if (lower.Contains("places.sqlite"))
+                return "Firefox/Mozilla places history and bookmarks database";
+            if (lower.Contains("manifest.db"))
+                return "Apple mobile-backup manifest database";
+            return "Application database or catalogue";
+        }
+
+        private static bool IsUsefulSqliteVisibleString(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return false;
+            return value.IndexOf("CREATE TABLE", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                value.IndexOf("CREATE INDEX", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                value.IndexOf("sqlite_", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                value.IndexOf("table", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                value.IndexOf("index", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                value.IndexOf("schema", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
         private static void AddJetDatabaseInfo(List<ReportSection> sections, string path, byte[] header, byte[] sample, long fileLength)
         {
             if (!LooksLikeMicrosoftJetDatabase(header))
@@ -147,6 +224,115 @@ namespace FileDentify
             if (names.Length > 0)
                 Add(section, "Visible object/table names", string.Join("\r\n", names));
             Add(section, "Notes", "FileDentify reports Jet database header and visible names only. It does not open tables, run queries, or extract records.");
+        }
+
+        private static bool LooksLikeFirebirdDatabase(string path, byte[] header)
+        {
+            if (!Path.GetExtension(path).Equals(".fdb", StringComparison.OrdinalIgnoreCase))
+                return false;
+            return header.Length >= 32 && header[0] == 0x01 && header[4] == 0x1D;
+        }
+
+        private static void AddFirebirdDatabaseInfo(List<ReportSection> sections, string path, byte[] header, byte[] sample, long fileLength)
+        {
+            if (!LooksLikeFirebirdDatabase(path, header))
+                return;
+            var section = AddSection(sections, "Database");
+            Add(section, "Format hint", "Firebird database");
+            Add(section, "File size", FormatBytes(fileLength));
+            Add(section, "Likely role", Path.GetFileName(path).Equals("security3.fdb", StringComparison.OrdinalIgnoreCase) ? "Firebird security database" : "Firebird application database");
+            var strings = FindReadableTextLines(sample, 4, 100)
+                .Where(value => value.IndexOf("RDB$", StringComparison.OrdinalIgnoreCase) >= 0 || value.IndexOf("Firebird", StringComparison.OrdinalIgnoreCase) >= 0 || value.IndexOf("SQL", StringComparison.OrdinalIgnoreCase) >= 0)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(20)
+                .ToArray();
+            if (strings.Length > 0)
+                Add(section, "Visible database strings", string.Join("\r\n", strings));
+            Add(section, "Notes", "Firebird .fdb files are relational databases used by Firebird and bundled applications such as LibreOffice Base support files. FileDentify reports the container role and safe visible strings only; it does not open tables, run queries, or extract records.");
+        }
+
+        private static bool LooksLikeFits(string path, byte[] header)
+        {
+            return Path.GetExtension(path).Equals(".fits", StringComparison.OrdinalIgnoreCase) &&
+                StartsWith(header, Encoding.ASCII.GetBytes("SIMPLE  ="));
+        }
+
+        private static void AddFitsInfo(List<ReportSection> sections, string path, byte[] header, byte[] sample, long fileLength)
+        {
+            if (!LooksLikeFits(path, header))
+                return;
+            var section = AddSection(sections, "Scientific data");
+            Add(section, "Format hint", "FITS scientific/astronomy data file");
+            Add(section, "File size", FormatBytes(fileLength));
+            var text = Encoding.ASCII.GetString(sample.Take(Math.Min(sample.Length, 64 * 1024)).ToArray());
+            var cards = FitsCards(text).ToArray();
+            foreach (var key in new[] { "BITPIX", "NAXIS", "NAXIS1", "NAXIS2", "EXTEND", "BSCALE", "BZERO" })
+                AddFitsCard(section, cards, key);
+            Add(section, "Header cards in sample", cards.Count(card => Regex.IsMatch(card, @"^[A-Z0-9_-]{1,8}\s*=")).ToString(CultureInfo.InvariantCulture));
+            Add(section, "Notes", "FITS files are scientific data containers common in astronomy and numerical libraries. FileDentify reports header cards only; it does not render images or parse data tables.");
+        }
+
+        private static IEnumerable<string> FitsCards(string text)
+        {
+            text = text ?? string.Empty;
+            for (var offset = 0; offset + 80 <= text.Length; offset += 80)
+                yield return text.Substring(offset, 80);
+        }
+
+        private static void AddFitsCard(ReportSection section, IEnumerable<string> cards, string key)
+        {
+            var match = (cards ?? Enumerable.Empty<string>())
+                .Select(card => Regex.Match(card, "^" + Regex.Escape(key).PadRight(8) + @"=\s*(?<value>[^/]+)"))
+                .FirstOrDefault(item => item.Success);
+            if (match != null && match.Success)
+                Add(section, key, match.Groups["value"].Value.Trim());
+        }
+
+        private static bool LooksLikeIccProfile(string path, byte[] header)
+        {
+            if (!Path.GetExtension(path).Equals(".icc", StringComparison.OrdinalIgnoreCase) && !Path.GetExtension(path).Equals(".icm", StringComparison.OrdinalIgnoreCase))
+                return false;
+            return header.Length >= 40 && Encoding.ASCII.GetString(header, 36, 4) == "acsp";
+        }
+
+        private static void AddIccProfileInfo(List<ReportSection> sections, string path, byte[] header, long fileLength)
+        {
+            if (!LooksLikeIccProfile(path, header))
+                return;
+            var section = AddSection(sections, "Color profile");
+            Add(section, "Format hint", "ICC color profile");
+            Add(section, "File size", FormatBytes(fileLength));
+            if (header.Length >= 24)
+            {
+                Add(section, "Profile/device class", Encoding.ASCII.GetString(header, 12, 4).Trim());
+                Add(section, "Color space", Encoding.ASCII.GetString(header, 16, 4).Trim());
+                Add(section, "PCS", Encoding.ASCII.GetString(header, 20, 4).Trim());
+            }
+            Add(section, "Header marker", "acsp");
+            Add(section, "Notes", "ICC/ICM profiles describe color-management transforms for displays, printers, scanners, PDFs, and image workflows. FileDentify reports header fields only; it does not apply or validate the profile.");
+        }
+
+        private static bool LooksLikeEmbeddedOpenType(string path, byte[] header)
+        {
+            if (!Path.GetExtension(path).Equals(".eot", StringComparison.OrdinalIgnoreCase))
+                return false;
+            return header.Length >= 36 && header[34] == (byte)'L' && header[35] == (byte)'P';
+        }
+
+        private static void AddEmbeddedOpenTypeInfo(List<ReportSection> sections, string path, byte[] header, long fileLength)
+        {
+            if (!LooksLikeEmbeddedOpenType(path, header))
+                return;
+            var section = AddSection(sections, "Font");
+            Add(section, "Format", "Embedded OpenType web font");
+            Add(section, "File size", FormatBytes(fileLength));
+            if (header.Length >= 8)
+            {
+                Add(section, "EOT size field", FormatBytes(ReadUInt32LittleEndian(header, 0)));
+                Add(section, "Embedded font size field", FormatBytes(ReadUInt32LittleEndian(header, 4)));
+            }
+            Add(section, "Header marker", "LP at EOT header font-data offset");
+            Add(section, "Notes", "Embedded OpenType .eot files are legacy web fonts, mainly associated with older Internet Explorer workflows. FileDentify reports header fields only; it does not render or install the font.");
         }
 
         private static bool LooksLikeTypeLibrary(string path, byte[] header)

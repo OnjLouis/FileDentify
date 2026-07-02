@@ -37,6 +37,8 @@ namespace FileDentify
                 return OtherNvdaSpeechEngineTypeName(path, header);
             if (LooksLikeScanSoftRealSpeakMobile(path, header))
                 return "ScanSoft RealSpeak Mobile speech data";
+            if (LooksLikeModelTalkerData(path, header))
+                return "ModelTalker speech data";
             if (LooksLikeMicrosoftSpeechVoice(path, header))
                 return MicrosoftSpeechVoiceTypeName(path, header);
             if (LooksLikeAcapelaVoicePath(path))
@@ -46,6 +48,8 @@ namespace FileDentify
                     return "Acapela voice data";
                 if (acapelaExt == ".nuul216")
                     return "Acapela voice support data";
+                if (acapelaExt == ".clb")
+                    return "Acapela/Infovox speech library module";
             }
             if (!LooksLikePiperVoicePath(path))
                 return null;
@@ -94,6 +98,12 @@ namespace FileDentify
                 return;
             }
 
+            if (LooksLikeModelTalkerData(path, header))
+            {
+                AddModelTalkerInfo(section, path, header);
+                return;
+            }
+
             if (LooksLikeSuperTonicSpeechData(path, header) ||
                 LooksLikeOrpheusSpeechData(path, header) ||
                 LooksLikeEloquenceOrIbmTtsData(path, header) ||
@@ -121,6 +131,8 @@ namespace FileDentify
             if (LooksLikeAcapelaVoicePath(path))
             {
                 Add(section, "Voice family", SegmentAfter(path, "Engines"));
+                if (Path.GetExtension(path).Equals(".clb", StringComparison.OrdinalIgnoreCase) && StartsWith(header, Encoding.ASCII.GetBytes("MZ")))
+                    Add(section, "Container", "Windows PE library/module");
                 Add(section, "Notes", "Acapela voice packages are commercial text-to-speech voice assets used by screen readers, assistive software, and embedded speech products. FileDentify reports the voice folder, role, and size so large speech-engine assets are easier to recognise without decoding them.");
                 return;
             }
@@ -174,7 +186,32 @@ namespace FileDentify
                 return OtherNvdaSpeechEngineRole(path, header);
             if (LooksLikeScanSoftRealSpeakMobile(path, header))
                 return "mobile TTS engine or voice header";
+            if (LooksLikeModelTalkerData(path, header))
+                return "voice codebook or model support file";
             return PiperVoiceRole(path);
+        }
+
+        private static bool LooksLikeModelTalkerData(string path, byte[] header)
+        {
+            if (!Path.GetExtension(path).Equals(".cbk", StringComparison.OrdinalIgnoreCase))
+                return false;
+            var text = DecodeTextSample(header, 8192);
+            return path.IndexOf("\\modeltalker\\", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                text.IndexOf("Default name", StringComparison.OrdinalIgnoreCase) >= 0 && text.IndexOf("Page 0", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static void AddModelTalkerInfo(ReportSection section, string path, byte[] header)
+        {
+            Add(section, "Voice system", "ModelTalker");
+            Add(section, "Voice folder", ParentName(path));
+            var strings = FindReadableTextLines(header, 3, 80)
+                .Where(line => line.Any(char.IsLetterOrDigit))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(12)
+                .ToArray();
+            if (strings.Length > 0)
+                Add(section, "Visible labels", string.Join(Environment.NewLine, strings));
+            Add(section, "Notes", "ModelTalker files are text-to-speech voice assets. FileDentify reports file role and visible labels only; it does not synthesize speech or decode proprietary voice data.");
         }
 
         private static bool LooksLikeScanSoftRealSpeakMobile(string path, byte[] header)
@@ -1206,8 +1243,10 @@ namespace FileDentify
         private static bool LooksLikeAcapelaVoicePath(string path)
         {
             var ext = Path.GetExtension(path);
-            return path.IndexOf("\\Acapela\\Engines\\", StringComparison.OrdinalIgnoreCase) >= 0 &&
-                (ext.Equals(".qvcu", StringComparison.OrdinalIgnoreCase) || ext.Equals(".nuul216", StringComparison.OrdinalIgnoreCase));
+            return path.IndexOf("\\Acapela\\", StringComparison.OrdinalIgnoreCase) >= 0 &&
+                (ext.Equals(".qvcu", StringComparison.OrdinalIgnoreCase) ||
+                 ext.Equals(".nuul216", StringComparison.OrdinalIgnoreCase) ||
+                 ext.Equals(".clb", StringComparison.OrdinalIgnoreCase));
         }
 
         private static string AcapelaVoiceRole(string path)
@@ -1217,6 +1256,8 @@ namespace FileDentify
                 return Path.GetFileName(path).IndexOf("extras", StringComparison.OrdinalIgnoreCase) >= 0 ? "extra voice data" : "main voice data";
             if (ext.Equals(".nuul216", StringComparison.OrdinalIgnoreCase))
                 return "compiled voice support/index data";
+            if (ext.Equals(".clb", StringComparison.OrdinalIgnoreCase))
+                return "speech library module";
             return "voice data";
         }
 

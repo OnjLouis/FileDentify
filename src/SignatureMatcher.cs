@@ -269,7 +269,8 @@ namespace FileDentify
             if (vmware != null)
                 yield return new ReportItem { Title = "VMware metadata extension", Detail = vmware };
             if (string.Equals(Path.GetExtension(path), ".qvcu", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(Path.GetExtension(path), ".nuul216", StringComparison.OrdinalIgnoreCase))
+                string.Equals(Path.GetExtension(path), ".nuul216", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(Path.GetExtension(path), ".clb", StringComparison.OrdinalIgnoreCase) && path.IndexOf("Acapela", StringComparison.OrdinalIgnoreCase) >= 0)
                 yield return new ReportItem { Title = "Acapela voice extension", Detail = "Acapela speech voice data" };
             var speechVoice = SpeechVoiceExtensionDescription(path, data);
             if (speechVoice != null)
@@ -359,6 +360,9 @@ namespace FileDentify
                 case ".srm": return "SRAM game save data";
                 case ".ssd": return "BBC Micro single-sided disk image";
                 case ".uef": return "BBC Micro UEF tape/state file";
+                case ".abm":
+                case ".cbl":
+                    return path.IndexOf("\\BeebEm\\", StringComparison.OrdinalIgnoreCase) >= 0 ? "BBC Micro / Torch MCP program image" : null;
                 case ".pak": return "Game/resource package";
                 case ".vpk": return "Valve package";
                 case ".pk3": return "Quake 3 package";
@@ -444,6 +448,7 @@ namespace FileDentify
                 case ".cbz": return "Comic Book ZIP archive";
                 case ".chm": return "Compiled HTML Help file";
                 case ".hlp": return "WinHelp help file";
+                case ".hhc": return "HTML Help table of contents";
                 default: return null;
             }
         }
@@ -661,6 +666,8 @@ namespace FileDentify
                 case ".jgl": return "Roland Juno-G Librarian file";
                 case ".mhr": return "OpenAL Soft HRTF data";
                 case ".ambdec": return "Ambisonic decoder configuration";
+                case ".m3u":
+                case ".m3u8": return "M3U/M3U8 media playlist";
                 case ".lso": return "Emagic Logic song/project";
                 case ".chtr": return "GarageBand chord/tuning table";
                 case ".nac": return "Native Instruments sample-add data";
@@ -688,6 +695,9 @@ namespace FileDentify
                 case ".dynamicarpeggiator": return "Korg dynamic arpeggiator data";
                 case ".classicvectoreg": return "Korg classic vector envelope data";
                 case ".cpt2": return "GForce M-Tron tape bank";
+                case ".k4s":
+                case ".mks":
+                    return lowerPath.Contains("midi learn") && lowerPath.Contains("spectrasonics") ? "Spectrasonics Stylus RMX Korg controller scene" : null;
                 case ".obw": return "Toontrack sound library data";
                 case ".dspreset": return "Decent Sampler preset";
                 case ".dsbundle": return "Decent Sampler bundle";
@@ -744,6 +754,12 @@ namespace FileDentify
                     return null;
                 case ".w5s":
                     return path.IndexOf("\\Winamp\\", StringComparison.OrdinalIgnoreCase) >= 0 ? "Winamp 5 / Wasabi system plug-in module" : null;
+                case ".ide":
+                    return "antivirus identity/signature file";
+                case ".appcache":
+                    return "HTML5 application cache manifest";
+                case ".catalog":
+                    return path.IndexOf("\\VLC\\", StringComparison.OrdinalIgnoreCase) >= 0 ? "VLC skin catalog" : null;
                 case ".soc":
                 case ".sod":
                 case ".soe":
@@ -765,6 +781,10 @@ namespace FileDentify
             var ext = Path.GetExtension(path).ToLowerInvariant();
             if (lower.Contains("\\ivona\\") || name.StartsWith("ivona", StringComparison.OrdinalIgnoreCase))
                 return "IVONA speech voice package";
+            if (lower.Contains("\\modeltalker\\") && ext == ".cbk")
+                return "ModelTalker speech data";
+            if (lower.Contains("\\acapela\\") && ext == ".clb")
+                return "Acapela/Infovox speech library module";
             if (lower.Contains("\\loquendo") || name.IndexOf("Loquendo_TTS", StringComparison.OrdinalIgnoreCase) >= 0)
                 return "Loquendo TTS package";
             if (lower.Contains("\\supertonic\\") && ext == ".onnx")

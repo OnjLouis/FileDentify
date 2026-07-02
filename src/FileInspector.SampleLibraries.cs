@@ -15,6 +15,12 @@ namespace FileDentify
             var ext = Path.GetExtension(path).ToLowerInvariant();
             if (ext == ".xpak" || IsXlnAudioPath(path))
                 return XlnAudioTypeName(path, header);
+            var pluginAlliance = PluginAllianceTypeName(path);
+            if (pluginAlliance != null)
+                return pluginAlliance;
+            var vital = VitalTypeName(path);
+            if (vital != null)
+                return vital;
             if (IsSpectrasonicsPath(path))
                 return SpectrasonicsTypeName(path, header);
             var korg = KorgTypeName(path, header);
@@ -62,6 +68,8 @@ namespace FileDentify
         private static void AddSampleLibraryInfo(List<ReportSection> sections, string path, byte[] header, byte[] sample, long fileLength)
         {
             AddXlnAudioInfo(sections, path, header, sample, fileLength);
+            AddPluginAllianceInfo(sections, path, fileLength);
+            AddVitalInfo(sections, path, header, sample, fileLength);
             AddSpectrasonicsInfo(sections, path, header, sample, fileLength);
             AddKorgInfo(sections, path, header, sample, fileLength);
             AddGForceInfo(sections, path, header, fileLength);
@@ -121,9 +129,13 @@ namespace FileDentify
         {
             var ext = Path.GetExtension(path).ToLowerInvariant();
             if (ext == ".db")
-                return StartsWith(header, Encoding.ASCII.GetBytes("<FileSystem>"))
-                    ? "Spectrasonics STEAM/SAGE sample container"
-                    : "Spectrasonics database or sample container";
+            {
+                if (StartsWith(header, Encoding.ASCII.GetBytes("<FileSystem>")))
+                    return "Spectrasonics STEAM/SAGE sample container";
+                if (IsSpectrasonicsPath(path))
+                    return "Spectrasonics database or sample container";
+                return null;
+            }
             if (ext == ".mlt_omn") return "Spectrasonics Omnisphere multi";
             if (ext == ".mlt_key") return "Spectrasonics Keyscape multi";
             if (ext == ".mlt_trl") return "Spectrasonics Trilian multi";
@@ -132,6 +144,10 @@ namespace FileDentify
             if (ext == ".fxr_rmx") return "Spectrasonics Stylus RMX effect rack";
             if (ext == ".kit_rmx") return "Spectrasonics Stylus RMX kit";
             if (ext == ".prt_rmx") return "Spectrasonics Stylus RMX part";
+            if (ext == ".ctl_rmx") return "Spectrasonics Stylus RMX MIDI learn/controller map";
+            if ((ext == ".k4s" || ext == ".mks") && LooksLikeKorgControllerScene(path, header))
+                return "Spectrasonics Stylus RMX Korg controller scene";
+            if (ext == ".db2") return "Spectrasonics STEAM/SAGE database";
             if (ext == ".index") return "Spectrasonics index file";
             return null;
         }
@@ -158,8 +174,30 @@ namespace FileDentify
             {
                 AddSpectrasonicsXmlInfo(section, header);
             }
+            else if (LooksLikeKorgControllerScene(path, header))
+            {
+                Add(section, "Controller scene marker", ReadAsciiUntil(header, 0, Math.Min(header.Length, 32)).Trim());
+                Add(section, "Role", "Korg controller scene or map bundled with Stylus RMX MIDI Learn support.");
+                var strings = FindAsciiStrings(sample, 3, 80)
+                    .Select(item => item.Value)
+                    .Where(value => value.IndexOf("KORG", StringComparison.OrdinalIgnoreCase) >= 0 || value.IndexOf("RMX", StringComparison.OrdinalIgnoreCase) >= 0)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .Take(12)
+                    .ToArray();
+                if (strings.Length > 0)
+                    Add(section, "Visible markers", string.Join(Environment.NewLine, strings));
+            }
 
             Add(section, "Notes", "Spectrasonics STEAM/SAGE files belong to instruments such as Omnisphere, Keyscape, Trilian, and Stylus RMX. They can be presets, multis, indexes, or large sample containers. FileDentify reports visible index, product, and preset clues only.");
+        }
+
+        private static bool LooksLikeKorgControllerScene(string path, byte[] header)
+        {
+            var ext = Path.GetExtension(path).ToLowerInvariant();
+            if (ext != ".k4s" && ext != ".mks")
+                return false;
+            return path.IndexOf("MIDI Learn", StringComparison.OrdinalIgnoreCase) >= 0 &&
+                StartsWith(header, Encoding.ASCII.GetBytes("KORG"));
         }
 
         private static void AddSpectrasonicsFileSystemEntries(ReportSection section, byte[] sample)
@@ -405,11 +443,66 @@ namespace FileDentify
                 path.IndexOf("Addictive Trigger", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
+        private static string PluginAllianceTypeName(string path)
+        {
+            if (Path.GetExtension(path).Equals(".pabundle", StringComparison.OrdinalIgnoreCase))
+                return "Plugin Alliance installer bundle";
+            return null;
+        }
+
+        private static void AddPluginAllianceInfo(List<ReportSection> sections, string path, long fileLength)
+        {
+            var type = PluginAllianceTypeName(path);
+            if (type == null)
+                return;
+
+            var section = AddSection(sections, "Plugin Alliance");
+            Add(section, "Format hint", type);
+            Add(section, "File size", FormatBytes(fileLength));
+            Add(section, "Product/folder", SegmentAfter(path, "Plugin Alliance"));
+            Add(section, "Notes", "Plugin Alliance .pabundle files are large installer/content bundles used by Plugin Alliance software. FileDentify identifies the bundle and path context without extracting or installing it.");
+        }
+
+        private static string VitalTypeName(string path)
+        {
+            var ext = Path.GetExtension(path).ToLowerInvariant();
+            if (ext == ".vitalbank")
+                return "Vital synthesizer preset bank";
+            if (ext == ".vital")
+                return "Vital synthesizer preset";
+            return null;
+        }
+
+        private static void AddVitalInfo(List<ReportSection> sections, string path, byte[] header, byte[] sample, long fileLength)
+        {
+            var type = VitalTypeName(path);
+            if (type == null)
+                return;
+
+            var section = AddSection(sections, "Vital synthesizer");
+            Add(section, "Format hint", type);
+            Add(section, "File size", FormatBytes(fileLength));
+            var names = FindReadableTextLines(sample, 4, 80)
+                .Where(value => value.IndexOf("preset", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    value.IndexOf("author", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    value.IndexOf("Vital", StringComparison.OrdinalIgnoreCase) >= 0)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(20)
+                .ToArray();
+            if (names.Length > 0)
+                Add(section, "Visible metadata strings", string.Join(Environment.NewLine, names));
+            Add(section, "Notes", "Vital .vital and .vitalbank files store synth presets and preset banks. FileDentify reports role and visible metadata only; it does not load the synthesizer or expand the full bank.");
+        }
+
         private static bool IsSpectrasonicsPath(string path)
         {
             return path.IndexOf("Spectrasonics", StringComparison.OrdinalIgnoreCase) >= 0 ||
                 path.IndexOf("\\STEAM\\", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                path.IndexOf("\\SAGE\\", StringComparison.OrdinalIgnoreCase) >= 0;
+                path.IndexOf("\\SAGE\\", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                path.IndexOf("Omnisphere", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                path.IndexOf("Keyscape", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                path.IndexOf("Trilian", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                path.IndexOf("Stylus RMX", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         private static bool IsKorgPath(string path)

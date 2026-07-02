@@ -14,7 +14,7 @@ powershell -ExecutionPolicy Bypass -File .\Build.ps1
 
 By default, the build script writes portable output under `bin\Release`. Set `FILEDENTIFY_PACKAGE_DIR` before building if you want the executable and console companion copied somewhere else.
 
-FileDentify can also be used from the SendTo Project, available from <https://3.onj.me/programs>.
+FileDentify can also be used from the SendTo Project, available from <https://onj.me/sendto>.
 
 ## Runtime features
 

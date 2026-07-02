@@ -79,7 +79,7 @@ namespace FileDentify
 
             var section = AddSection(sections, "FileDentify database");
             Add(section, "Best match", typeName);
-            Add(section, "Source", "FileDentify built-in file-type database");
+            Add(section, "Source", "FileDentify database");
             Add(section, "Detection basis", FileDentifyDatabaseDetectionBasis(path, header));
             if (string.IsNullOrWhiteSpace(Path.GetExtension(path)))
                 Add(section, "Extensionless file", "The filename has no extension, so FileDentify relied on header, filename, path, or structure clues.");
@@ -153,6 +153,10 @@ namespace FileDentify
             if (legacyAppResourceType != null) return legacyAppResourceType;
             var personalDataType = PersonalDataTypeName(path, header);
             if (personalDataType != null) return personalDataType;
+            var browserProfileType = BrowserProfileTypeName(path, header);
+            if (browserProfileType != null) return browserProfileType;
+            var mercuryMailType = MercuryMailTypeName(path, header);
+            if (mercuryMailType != null) return mercuryMailType;
             var windowsSystemType = WindowsSystemTypeName(path, header);
             if (windowsSystemType != null) return windowsSystemType;
             var commonDataType = CommonDataTypeName(path, header);
@@ -322,6 +326,12 @@ namespace FileDentify
             var personalDataType = PersonalDataTypeName(path, header);
             if (personalDataType != null)
                 return personalDataType;
+            var browserProfileType = BrowserProfileTypeName(path, header);
+            if (browserProfileType != null)
+                return browserProfileType;
+            var mercuryMailType = MercuryMailTypeName(path, header);
+            if (mercuryMailType != null)
+                return mercuryMailType;
             var windowsSystemType = WindowsSystemTypeName(path, header);
             if (windowsSystemType != null)
                 return windowsSystemType;

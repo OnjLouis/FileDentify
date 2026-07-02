@@ -21,6 +21,10 @@ namespace FileDentify
                 return "Ollama model manifest";
             if (IsOllamaBlobPath(path))
                 return LooksLikeText(header) ? "Ollama metadata blob" : "Ollama model/blob layer";
+            if (Path.GetExtension(path).Equals(".tflite", StringComparison.OrdinalIgnoreCase))
+                return "TensorFlow Lite model";
+            if (Path.GetExtension(path).Equals(".ort", StringComparison.OrdinalIgnoreCase))
+                return "ONNX Runtime optimized model";
             return null;
         }
 
@@ -39,10 +43,14 @@ namespace FileDentify
                 AddGgufInfo(section, header);
             else if (IsPyTorchCheckpoint(path, header))
                 AddPyTorchCheckpointInfo(section, path, header);
+            else if (Path.GetExtension(path).Equals(".tflite", StringComparison.OrdinalIgnoreCase))
+                Add(section, "Container", "TensorFlow Lite FlatBuffer model file");
+            else if (Path.GetExtension(path).Equals(".ort", StringComparison.OrdinalIgnoreCase))
+                Add(section, "Container", "ONNX Runtime optimized model file");
             else if (LooksLikeText(header))
                 AddOllamaJsonInfo(section, Encoding.UTF8.GetString(header.Take(Math.Min(header.Length, 1024 * 1024)).ToArray()), path);
 
-            Add(section, "Notes", "Ollama stores manifests and content-addressed blobs under .ollama. GGUF and PyTorch checkpoint files are large local model weights; FileDentify reports header and visible metadata without loading the model.");
+            Add(section, "Notes", "Ollama stores manifests and content-addressed blobs under .ollama. GGUF, PyTorch, TensorFlow Lite, ONNX Runtime, and SafeTensors files are local model weights or optimized inference assets; FileDentify reports header and visible metadata without loading the model.");
         }
 
         private static bool IsPyTorchCheckpoint(string path, byte[] header)

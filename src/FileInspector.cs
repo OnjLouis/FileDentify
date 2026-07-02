@@ -97,6 +97,7 @@ namespace FileDentify
             AddNeroImageInfo(sections, path, file.Length);
             AddVirtualDiskInfo(sections, path, header, file.Length);
             AddMozillaLz4Info(sections, header);
+            AddBrowserProfileInfo(sections, path, header, stringSample, file.Length);
             AddUfsInfo(sections, path, header);
             AddBlobInfo(sections, path, header);
             AddClipmanInfo(sections, path, stringSample, file.Length);
@@ -115,6 +116,7 @@ namespace FileDentify
             AddAccessibilityDataInfo(sections, path, header);
             AddLegacyAppResourceInfo(sections, path, header, stringSample, file.Length);
             AddPersonalDataInfo(sections, path, stringSample);
+            AddMercuryMailInfo(sections, path, stringSample, file.Length);
             AddWindowsSystemInfo(sections, path, header, file.Length);
             AddCommonDataInfo(sections, path, header, stringSample, file.Length);
             AddInstallerDataInfo(sections, path, header, file.Length);

@@ -45,6 +45,7 @@ namespace FileDentify
             if (LooksLikeUnityAsset(path, header)) return "Unity asset data file";
             if (LooksLikeSteamVdf(path, header)) return ext == ".acf" ? "Steam app manifest" : "Valve Data Format text";
             if (LooksLikeBbcMicroMedia(path, header)) return BbcMicroMediaTypeName(path, header);
+            if (LooksLikeTorchMcpProgram(path, header)) return "BBC Micro / Torch MCP program image";
             if (LooksLikeRolandMt32Rom(path)) return "Roland MT-32/CM-32L ROM image";
             if (LooksLikeFruitMachineBpak(path)) return "Protected fruit-machine game package";
             if (LooksLikeDuke3dSave(path)) return "Duke Nukem 3D saved game";
@@ -153,6 +154,8 @@ namespace FileDentify
                 AddSteamVdfInfo(section, header);
             else if (LooksLikeBbcMicroMedia(path, header))
                 AddBbcMicroMediaInfo(section, path, header);
+            else if (LooksLikeTorchMcpProgram(path, header))
+                AddTorchMcpProgramInfo(section, path, header);
             else if (LooksLikeRolandMt32Rom(path))
                 AddRolandMt32RomInfo(section, path);
             else if (IsNintendoSwitchNcaConcatSegment(path))
@@ -198,6 +201,7 @@ namespace FileDentify
             if (IsNintendoSwitchSaveFile(path)) parts.Add("Nintendo save folder path");
             if (LooksLikeUnityAsset(path, header)) parts.Add("Unity version string");
             if (LooksLikeBbcMicroMedia(path, header)) parts.Add("BBC Micro/BeebEm extension, path, or UEF marker");
+            if (LooksLikeTorchMcpProgram(path, header)) parts.Add("Torch MCP marker in BBC Micro/BeebEm context");
             if (LooksLikeRolandMt32Rom(path)) parts.Add("Roland MT-32/CM-32L filename");
             if (LooksLikeFruitMachineBpak(path)) parts.Add(".bpak extension and fruit-machine/game-package filename context");
             if (LooksLikeDuke3dSave(path)) parts.Add("Duke 3D path/name context and .sav extension");
@@ -231,6 +235,33 @@ namespace FileDentify
             var name = Path.GetFileName(path) ?? string.Empty;
             return name.StartsWith("PHROM", StringComparison.OrdinalIgnoreCase) &&
                 path.IndexOf("\\BeebEm\\", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static bool LooksLikeTorchMcpProgram(string path, byte[] header)
+        {
+            var ext = Path.GetExtension(path).ToLowerInvariant();
+            if (ext != ".abm" && ext != ".cbl")
+                return false;
+            var text = Encoding.ASCII.GetString(header.Take(Math.Min(header.Length, 4096)).ToArray());
+            return path.IndexOf("\\BeebEm\\", StringComparison.OrdinalIgnoreCase) >= 0 &&
+                text.IndexOf("MCP", StringComparison.OrdinalIgnoreCase) >= 0 &&
+                text.IndexOf("Torch", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static void AddTorchMcpProgramInfo(ReportSection section, string path, byte[] header)
+        {
+            Add(section, "Computer family", "BBC Micro / Acorn 8-bit emulator data");
+            Add(section, "Platform/context", "Torch MCP program image found in a BeebEm file area.");
+            var visible = FindReadableTextLines(header, 3, 80)
+                .Where(line => line.IndexOf("MCP", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    line.IndexOf("Torch", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    line.IndexOf("198", StringComparison.OrdinalIgnoreCase) >= 0)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(8)
+                .ToArray();
+            if (visible.Length > 0)
+                Add(section, "Visible program marker", string.Join(Environment.NewLine, visible));
+            Add(section, "Notes", "Torch MCP files are old BBC Micro/Acorn-era program data seen in BeebEm collections. FileDentify reports the emulator context and visible program marker only; it does not run or disassemble the program.");
         }
 
         private static string BbcMicroMediaTypeName(string path, byte[] header)

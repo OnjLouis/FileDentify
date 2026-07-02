@@ -104,15 +104,16 @@ function Test-Directory([string]$root, [string]$label) {
 }
 
 function Test-ManualChangelog {
-    $manualPath = Join-Path $repoRoot 'src\ManualService.cs'
-    if (-not (Test-Path -LiteralPath $manualPath)) {
-        Fail "ManualService.cs does not exist."
+    $manualRoot = Join-Path $repoRoot 'src'
+    $manualFiles = @(Get-ChildItem -LiteralPath $manualRoot -Filter 'ManualService*.cs' -File)
+    if ($manualFiles.Count -eq 0) {
+        Fail "ManualService source files do not exist."
     }
 
-    $text = Get-Content -LiteralPath $manualPath -Raw
+    $text = ($manualFiles | ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw }) -join "`n"
     $matches = [regex]::Matches($text, 'AppendLine\("<h3>([0-9]+(?:\.[0-9]+)*)</h3>"\)')
     $versions = @($matches | ForEach-Object { $_.Groups[1].Value })
-    $requiredVersions = @('1.6', '1.5', '1.4.1', '1.4', '1.3', '1.2', '1.1.1', '1.1', '1.0')
+    $requiredVersions = @('1.7', '1.6', '1.5', '1.4.1', '1.4', '1.3', '1.2', '1.1.1', '1.1', '1.0')
 
     foreach ($version in $requiredVersions) {
         $count = @($versions | Where-Object { $_ -eq $version }).Count
