@@ -120,6 +120,25 @@ namespace FileDentify
         }
 
 
+        private void DetailsBrowser_Navigating(object sender, WebBrowserNavigatingEventArgs e)
+        {
+            if (e == null || e.Url == null)
+                return;
+
+            var target = e.Url.OriginalString ?? string.Empty;
+            var match = Regex.Match(target, @"^fdreport:file:(\d+)$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            if (!match.Success)
+                return;
+
+            e.Cancel = true;
+            int index;
+            if (!int.TryParse(match.Groups[1].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out index))
+                return;
+
+            SelectFileByIndex(index, "No file " + (index + 1).ToString(CultureInfo.InvariantCulture) + ".");
+        }
+
+
         private bool DetailsPaneContainsFocus()
         {
             return (detailsBox != null && detailsBox.ContainsFocus) || (detailsBrowser != null && detailsBrowser.ContainsFocus);
@@ -144,7 +163,7 @@ namespace FileDentify
                 return "<h1>Details</h1>";
 
             if (IsReportOverviewNode(node))
-                return TextDetailsToHtml("Report overview", node.Tag == null ? string.Empty : node.Tag.ToString());
+                return ReportOverviewToDetailsHtml(node.Tag == null ? string.Empty : node.Tag.ToString());
 
             var report = ReportForNode(node);
             if (report == null)
@@ -192,6 +211,12 @@ namespace FileDentify
         }
 
 
+        private string ReportOverviewToDetailsHtml(string text)
+        {
+            return TextDetailsToHtml("Report overview", text, LinkReportOverviewLine);
+        }
+
+
         private static string SectionToDetailsHtml(ReportSection section, string fileName)
         {
             var sb = new StringBuilder();
@@ -210,6 +235,48 @@ namespace FileDentify
             sb.AppendLine("<h3>" + Html(item.Title) + "</h3>");
             sb.AppendLine("<pre>" + Html(detail) + "</pre>");
             return sb.ToString();
+        }
+
+
+        private string LinkReportOverviewLine(string line)
+        {
+            var index = ReportIndexForOverviewLine(line);
+            if (index < 0)
+                return Html(line);
+
+            var report = currentReports[index];
+            var displayName = report.DisplayName ?? string.Empty;
+            var escapedLine = Html(line);
+            var escapedName = Html(displayName);
+            var nameIndex = escapedLine.IndexOf(escapedName, StringComparison.Ordinal);
+            if (nameIndex < 0)
+                return escapedLine;
+
+            var link = "<a href=\"fdreport:file:" + index.ToString(CultureInfo.InvariantCulture) + "\">" + escapedName + "</a>";
+            return escapedLine.Substring(0, nameIndex) + link + escapedLine.Substring(nameIndex + escapedName.Length);
+        }
+
+
+        private int ReportIndexForOverviewLine(string line)
+        {
+            if (string.IsNullOrWhiteSpace(line) || currentReports.Count == 0)
+                return -1;
+
+            for (var i = 0; i < currentReports.Count; i++)
+            {
+                var report = currentReports[i];
+                var displayName = report.DisplayName ?? string.Empty;
+                var path = report.OriginalPath ?? string.Empty;
+                if (string.IsNullOrWhiteSpace(displayName))
+                    continue;
+                if (line.IndexOf(displayName, StringComparison.OrdinalIgnoreCase) < 0)
+                    continue;
+                if (!string.IsNullOrWhiteSpace(path) && line.IndexOf(path, StringComparison.OrdinalIgnoreCase) < 0)
+                    continue;
+                return i;
+            }
+
+            return -1;
         }
 
 
@@ -345,6 +412,12 @@ namespace FileDentify
 
         private static string TextDetailsToHtml(string title, string text)
         {
+            return TextDetailsToHtml(title, text, null);
+        }
+
+
+        private static string TextDetailsToHtml(string title, string text, Func<string, string> lineRenderer)
+        {
             var sb = new StringBuilder();
             var safeTitle = title ?? "Details";
             sb.AppendLine("<h1>" + Html(safeTitle) + "</h1>");
@@ -361,7 +434,7 @@ namespace FileDentify
                         i++;
                         continue;
                     }
-                    FlushParagraph(sb, paragraph);
+                    FlushParagraph(sb, paragraph, lineRenderer);
                     var level = next.StartsWith("=", StringComparison.Ordinal) ? 2 : 3;
                     sb.AppendLine("<h" + level.ToString(CultureInfo.InvariantCulture) + ">" + Html(line.Trim()) + "</h" + level.ToString(CultureInfo.InvariantCulture) + ">");
                     i++;
@@ -370,21 +443,21 @@ namespace FileDentify
 
                 if (line.EndsWith(":", StringComparison.Ordinal) && line.Length < 80)
                 {
-                    FlushParagraph(sb, paragraph);
+                    FlushParagraph(sb, paragraph, lineRenderer);
                     sb.AppendLine("<h3>" + Html(line.TrimEnd(':')) + "</h3>");
                     continue;
                 }
 
                 if (IsHtmlNavigationHeadingItem(line))
                 {
-                    FlushParagraph(sb, paragraph);
+                    FlushParagraph(sb, paragraph, lineRenderer);
                     sb.AppendLine("<h3>" + Html(line.Trim()) + "</h3>");
                     continue;
                 }
 
                 paragraph.AppendLine(line);
             }
-            FlushParagraph(sb, paragraph);
+            FlushParagraph(sb, paragraph, lineRenderer);
             return sb.ToString();
         }
 
@@ -402,10 +475,26 @@ namespace FileDentify
 
         private static void FlushParagraph(StringBuilder sb, StringBuilder paragraph)
         {
+            FlushParagraph(sb, paragraph, null);
+        }
+
+
+        private static void FlushParagraph(StringBuilder sb, StringBuilder paragraph, Func<string, string> lineRenderer)
+        {
             var text = paragraph.ToString().TrimEnd();
             paragraph.Length = 0;
             if (!string.IsNullOrWhiteSpace(text))
-                sb.AppendLine("<pre>" + Html(text) + "</pre>");
+                sb.AppendLine("<pre>" + HtmlLines(text, lineRenderer) + "</pre>");
+        }
+
+
+        private static string HtmlLines(string text, Func<string, string> lineRenderer)
+        {
+            if (lineRenderer == null)
+                return Html(text);
+
+            var lines = NormalizeLineEndings(text).Split(new[] { Environment.NewLine }, StringSplitOptions.None);
+            return string.Join(Environment.NewLine, lines.Select(lineRenderer).ToArray());
         }
 
 
@@ -413,7 +502,7 @@ namespace FileDentify
         {
             return "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta http-equiv=\"X-UA-Compatible\" content=\"IE=edge\"><title>" +
                 Html(title) +
-                "</title><style>body{font-family:Segoe UI,Arial,sans-serif;font-size:10pt;line-height:1.45;color:#111;background:#fff;margin:.75rem}h1{font-size:1.25rem;margin:0 0 .75rem}h2{font-size:1.1rem;margin:1rem 0 .35rem}h3{font-size:1rem;margin:.85rem 0 .25rem}table{border-collapse:collapse;width:100%;margin:.25rem 0 1rem}th,td{border:1px solid #aaa;padding:.35rem .5rem;text-align:left;vertical-align:top}th{background:#f2f2f2}td:first-child{width:15rem;font-weight:600}pre{white-space:pre-wrap;font-family:Consolas,monospace;margin:0}</style></head><body>" +
+                "</title><style>body{font-family:Segoe UI,Arial,sans-serif;font-size:10pt;line-height:1.45;color:#111;background:#fff;margin:.75rem}h1{font-size:1.25rem;margin:0 0 .75rem}h2{font-size:1.1rem;margin:1rem 0 .35rem}h3{font-size:1rem;margin:.85rem 0 .25rem}table{border-collapse:collapse;width:100%;margin:.25rem 0 1rem}th,td{border:1px solid #aaa;padding:.35rem .5rem;text-align:left;vertical-align:top}th{background:#f2f2f2}td:first-child{width:15rem;font-weight:600}pre{white-space:pre-wrap;font-family:Consolas,monospace;margin:0}a{color:#0645ad}</style></head><body>" +
                 (body ?? string.Empty) +
                 "</body></html>";
         }

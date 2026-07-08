@@ -14,6 +14,8 @@ namespace FileDentify
         private static string AppleFormatTypeName(string path, byte[] header)
         {
             var ext = Path.GetExtension(path).ToLowerInvariant();
+            if (LooksLikeMachO(header))
+                return ext == ".dylib" ? "Mach-O dynamic library" : "Mach-O binary";
             if (Path.GetFileName(path).Equals("Info.plist", StringComparison.OrdinalIgnoreCase) && IsInsideAppleBundle(path))
                 return "Apple application or bundle metadata";
             if (ext == ".strings") return "Apple localization strings";
@@ -136,6 +138,12 @@ namespace FileDentify
         private static void AddAppleResourceInfo(List<ReportSection> sections, string path, byte[] header)
         {
             var ext = Path.GetExtension(path).ToLowerInvariant();
+            if (LooksLikeMachO(header))
+            {
+                AddMachOInfo(sections, path, header);
+                return;
+            }
+
             if (Path.GetFileName(path).Equals(".DS_Store", StringComparison.OrdinalIgnoreCase) && LooksLikeDsStore(header))
             {
                 var section = AddSection(sections, "Apple Finder metadata");
@@ -268,6 +276,121 @@ namespace FileDentify
                     Add(section, "Uncompressed TOC length", FormatAppleUnsignedBytes(ReadUInt64BigEndian(header, 16)));
                 }
                 return;
+            }
+        }
+
+        private static bool LooksLikeMachO(byte[] header)
+        {
+            if (header == null || header.Length < 4)
+                return false;
+            var magic = ReadUInt32BigEndian(header, 0);
+            return magic == 0xFEEDFACE ||
+                magic == 0xFEEDFACF ||
+                magic == 0xCEFAEDFE ||
+                magic == 0xCFFAEDFE ||
+                magic == 0xCAFEBABE ||
+                magic == 0xCAFEBABF ||
+                magic == 0xBEBAFECA ||
+                magic == 0xBFBAFECA;
+        }
+
+        private static void AddMachOInfo(List<ReportSection> sections, string path, byte[] header)
+        {
+            var section = AddSection(sections, "Apple Mach-O binary");
+            var ext = Path.GetExtension(path).ToLowerInvariant();
+            Add(section, "Format hint", ext == ".dylib" ? "Mach-O dynamic library" : "Mach-O binary");
+            Add(section, "Header magic", MachOMagicName(header));
+            Add(section, "File role", MachOFileRole(path, header));
+            Add(section, "Architectures", MachOArchitectures(header));
+            var bundle = FindAppleBundlePath(path);
+            if (!string.IsNullOrWhiteSpace(bundle))
+                Add(section, "Containing bundle", Path.GetFileName(bundle));
+            Add(section, "Notes", "Mach-O is the native executable and library format used by macOS, iOS, and Apple plug-ins. FileDentify reports safe header architecture and role fields only; it does not load or execute the binary.");
+        }
+
+        private static string MachOMagicName(byte[] header)
+        {
+            var magic = ReadUInt32BigEndian(header, 0);
+            switch (magic)
+            {
+                case 0xCAFEBABE: return "CAFEBABE, universal/fat Mach-O";
+                case 0xCAFEBABF: return "CAFEBABF, universal/fat Mach-O with 64-bit archive records";
+                case 0xBEBAFECA: return "BEBAFECA, byte-swapped universal/fat Mach-O";
+                case 0xBFBAFECA: return "BFBAFECA, byte-swapped universal/fat Mach-O with 64-bit archive records";
+                case 0xFEEDFACE: return "FEEDFACE, 32-bit Mach-O";
+                case 0xFEEDFACF: return "FEEDFACF, 64-bit Mach-O";
+                case 0xCEFAEDFE: return "CEFAEDFE, byte-swapped 32-bit Mach-O";
+                case 0xCFFAEDFE: return "CFFAEDFE, byte-swapped 64-bit Mach-O";
+                default: return "Mach-O";
+            }
+        }
+
+        private static string MachOFileRole(string path, byte[] header)
+        {
+            if (Path.GetExtension(path).Equals(".dylib", StringComparison.OrdinalIgnoreCase))
+                return "Dynamic library";
+            if (header.Length < 16)
+                return "Binary";
+            var magic = ReadUInt32BigEndian(header, 0);
+            if (magic == 0xCAFEBABE || magic == 0xCAFEBABF || magic == 0xBEBAFECA || magic == 0xBFBAFECA)
+                return "Universal binary container";
+            var littleEndian = magic == 0xCEFAEDFE || magic == 0xCFFAEDFE;
+            var fileType = littleEndian ? ReadUInt32LittleEndian(header, 12) : ReadUInt32BigEndian(header, 12);
+            switch (fileType)
+            {
+                case 1: return "Relocatable object";
+                case 2: return "Executable";
+                case 6: return "Dynamic library";
+                case 8: return "Bundle/loadable module";
+                case 11: return "Dynamic linker";
+                case 10: return "Preloaded executable";
+                default: return "Mach-O file type " + fileType.ToString(CultureInfo.InvariantCulture);
+            }
+        }
+
+        private static string MachOArchitectures(byte[] header)
+        {
+            if (header.Length < 8)
+                return "Not enough header data";
+
+            var magic = ReadUInt32BigEndian(header, 0);
+            if (magic == 0xCAFEBABE || magic == 0xCAFEBABF)
+            {
+                var count = ReadUInt32BigEndian(header, 4);
+                var entrySize = magic == 0xCAFEBABF ? 32 : 20;
+                var entries = new List<string>();
+                for (var i = 0; i < Math.Min(count, 8); i++)
+                {
+                    var offset = 8 + i * entrySize;
+                    if (offset + 20 > header.Length)
+                        break;
+                    var cpu = ReadUInt32BigEndian(header, offset);
+                    var size = magic == 0xCAFEBABF && offset + 32 <= header.Length
+                        ? ReadUInt64BigEndian(header, offset + 16)
+                        : ReadUInt32BigEndian(header, offset + 12);
+                    entries.Add(MachOCpuName(cpu) + ", " + FormatUnsignedBytes(size));
+                }
+                if (entries.Count > 0)
+                    return count.ToString(CultureInfo.InvariantCulture) + " architecture(s): " + string.Join(Environment.NewLine, entries.ToArray());
+                return count.ToString(CultureInfo.InvariantCulture) + " architecture(s)";
+            }
+
+            var littleEndian = magic == 0xCEFAEDFE || magic == 0xCFFAEDFE;
+            var cpuType = littleEndian ? ReadUInt32LittleEndian(header, 4) : ReadUInt32BigEndian(header, 4);
+            return MachOCpuName(cpuType);
+        }
+
+        private static string MachOCpuName(uint cpuType)
+        {
+            switch (cpuType)
+            {
+                case 7: return "i386";
+                case 0x01000007: return "x86_64";
+                case 12: return "ARM";
+                case 0x0100000C: return "ARM64";
+                case 18: return "PowerPC";
+                case 0x01000012: return "PowerPC 64";
+                default: return "CPU type 0x" + cpuType.ToString("X", CultureInfo.InvariantCulture);
             }
         }
 

@@ -33,6 +33,8 @@ namespace FileDentify
                 return RhVoiceTypeName(path);
             if (LooksLikeFlexVoiceData(path, header))
                 return FlexVoiceTypeName(path);
+            if (LooksLikePocketTtsData(path, header))
+                return PocketTtsTypeName(path, header);
             if (LooksLikeOtherNvdaSpeechEngineData(path, header))
                 return OtherNvdaSpeechEngineTypeName(path, header);
             if (LooksLikeScanSoftRealSpeakMobile(path, header))
@@ -70,7 +72,8 @@ namespace FileDentify
 
             var section = AddSection(sections, "Speech voice");
             Add(section, "Format hint", type);
-            Add(section, "Voice folder", Path.GetFileName(Path.GetDirectoryName(path) ?? string.Empty));
+            if (!LooksLikePocketTtsData(path, header))
+                Add(section, "Voice folder", Path.GetFileName(Path.GetDirectoryName(path) ?? string.Empty));
             Add(section, "File size", FormatBytes(fileLength));
             Add(section, "Role", SpeechVoiceRole(path, header));
 
@@ -109,6 +112,7 @@ namespace FileDentify
                 LooksLikeEloquenceOrIbmTtsData(path, header) ||
                 LooksLikeRhVoiceData(path, header) ||
                 LooksLikeFlexVoiceData(path, header) ||
+                LooksLikePocketTtsData(path, header) ||
                 LooksLikeEspeakSpeechData(path, header) ||
                 LooksLikeOtherNvdaSpeechEngineData(path, header))
             {
@@ -182,6 +186,8 @@ namespace FileDentify
                 return RhVoiceRole(path);
             if (LooksLikeFlexVoiceData(path, header))
                 return FlexVoiceRole(path);
+            if (LooksLikePocketTtsData(path, header))
+                return PocketTtsRole(path);
             if (LooksLikeOtherNvdaSpeechEngineData(path, header))
                 return OtherNvdaSpeechEngineRole(path, header);
             if (LooksLikeScanSoftRealSpeakMobile(path, header))
@@ -548,7 +554,7 @@ namespace FileDentify
             var ext = Path.GetExtension(path).ToLowerInvariant();
             if (!lower.Contains("\\orpheus\\"))
                 return false;
-            if (ext == ".tts" || ext == ".dat" || ext == ".ini" || ext == ".bin")
+            if (ext == ".tts" || ext == ".phm" || ext == ".vcx" || ext == ".dat" || ext == ".ini" || ext == ".bin")
                 return true;
             var name = Path.GetFileName(path) ?? string.Empty;
             return name.IndexOf("orpheus", StringComparison.OrdinalIgnoreCase) >= 0 &&
@@ -560,6 +566,10 @@ namespace FileDentify
             var ext = Path.GetExtension(path).ToLowerInvariant();
             if (ext == ".tts")
                 return "Dolphin Orpheus TTS language data";
+            if (ext == ".phm")
+                return "Dolphin Orpheus phoneme data";
+            if (ext == ".vcx")
+                return "Dolphin Orpheus voice/configuration data";
             if (ext == ".ini")
                 return "Dolphin Orpheus TTS configuration";
             if (ext == ".dll" || ext == ".exe")
@@ -572,6 +582,10 @@ namespace FileDentify
             var ext = Path.GetExtension(path).ToLowerInvariant();
             if (ext == ".tts")
                 return "language voice data";
+            if (ext == ".phm")
+                return "phoneme/language support data";
+            if (ext == ".vcx")
+                return "voice configuration or language resource";
             if (ext == ".ini")
                 return "engine/language configuration";
             if (ext == ".dll")
@@ -627,7 +641,7 @@ namespace FileDentify
                 return false;
             var name = Path.GetFileName(path) ?? string.Empty;
             var ext = Path.GetExtension(path).ToLowerInvariant();
-            if (name.Equals("voice.data", StringComparison.OrdinalIgnoreCase) || ext == ".fst")
+            if (name.Equals("voice.data", StringComparison.OrdinalIgnoreCase) || ext == ".fst" || ext == ".params")
                 return true;
             if (ext == ".pdf" && lower.Contains("\\data\\") && !StartsWith(header, Encoding.ASCII.GetBytes("%PDF")))
                 return true;
@@ -644,6 +658,8 @@ namespace FileDentify
                 return "RHVoice HTS voice data";
             if (ext == ".fst")
                 return "RHVoice pronunciation lexicon";
+            if (ext == ".params")
+                return "RHVoice voice parameters";
             if (ext == ".pdf")
                 return "RHVoice acoustic model data";
             if (ext == ".dll")
@@ -659,6 +675,8 @@ namespace FileDentify
                 return "HTS voice definition";
             if (ext == ".fst")
                 return "finite-state pronunciation dictionary";
+            if (ext == ".params")
+                return "voice parameter settings";
             if (ext == ".pdf")
                 return "binary acoustic-model parameter data, not a PDF document";
             if (ext == ".dll")
@@ -744,10 +762,153 @@ namespace FileDentify
             return "speech engine support data";
         }
 
+        private static bool LooksLikePocketTtsData(string path, byte[] header)
+        {
+            if (path == null || path.IndexOf("\\nvda\\pocket_tts\\", StringComparison.OrdinalIgnoreCase) < 0)
+                return false;
+            var ext = Path.GetExtension(path).ToLowerInvariant();
+            var name = Path.GetFileName(path) ?? string.Empty;
+            return ext == ".onnx" ||
+                (ext == ".npy" && LooksLikeNumpyArray(header)) ||
+                name.Equals("tokenizer.model", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string PocketTtsTypeName(string path, byte[] header)
+        {
+            var ext = Path.GetExtension(path).ToLowerInvariant();
+            var name = Path.GetFileName(path) ?? string.Empty;
+            if (ext == ".npy")
+                return "Pocket TTS voice embedding";
+            if (ext == ".onnx")
+                return "Pocket TTS neural speech model";
+            if (name.Equals("tokenizer.model", StringComparison.OrdinalIgnoreCase))
+                return "Pocket TTS tokenizer model";
+            return "Pocket TTS speech data";
+        }
+
+        private static string PocketTtsRole(string path)
+        {
+            var name = Path.GetFileNameWithoutExtension(path) ?? string.Empty;
+            var ext = Path.GetExtension(path).ToLowerInvariant();
+            if (ext == ".npy")
+                return "voice embedding or speaker prompt " + name;
+            if (ext == ".onnx")
+            {
+                var lower = name.ToLowerInvariant();
+                if (lower.Contains("mimi_encoder"))
+                    return "audio codec encoder model";
+                if (lower.Contains("mimi_decoder"))
+                    return "audio codec decoder model";
+                if (lower.Contains("text_conditioner"))
+                    return "text conditioning model";
+                if (lower.Contains("flow_lm_flow"))
+                    return "flow model component";
+                if (lower.Contains("flow_lm_main"))
+                    return "main language/acoustic model";
+                return "ONNX neural TTS model";
+            }
+            if (Path.GetFileName(path).Equals("tokenizer.model", StringComparison.OrdinalIgnoreCase))
+                return "SentencePiece-style text tokenizer";
+            return "speech engine support data";
+        }
+
+        private static void AddPocketTtsDetails(ReportSection section, string path, byte[] header)
+        {
+            var ext = Path.GetExtension(path).ToLowerInvariant();
+            if (ext == ".npy")
+                AddNumpyVoiceEmbeddingInfo(section, path, header);
+            else if (ext == ".onnx")
+                AddPocketTtsOnnxInfo(section, path, header);
+            else if (Path.GetFileName(path).Equals("tokenizer.model", StringComparison.OrdinalIgnoreCase))
+                AddPocketTtsTokenizerInfo(section, header);
+        }
+
+        private static void AddNumpyVoiceEmbeddingInfo(ReportSection section, string path, byte[] header)
+        {
+            Add(section, "Container", "NumPy .npy array");
+            Add(section, "Voice name", Path.GetFileNameWithoutExtension(path));
+            var numpyHeader = NumpyHeaderText(header);
+            if (string.IsNullOrWhiteSpace(numpyHeader))
+                return;
+
+            var dtype = Regex.Match(numpyHeader, @"'descr'\s*:\s*'(?<value>[^']+)'");
+            if (dtype.Success)
+                Add(section, "Array data type", dtype.Groups["value"].Value);
+            var order = Regex.Match(numpyHeader, @"'fortran_order'\s*:\s*(?<value>True|False)", RegexOptions.IgnoreCase);
+            if (order.Success)
+                Add(section, "Fortran order", order.Groups["value"].Value);
+            var shape = Regex.Match(numpyHeader, @"'shape'\s*:\s*\((?<value>[^)]*)\)");
+            if (shape.Success)
+                Add(section, "Array shape", CleanMetadataText(shape.Groups["value"].Value));
+        }
+
+        private static void AddPocketTtsOnnxInfo(ReportSection section, string path, byte[] header)
+        {
+            Add(section, "Model file", Path.GetFileName(path));
+            var producer = FindReadableTextLines(header, 3, 80)
+                .FirstOrDefault(line => line.IndexOf("onnx.", StringComparison.OrdinalIgnoreCase) >= 0);
+            if (!string.IsNullOrWhiteSpace(producer))
+                Add(section, "Visible producer string", producer);
+            var modelStrings = FindReadableTextLines(header, 3, 100)
+                .Where(line => line.IndexOf("transformer", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    line.IndexOf("encoder", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    line.IndexOf("decoder", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    line.IndexOf("conditioner", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    line.IndexOf("output", StringComparison.OrdinalIgnoreCase) >= 0)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(12)
+                .ToArray();
+            if (modelStrings.Length > 0)
+                Add(section, "Model strings", string.Join(Environment.NewLine, modelStrings));
+        }
+
+        private static void AddPocketTtsTokenizerInfo(ReportSection section, byte[] header)
+        {
+            Add(section, "Container", "SentencePiece-style tokenizer model");
+            var pieces = FindReadableTextLines(header, 2, 40)
+                .Where(line => line.StartsWith("<", StringComparison.Ordinal) || line.IndexOf("0x", StringComparison.OrdinalIgnoreCase) >= 0)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(16)
+                .ToArray();
+            if (pieces.Length > 0)
+                Add(section, "Visible tokens", string.Join(Environment.NewLine, pieces));
+        }
+
+        private static bool LooksLikeNumpyArray(byte[] header)
+        {
+            return header != null &&
+                header.Length >= 10 &&
+                header[0] == 0x93 &&
+                header[1] == (byte)'N' &&
+                header[2] == (byte)'U' &&
+                header[3] == (byte)'M' &&
+                header[4] == (byte)'P' &&
+                header[5] == (byte)'Y';
+        }
+
+        private static string NumpyHeaderText(byte[] header)
+        {
+            if (!LooksLikeNumpyArray(header) || header.Length < 10)
+                return string.Empty;
+            var major = header[6];
+            if (major > 1 && header.Length < 12)
+                return string.Empty;
+            var offset = major <= 1 ? 10 : 12;
+            var length = major <= 1
+                ? header[8] | (header[9] << 8)
+                : header[8] | (header[9] << 8) | (header[10] << 16) | (header[11] << 24);
+            if (length <= 0 || offset + length > header.Length)
+                return string.Empty;
+            return Encoding.ASCII.GetString(header, offset, length).Trim();
+        }
+
         private static void AddNvdaSpeechEngineInfo(ReportSection section, string path, byte[] header)
         {
-            Add(section, "Vendor/family", NvdaSpeechFamily(path));
-            Add(section, "Component", NvdaSpeechComponent(path));
+            if (!LooksLikePocketTtsData(path, header))
+            {
+                Add(section, "Vendor/family", NvdaSpeechFamily(path));
+                Add(section, "Component", NvdaSpeechComponent(path));
+            }
 
             var manifest = FindNearestAddonManifest(path);
             if (manifest != null)
@@ -767,12 +928,14 @@ namespace FileDentify
                 AddRhVoiceDetails(section, path, header);
             else if (LooksLikeFlexVoiceData(path, header))
                 AddFlexVoiceDetails(section, path, header);
+            else if (LooksLikePocketTtsData(path, header))
+                AddPocketTtsDetails(section, path, header);
             else if (LooksLikeEspeakSpeechData(path, header))
                 AddEspeakDetails(section, path, header);
             else if (LooksLikeText(header))
                 AddSpeechTextClues(section, header);
 
-            Add(section, "Notes", "NVDA speech-engine files can be open-source voice data, neural models, dictionaries, or wrappers around commercial engines such as Eloquence, IBM TTS, RHVoice, eSpeak, Orpheus, and SuperTonic. FileDentify reports known add-on paths, package manifests, filenames, and safe text/header metadata; it does not load synthesizers, run engine components, or decode proprietary voice payloads.");
+            Add(section, "Notes", "NVDA speech-engine files can be open-source voice data, neural models, dictionaries, or wrappers around engines such as Eloquence, IBM TTS, RHVoice, eSpeak, Orpheus, SuperTonic, and Pocket TTS. FileDentify reports known add-on paths, package manifests, filenames, and safe text/header metadata; it does not load synthesizers, run engine components, or decode proprietary voice payloads.");
         }
 
         private static string NvdaSpeechFamily(string path)
@@ -789,6 +952,8 @@ namespace FileDentify
                 return "RHVoice";
             if (path.IndexOf("\\Flexvoice\\", StringComparison.OrdinalIgnoreCase) >= 0)
                 return "Mindmaker FlexVoice";
+            if (path.IndexOf("\\pocket_tts\\", StringComparison.OrdinalIgnoreCase) >= 0)
+                return "Pocket TTS";
             if (path.IndexOf("\\espeak-ng-data\\", StringComparison.OrdinalIgnoreCase) >= 0 || path.IndexOf("\\espeak-data\\", StringComparison.OrdinalIgnoreCase) >= 0)
                 return "eSpeak NG";
             if (path.IndexOf("\\stspeech\\", StringComparison.OrdinalIgnoreCase) >= 0)

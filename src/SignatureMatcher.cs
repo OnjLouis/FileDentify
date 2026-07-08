@@ -32,6 +32,12 @@ namespace FileDentify
 
             if (data.Length >= 8 && data[0] == 0x00 && data[1] == 0x00 && data[2] == 0x00 && data[3] == 0x01 && data[4] == (byte)'B' && data[5] == (byte)'u' && data[6] == (byte)'d' && data[7] == (byte)'1')
                 yield return new ReportItem { Title = "Apple Finder metadata", Detail = "macOS .DS_Store folder metadata" };
+            if (data.Length >= 4 &&
+                ((data[0] == 0xCA && data[1] == 0xFE && data[2] == 0xBA && (data[3] == 0xBE || data[3] == 0xBF)) ||
+                 (data[0] == 0xFE && data[1] == 0xED && data[2] == 0xFA && (data[3] == 0xCE || data[3] == 0xCF)) ||
+                 (data[0] == 0xCE && data[1] == 0xFA && data[2] == 0xED && data[3] == 0xFE) ||
+                 (data[0] == 0xCF && data[1] == 0xFA && data[2] == 0xED && data[3] == 0xFE)))
+                yield return new ReportItem { Title = "Apple Mach-O binary", Detail = "macOS/iOS executable, dynamic library, or universal binary" };
             if (data.Length >= 6 && data[0] == 0x00 && data[1] == 0x00 && data[2] == 0x01 && data[3] == 0x00)
                 yield return new ReportItem { Title = "Windows icon", Detail = "Windows ICO icon resource" };
             if (data.Length >= 6 && data[0] == 0x00 && data[1] == 0x00 && data[2] == 0x02 && data[3] == 0x00)
@@ -260,10 +266,11 @@ namespace FileDentify
                 yield return new ReportItem { Title = "Electron ASAR extension", Detail = "Electron application resource archive" };
             if (string.Equals(Path.GetExtension(path), ".nupkg", StringComparison.OrdinalIgnoreCase))
                 yield return new ReportItem { Title = "NuGet extension", Detail = "NuGet package archive" };
-            if (string.Equals(Path.GetExtension(path), ".ckpt", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(Path.GetExtension(path), ".pt", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(Path.GetExtension(path), ".pth", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(Path.GetExtension(path), ".safetensors", StringComparison.OrdinalIgnoreCase))
+            var extension = Path.GetExtension(path);
+            if (string.Equals(extension, ".ckpt", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(extension, ".pt", StringComparison.OrdinalIgnoreCase) ||
+                (string.Equals(extension, ".pth", StringComparison.OrdinalIgnoreCase) && (IsZipHeaderForSignature(data) || (data.Length > 0 && data[0] == 0x80))) ||
+                string.Equals(extension, ".safetensors", StringComparison.OrdinalIgnoreCase))
                 yield return new ReportItem { Title = "AI model extension", Detail = "Machine-learning model checkpoint or tensor file" };
             var vmware = VmwareMetadataExtensionDescription(path);
             if (vmware != null)
@@ -568,7 +575,9 @@ namespace FileDentify
 
         private static string MusicProjectExtensionDescription(string path)
         {
-            switch (Path.GetExtension(path).ToLowerInvariant())
+            var ext = Path.GetExtension(path).ToLowerInvariant();
+            var isArturiaPath = path.IndexOf("Arturia", StringComparison.OrdinalIgnoreCase) >= 0;
+            switch (ext)
             {
                 case ".ablbundle": return "Ableton Move/Live bundle";
                 case ".abl": return "Ableton Move/Live song JSON";
@@ -615,6 +624,29 @@ namespace FileDentify
                 case ".wt": return "Wavetable data";
                 case ".arta": return "Arturia sample payload";
                 case ".astr": return "Arturia bitmap/UI resource";
+                case ".artx": return isArturiaPath ? "Arturia sample/resource payload" : null;
+                case ".raw12b": return isArturiaPath ? "Arturia MiniFreak raw 12-bit sample data" : null;
+                case ".afx": return isArturiaPath ? "Arturia effect preset" : null;
+                case ".mnfx": return isArturiaPath ? "Arturia MiniFreak hardware preset" : null;
+                case ".agvs": return isArturiaPath ? "Arturia Augmented VOICES preset" : null;
+                case ".agss": return isArturiaPath ? "Arturia Augmented STRINGS preset" : null;
+                case ".agws": return isArturiaPath ? "Arturia Augmented WOODWINDS preset" : null;
+                case ".agps": return isArturiaPath ? "Arturia Augmented GRAND PIANO preset" : null;
+                case ".agbs": return isArturiaPath ? "Arturia Augmented BRASS preset" : null;
+                case ".agms": return isArturiaPath ? "Arturia Augmented MALLETS preset" : null;
+                case ".aeas": return isArturiaPath ? "Arturia Augmented YANGTZE preset" : null;
+                case ".agvm": return isArturiaPath ? "Arturia Augmented VOICES multisample preset" : null;
+                case ".agsm": return isArturiaPath ? "Arturia Augmented STRINGS multisample preset" : null;
+                case ".agwm": return isArturiaPath ? "Arturia Augmented WOODWINDS multisample preset" : null;
+                case ".agpm": return isArturiaPath ? "Arturia Augmented GRAND PIANO multisample preset" : null;
+                case ".agbm": return isArturiaPath ? "Arturia Augmented BRASS multisample preset" : null;
+                case ".agmm": return isArturiaPath ? "Arturia Augmented MALLETS multisample preset" : null;
+                case ".aeam": return isArturiaPath ? "Arturia Augmented YANGTZE multisample preset" : null;
+                case ".fct":
+                case ".fct2": return isArturiaPath ? "Arturia function/envelope preset" : null;
+                case ".seq": return isArturiaPath ? "Arturia sequencer/arpeggio preset" : null;
+                case ".sfzi":
+                case ".sfzh": return isArturiaPath ? "Arturia SFZ include/header resource" : null;
                 case ".eiiwav": return "Arturia Emulator II V sample audio";
                 case ".roliaudio": return "ROLI Equator sample audio";
                 case ".ignitex": return "Initial Audio Sektor sample data";
@@ -733,10 +765,42 @@ namespace FileDentify
 
         private static string DeveloperExtensionDescription(string path, byte[] data)
         {
-            switch (Path.GetExtension(path).ToLowerInvariant())
+            var lowerPath = path.ToLowerInvariant();
+            var name = Path.GetFileName(path) ?? string.Empty;
+            var ext = Path.GetExtension(path).ToLowerInvariant();
+            if (name.Equals("meson.build", StringComparison.OrdinalIgnoreCase))
+                return "Meson build definition";
+            if (name.IndexOf("meson", StringComparison.OrdinalIgnoreCase) >= 0 && name.EndsWith(".template", StringComparison.OrdinalIgnoreCase))
+                return "Meson build template";
+            if (name.Equals(".f2py_f2cmap", StringComparison.OrdinalIgnoreCase))
+                return "F2PY C/Fortran type map";
+            if (name.Equals("nfkc.bin", StringComparison.OrdinalIgnoreCase) && lowerPath.Contains("\\sentencepiece\\package_data\\"))
+                return "SentencePiece normalization table";
+            if (ext == ".metadata" && lowerPath.Contains("\\.cache\\huggingface\\download\\"))
+                return "Hugging Face download metadata";
+            if (ext == ".metadata" && lowerPath.Contains("\\nao\\document-cache\\"))
+                return "NAO document cache metadata";
+            if (ext == ".tab" && lowerPath.Contains("\\pytz\\zoneinfo\\"))
+                return "IANA timezone table";
+            if (ext == ".rng" && lowerPath.Contains("\\nvdacomposer\\"))
+                return "Nokia ringtone demo";
+            switch (ext)
             {
                 case ".apk": return "Android application package";
                 case ".pyc": return "Python bytecode cache";
+                case ".pyf": return "F2PY signature file";
+                case ".npz":
+                    return StartsWith(data, new byte[] { 0x50, 0x4B, 0x03, 0x04 }) ||
+                        StartsWith(data, new byte[] { 0x50, 0x4B, 0x05, 0x06 }) ||
+                        StartsWith(data, new byte[] { 0x50, 0x4B, 0x07, 0x08 })
+                        ? "NumPy compressed array archive"
+                        : null;
+                case ".pkl":
+                case ".pickle":
+                    return data.Length > 0 && data[0] == 0x80 ? "Python pickle data" : null;
+                case ".pot": return "gettext translation template";
+                case ".g4": return "ANTLR grammar file";
+                case ".pth": return "Python path configuration file";
                 case ".wasm": return "WebAssembly binary module";
                 case ".msg": return "Outlook or installer message/resource file";
                 case ".pak":
@@ -789,11 +853,24 @@ namespace FileDentify
                 return "Loquendo TTS package";
             if (lower.Contains("\\supertonic\\") && ext == ".onnx")
                 return "SuperTonic ONNX neural TTS model";
+            if (lower.Contains("\\nvda\\pocket_tts\\"))
+            {
+                if (ext == ".onnx")
+                    return "Pocket TTS neural speech model";
+                if (ext == ".npy" && data.Length >= 6 && data[0] == 0x93 && data[1] == (byte)'N' && data[2] == (byte)'U' && data[3] == (byte)'M' && data[4] == (byte)'P' && data[5] == (byte)'Y')
+                    return "Pocket TTS voice embedding";
+                if (name.Equals("tokenizer.model", StringComparison.OrdinalIgnoreCase))
+                    return "Pocket TTS tokenizer model";
+            }
             if (lower.Contains("\\orpheus\\") && ext == ".tts")
                 return "Dolphin Orpheus TTS language data";
+            if (lower.Contains("\\orpheus\\") && ext == ".phm")
+                return "Dolphin Orpheus phoneme data";
+            if (lower.Contains("\\orpheus\\") && ext == ".vcx")
+                return "Dolphin Orpheus voice/configuration data";
             if ((lower.Contains("\\eloquence\\") || lower.Contains("\\ibmtts\\")) && ext == ".syn")
                 return "Eloquence/IBM TTS synthesizer language module";
-            if (lower.Contains("\\rhvoice") && (name.Equals("voice.data", StringComparison.OrdinalIgnoreCase) || ext == ".fst"))
+            if (lower.Contains("\\rhvoice") && (name.Equals("voice.data", StringComparison.OrdinalIgnoreCase) || ext == ".fst" || ext == ".params"))
                 return "RHVoice speech data";
             if (lower.Contains("\\rhvoice") && ext == ".pdf" && !StartsWith(data, Encoding.ASCII.GetBytes("%PDF")))
                 return "RHVoice acoustic model data using .pdf extension";
@@ -824,6 +901,13 @@ namespace FileDentify
                  (data[1] == 0xBF && data[2] == 0xBA && data[3] == 0xAD) ||
                  (data[0] == 0xAD && data[1] == 0xBE && data[2] == 0xEF) ||
                  (data[0] == 0xBF && data[1] == 0xBA && data[2] == 0xAD));
+        }
+
+        private static bool IsZipHeaderForSignature(byte[] data)
+        {
+            return StartsWith(data, new byte[] { 0x50, 0x4B, 0x03, 0x04 }) ||
+                StartsWith(data, new byte[] { 0x50, 0x4B, 0x05, 0x06 }) ||
+                StartsWith(data, new byte[] { 0x50, 0x4B, 0x07, 0x08 });
         }
 
         private static readonly Signature[] Signatures =

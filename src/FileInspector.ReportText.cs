@@ -251,7 +251,7 @@ namespace FileDentify
             sb.AppendLine("<h3>Largest files</h3>");
             sb.AppendLine("<table><thead><tr><th scope=\"col\">Size</th><th scope=\"col\">File</th><th scope=\"col\">Path</th></tr></thead><tbody>");
             foreach (var row in rows.OrderByDescending(r => r.SizeBytes).Take(25))
-                sb.AppendLine("<tr><td>" + Html(FormatBytes(row.SizeBytes)) + "</td><td>" + Html(row.DisplayName) + "</td><td>" + Html(row.Path) + "</td></tr>");
+                sb.AppendLine("<tr><td>" + Html(FormatBytes(row.SizeBytes)) + "</td><td>" + HtmlFileLink(row) + "</td><td>" + Html(row.Path) + "</td></tr>");
             sb.AppendLine("</tbody></table>");
 
             var commonBytes = CommonBytes(rows).Take(16).ToArray();
@@ -280,10 +280,17 @@ namespace FileDentify
                 sb.AppendLine("<h3>Needs attention</h3>");
                 sb.AppendLine("<table><thead><tr><th scope=\"col\">File</th><th scope=\"col\">Likely type</th><th scope=\"col\">Path</th></tr></thead><tbody>");
                 foreach (var row in attention)
-                    sb.AppendLine("<tr><td>" + Html(row.DisplayName) + "</td><td>" + Html(row.LikelyType) + "</td><td>" + Html(row.Path) + "</td></tr>");
+                    sb.AppendLine("<tr><td>" + HtmlFileLink(row) + "</td><td>" + Html(row.LikelyType) + "</td><td>" + Html(row.Path) + "</td></tr>");
                 sb.AppendLine("</tbody></table>");
             }
             sb.AppendLine("</section>");
+        }
+
+        private static string HtmlFileLink(ReportOverviewRow row)
+        {
+            if (row == null || row.Index < 0)
+                return Html(row == null ? string.Empty : row.DisplayName);
+            return "<a href=\"#file-" + row.Index.ToString(CultureInfo.InvariantCulture) + "\">" + Html(row.DisplayName) + "</a>";
         }
 
         private static void HtmlMetric(StringBuilder sb, string name, string value)
@@ -294,9 +301,11 @@ namespace FileDentify
         private static List<ReportOverviewRow> BuildOverviewRows(IEnumerable<FileReport> reports)
         {
             var rows = new List<ReportOverviewRow>();
+            var index = 0;
             foreach (var report in reports)
             {
                 var row = new ReportOverviewRow();
+                row.Index = index++;
                 row.DisplayName = report.DisplayName ?? string.Empty;
                 row.LikelyType = FindReportValue(report, "Summary", "Likely type");
                 if (string.IsNullOrWhiteSpace(row.LikelyType))
@@ -410,6 +419,7 @@ namespace FileDentify
 
         private sealed class ReportOverviewRow
         {
+            public int Index;
             public string DisplayName;
             public string LikelyType;
             public string Path;

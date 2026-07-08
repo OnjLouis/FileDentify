@@ -380,10 +380,7 @@ namespace FileDentify
         private void PrepareHtmlBrowserKeyboardNavigation()
         {
             if (settings.HtmlDetailsView && detailsBrowser != null && detailsBrowser.ContainsFocus)
-            {
                 htmlDetailsWantsFocus = true;
-                resultsTree.Focus();
-            }
         }
 
 

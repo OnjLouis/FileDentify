@@ -25,6 +25,8 @@ namespace FileDentify
             if (ext == ".rpp" || ext == ".rpp-bak")
                 return;
             var extensionHint = NativeInstrumentsTypeName(path);
+            if (extensionHint == null && IsArturiaPath(path) && !PathContainsNativeInstrumentsContext(path))
+                return;
             if (extensionHint == null && !PathContainsNativeInstrumentsContext(path) && WindowsSystemTypeName(path, sample) != null)
                 return;
             var headerMarker = NativeHeaderMarker(sample);

@@ -91,6 +91,8 @@ namespace FileDentify
             if (IsInternetShortcut(path, header)) return "Internet shortcut or web favorite (.url)";
             var savedReportType = SavedReportTypeName(path, header);
             if (savedReportType != null) return savedReportType;
+            var nvdaAddonType = NvdaAddonTypeName(path, header);
+            if (nvdaAddonType != null) return nvdaAddonType;
             var developerType = DeveloperFormatTypeName(path, header);
             if (developerType != null) return developerType;
             var developerAppResourceType = DeveloperAppResourceTypeName(path, header);
@@ -103,8 +105,6 @@ namespace FileDentify
             if (ensoniqType != null) return ensoniqType;
             var qwsType = QwsTypeName(path, header);
             if (qwsType != null) return qwsType;
-            var nvdaAddonType = NvdaAddonTypeName(path, header);
-            if (nvdaAddonType != null) return nvdaAddonType;
             var gameType = GameFileTypeName(path, header);
             if (gameType != null) return gameType;
             var legacyMusicType = LegacyMusicTypeName(path, header);
@@ -237,6 +237,9 @@ namespace FileDentify
             var savedReportType = SavedReportTypeName(path, header);
             if (savedReportType != null)
                 return savedReportType;
+            var nvdaAddonType = NvdaAddonTypeName(path, header);
+            if (nvdaAddonType != null)
+                return nvdaAddonType;
             var developerType = DeveloperFormatTypeName(path, header);
             if (developerType != null)
                 return developerType;
@@ -255,9 +258,6 @@ namespace FileDentify
             var qwsType = QwsTypeName(path, header);
             if (qwsType != null)
                 return qwsType;
-            var nvdaAddonType = NvdaAddonTypeName(path, header);
-            if (nvdaAddonType != null)
-                return nvdaAddonType;
             var gameType = GameFileTypeName(path, header);
             if (gameType != null)
                 return gameType;

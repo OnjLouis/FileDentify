@@ -11,6 +11,8 @@ namespace FileDentify
     {
         private static string NvdaAddonTypeName(string path, byte[] header)
         {
+            if (LooksLikeInstalledNvdaAddonManifest(path, header))
+                return "Installed NVDA add-on manifest";
             if (!IsZipHeader(header) || !string.Equals(Path.GetExtension(path), ".nvda-addon", StringComparison.OrdinalIgnoreCase))
                 return null;
             return "NVDA add-on package";
@@ -18,8 +20,30 @@ namespace FileDentify
 
         private static void AddNvdaAddonInfo(List<ReportSection> sections, string path, byte[] header)
         {
-            if (NvdaAddonTypeName(path, header) == null)
+            var type = NvdaAddonTypeName(path, header);
+            if (type == null)
                 return;
+
+            if (LooksLikeInstalledNvdaAddonManifest(path, header))
+            {
+                var section = AddSection(sections, "NVDA add-on");
+                Add(section, "Format hint", type);
+                Add(section, "Container", "Installed add-on folder metadata");
+                var text = DecodeTextSample(header, 64 * 1024);
+                AddNvdaManifestValue(section, text, "name", "Name");
+                AddNvdaManifestValue(section, text, "summary", "Summary");
+                AddNvdaManifestValue(section, text, "description", "Description");
+                AddNvdaManifestValue(section, text, "author", "Author");
+                AddNvdaManifestValue(section, text, "version", "Version");
+                AddNvdaManifestValue(section, text, "url", "URL");
+                AddNvdaManifestValue(section, text, "minimumNVDAVersion", "Minimum NVDA version");
+                AddNvdaManifestValue(section, text, "lastTestedNVDAVersion", "Last tested NVDA version");
+                AddNvdaManifestValue(section, text, "docFileName", "Documentation file");
+                AddNvdaManifestValue(section, text, "updateChannel", "Update channel");
+                Add(section, "Add-on folder", Path.GetFileName(Path.GetDirectoryName(path) ?? string.Empty));
+                Add(section, "Notes", "Installed NVDA add-on manifests describe an add-on already unpacked under NVDA's add-ons folder. FileDentify reads manifest.ini only; it does not import or run add-on code.");
+                return;
+            }
 
             try
             {
@@ -65,6 +89,18 @@ namespace FileDentify
             {
                 Add(AddSection(sections, "NVDA add-on"), "Metadata read error", ex.Message);
             }
+        }
+
+        private static bool LooksLikeInstalledNvdaAddonManifest(string path, byte[] header)
+        {
+            if (!string.Equals(Path.GetFileName(path), "manifest.ini", StringComparison.OrdinalIgnoreCase))
+                return false;
+            if (path.IndexOf("\\nvda\\addons\\", StringComparison.OrdinalIgnoreCase) < 0)
+                return false;
+            var text = DecodeTextSample(header, 8192);
+            return text.IndexOf("name", StringComparison.OrdinalIgnoreCase) >= 0 &&
+                text.IndexOf("summary", StringComparison.OrdinalIgnoreCase) >= 0 &&
+                text.IndexOf("lastTestedNVDAVersion", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         private static void AddNvdaManifestValue(ReportSection section, string text, string key, string label)

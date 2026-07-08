@@ -1472,6 +1472,9 @@ namespace FileDentify
         private static string AudioSampleResourceTypeName(string path, byte[] header)
         {
             var ext = Path.GetExtension(path).ToLowerInvariant();
+            var arturiaType = ArturiaResourceTypeName(path, ext);
+            if (arturiaType != null)
+                return arturiaType;
             switch (ext)
             {
                 case ".arta": return "Arturia sample payload";
@@ -1496,8 +1499,11 @@ namespace FileDentify
 
             var ext = Path.GetExtension(path).ToLowerInvariant();
             var section = AddSection(sections, "Audio sample resource");
+            var vendor = AudioResourceVendor(path, ext);
             Add(section, "Format hint", type);
-            Add(section, "Product or vendor", AudioResourceVendor(path, ext));
+            if (!string.IsNullOrWhiteSpace(vendor) &&
+                type.IndexOf(vendor, StringComparison.OrdinalIgnoreCase) < 0)
+                Add(section, "Product or vendor", vendor);
             Add(section, "Library folder", AudioResourceLibrary(path));
             Add(section, "Role", AudioResourceRole(path, ext));
             Add(section, "File size", FormatBytes(fileLength));
@@ -1508,6 +1514,8 @@ namespace FileDentify
                 AddScalaScaleInfo(section, sample);
             else if (ext == ".wt")
                 AddWavetableResourceInfo(section, header, sample);
+            else if (vendor.Equals("Arturia", StringComparison.OrdinalIgnoreCase))
+                AddArturiaResourceDetails(section, path, sample);
             else
                 AddAudioResourceVisibleStrings(section, sample);
 
@@ -1606,6 +1614,119 @@ namespace FileDentify
                 value.IndexOf("ROLI", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
+        private static string ArturiaResourceTypeName(string path, string ext)
+        {
+            if (!IsArturiaPath(path))
+                return null;
+            switch (ext)
+            {
+                case ".artx": return "Arturia sample/resource payload";
+                case ".raw12b": return "Arturia MiniFreak raw 12-bit sample data";
+                case ".afx": return "Arturia effect preset";
+                case ".mnfx": return "Arturia MiniFreak hardware preset";
+                case ".agvs": return "Arturia Augmented VOICES preset";
+                case ".agss": return "Arturia Augmented STRINGS preset";
+                case ".agws": return "Arturia Augmented WOODWINDS preset";
+                case ".agps": return "Arturia Augmented GRAND PIANO preset";
+                case ".agbs": return "Arturia Augmented BRASS preset";
+                case ".agms": return "Arturia Augmented MALLETS preset";
+                case ".aeas": return "Arturia Augmented YANGTZE preset";
+                case ".agvm": return "Arturia Augmented VOICES multisample preset";
+                case ".agsm": return "Arturia Augmented STRINGS multisample preset";
+                case ".agwm": return "Arturia Augmented WOODWINDS multisample preset";
+                case ".agpm": return "Arturia Augmented GRAND PIANO multisample preset";
+                case ".agbm": return "Arturia Augmented BRASS multisample preset";
+                case ".agmm": return "Arturia Augmented MALLETS multisample preset";
+                case ".aeam": return "Arturia Augmented YANGTZE multisample preset";
+                case ".fct":
+                case ".fct2": return "Arturia function/envelope preset";
+                case ".seq": return "Arturia sequencer/arpeggio preset";
+                case ".sfzi":
+                case ".sfzh": return "Arturia SFZ include/header resource";
+                default:
+                    return IsArturiaEffectExtension(ext) ? "Arturia effect/model preset" : null;
+            }
+        }
+
+        private static bool IsArturiaPath(string path)
+        {
+            return path != null && path.IndexOf("Arturia", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static bool IsArturiaEffectExtension(string ext)
+        {
+            switch (ext)
+            {
+                case ".distortion":
+                case ".flanger":
+                case ".parameq":
+                case ".chorus":
+                case ".reverb":
+                case ".analogdelay":
+                case ".delay":
+                case ".stereopan":
+                case ".leslie":
+                case ".twin":
+                case ".analogphaser":
+                case ".limiter":
+                case ".room2":
+                case ".spaceecho":
+                case ".compressor":
+                case ".crywah":
+                case ".tapeecho":
+                case ".multifilter":
+                case ".phaser":
+                case ".room":
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        private static void AddArturiaResourceDetails(ReportSection section, string path, byte[] sample)
+        {
+            var ext = Path.GetExtension(path).ToLowerInvariant();
+            if (LooksLikeText(sample))
+            {
+                var text = DecodeTextSample(sample);
+                AddXmlishAttribute(section, text, "instrument_version", "value", "Instrument/resource version");
+                var paramCount = Regex.Matches(text, "<param\\b", RegexOptions.IgnoreCase).Count;
+                if (paramCount > 0)
+                    Add(section, "Parameter count", paramCount.ToString(CultureInfo.InvariantCulture));
+                var filePaths = Regex.Matches(text, "FilePath\"\\s+value=\"(?<value>[^\"]+)\"", RegexOptions.IgnoreCase)
+                    .Cast<Match>()
+                    .Select(match => CleanMetadataText(match.Groups["value"].Value))
+                    .Where(value => value.Length > 0)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .Take(12)
+                    .ToArray();
+                if (filePaths.Length > 0)
+                    Add(section, "Referenced files", string.Join(Environment.NewLine, filePaths));
+                if (text.StartsWith("22 serialization::archive", StringComparison.Ordinal))
+                {
+                    Add(section, "Serialization marker", "Boost text serialization archive");
+                    var tokens = Regex.Matches(text, "[A-Za-z][A-Za-z0-9_\\-]{2,}")
+                        .Cast<Match>()
+                        .Select(match => match.Value)
+                        .Where(value => IsUsefulAudioResourceString(value) || value.IndexOf("MiniFreak", StringComparison.OrdinalIgnoreCase) >= 0 || value.IndexOf("Sequence", StringComparison.OrdinalIgnoreCase) >= 0)
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .Take(18)
+                        .ToArray();
+                    if (tokens.Length > 0)
+                        Add(section, "Visible preset strings", string.Join(Environment.NewLine, tokens));
+                }
+                else
+                    AddAudioResourceVisibleStrings(section, sample);
+                return;
+            }
+
+            if (ext == ".raw12b")
+                Add(section, "Payload hint", "Raw 12-bit sample-style data used by MiniFreak resources");
+            else if (ext == ".artx")
+                Add(section, "Payload hint", "Opaque Arturia sample/resource payload");
+            AddAudioResourceVisibleStrings(section, sample);
+        }
+
         private static string AudioResourceVendor(string path, string ext)
         {
             foreach (var vendor in new[] { "Arturia", "ROLI", "Initial Audio", "Native Instruments", "Apple", "Sonic Charge", "KV331 Audio" })
@@ -1673,8 +1794,10 @@ namespace FileDentify
                 return "Wavetable";
             if (path.IndexOf("bitmap", StringComparison.OrdinalIgnoreCase) >= 0 || ext == ".astr")
                 return "UI bitmap/resource";
-            if (path.IndexOf("SFZ", StringComparison.OrdinalIgnoreCase) >= 0 || ext == ".arta" || ext == ".eiiwav" || ext == ".roliaudio" || ext == ".ignitex")
+            if (path.IndexOf("SFZ", StringComparison.OrdinalIgnoreCase) >= 0 || ext == ".arta" || ext == ".artx" || ext == ".raw12b" || ext == ".eiiwav" || ext == ".roliaudio" || ext == ".ignitex")
                 return "Sampler audio payload";
+            if (AudioResourceVendor(path, ext).Equals("Arturia", StringComparison.OrdinalIgnoreCase))
+                return "Instrument, preset, or support resource";
             if (ext == ".scl")
                 return "Microtuning scale";
             if (ext == ".caf")

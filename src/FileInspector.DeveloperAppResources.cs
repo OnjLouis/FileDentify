@@ -14,6 +14,8 @@ namespace FileDentify
     {
         private static string DeveloperAppResourceTypeName(string path, byte[] header)
         {
+            if (LooksLikeInstalledNvdaAddonManifest(path, header))
+                return null;
             var ext = Path.GetExtension(path).ToLowerInvariant();
             if (ext == ".asar" && LooksLikeElectronAsar(header))
                 return "Electron ASAR application archive";
@@ -93,7 +95,30 @@ namespace FileDentify
 
         private static string GenericDeveloperResourceTypeName(string path, byte[] header)
         {
+            var name = Path.GetFileName(path) ?? string.Empty;
             var ext = Path.GetExtension(path).ToLowerInvariant();
+            if (name.Equals(".f2py_f2cmap", StringComparison.OrdinalIgnoreCase))
+                return "F2PY C/Fortran type map";
+            if (name.Equals("meson.build", StringComparison.OrdinalIgnoreCase))
+                return "Meson build definition";
+            if (name.IndexOf("meson", StringComparison.OrdinalIgnoreCase) >= 0 && name.EndsWith(".template", StringComparison.OrdinalIgnoreCase))
+                return "Meson build template";
+            if (name.Equals("nfkc.bin", StringComparison.OrdinalIgnoreCase) && path.IndexOf("\\sentencepiece\\package_data\\", StringComparison.OrdinalIgnoreCase) >= 0)
+                return "SentencePiece normalization table";
+            if (ext == ".pot")
+                return "gettext translation template";
+            if (ext == ".g4")
+                return "ANTLR grammar file";
+            if (ext == ".pth")
+                return "Python path configuration file";
+            if (ext == ".metadata" && path.IndexOf("\\.cache\\huggingface\\download\\", StringComparison.OrdinalIgnoreCase) >= 0)
+                return "Hugging Face download metadata";
+            if (ext == ".metadata" && path.IndexOf("\\nao\\document-cache\\", StringComparison.OrdinalIgnoreCase) >= 0)
+                return "NAO document cache metadata";
+            if (ext == ".tab" && path.IndexOf("\\pytz\\zoneinfo\\", StringComparison.OrdinalIgnoreCase) >= 0)
+                return "IANA timezone table";
+            if (ext == ".rng" && path.IndexOf("\\nvdaComposer\\", StringComparison.OrdinalIgnoreCase) >= 0)
+                return "Nokia ringtone demo";
             switch (ext)
             {
                 case ".h":
@@ -117,10 +142,20 @@ namespace FileDentify
                     return "reStructuredText documentation";
                 case ".cmake":
                     return "CMake build script/module";
+                case ".build":
+                    if (name.Equals("meson.build", StringComparison.OrdinalIgnoreCase))
+                        return "Meson build definition";
+                    break;
+                case ".template":
+                    if (name.IndexOf("meson", StringComparison.OrdinalIgnoreCase) >= 0)
+                        return "Meson build template";
+                    break;
                 case ".zig":
                     return "Zig source file";
                 case ".pyi":
                     return "Python type stub";
+                case ".pyf":
+                    return "F2PY signature file";
                 case ".pyx":
                 case ".pxd":
                 case ".pxi":
@@ -193,6 +228,15 @@ namespace FileDentify
                     return "Node.js native add-on";
                 case ".pyd":
                     return "Python native extension module";
+                case ".npz":
+                    if (IsZipHeader(header))
+                        return "NumPy compressed array archive";
+                    break;
+                case ".pkl":
+                case ".pickle":
+                    if (header.Length > 0 && header[0] == 0x80)
+                        return "Python pickle data";
+                    break;
                 case ".natvis":
                     return "Visual Studio debugger visualizer";
                 case ".version":
@@ -277,7 +321,9 @@ namespace FileDentify
                 path.IndexOf("\\Microsoft Visual Studio\\", StringComparison.OrdinalIgnoreCase) >= 0 ||
                 path.IndexOf("\\Git\\", StringComparison.OrdinalIgnoreCase) >= 0 ||
                 path.IndexOf("\\Nmap\\", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                path.IndexOf("\\node_modules\\", StringComparison.OrdinalIgnoreCase) >= 0;
+                path.IndexOf("\\node_modules\\", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                path.IndexOf("\\nvda\\addons\\", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                path.IndexOf("\\nvda\\pocket_tts\\", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         private static void AddGenericDeveloperResourceInfo(ReportSection section, string path, byte[] header, string type)
@@ -304,7 +350,7 @@ namespace FileDentify
             if (StartsWith(header, Encoding.ASCII.GetBytes("MZ")) && (ext == ".acm" || ext == ".ax"))
                 Add(section, "Container", "Windows PE module");
 
-            var text = DecodeTextSample(header, 256 * 1024);
+            var text = LooksLikeText(header) ? DecodeTextSample(header, 256 * 1024) : string.Empty;
             if (!string.IsNullOrWhiteSpace(text))
             {
                 var firstLine = FirstNonEmptyLine(text);
@@ -335,6 +381,10 @@ namespace FileDentify
                 Add(section, "Product/path hint", "Microsoft Visual Studio");
             else if (path.IndexOf("\\MAGIX\\", StringComparison.OrdinalIgnoreCase) >= 0 || path.IndexOf("\\Sound Forge", StringComparison.OrdinalIgnoreCase) >= 0)
                 Add(section, "Product/path hint", "MAGIX / Sound Forge");
+            else if (path.IndexOf("\\nvda\\addons\\", StringComparison.OrdinalIgnoreCase) >= 0)
+                Add(section, "Product/path hint", "Installed NVDA add-on resources");
+            else if (path.IndexOf("\\nvda\\pocket_tts\\", StringComparison.OrdinalIgnoreCase) >= 0)
+                Add(section, "Product/path hint", "Pocket TTS / NVDA speech engine resources");
         }
 
         private static void AddDeveloperTextCounters(ReportSection section, string ext, string text)

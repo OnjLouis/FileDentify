@@ -172,6 +172,7 @@ namespace FileDentify
             detailsBrowser.AccessibleName = "Selected item HTML details";
             detailsBrowser.TabStop = false;
             detailsBrowser.PreviewKeyDown += DetailsBrowser_PreviewKeyDown;
+            detailsBrowser.Navigating += DetailsBrowser_Navigating;
             detailsBrowser.DocumentCompleted += delegate
             {
                 if (CanRestoreHtmlDetailsFocus())

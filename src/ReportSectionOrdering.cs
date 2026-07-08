@@ -55,6 +55,7 @@ namespace FileDentify
             "Apple mobile backup",
             "Apple mobile backup file",
             "Apple bundle",
+            "Apple Mach-O binary",
             "Apple Finder metadata",
             "Apple firmware package",
             "iOS application archive",
