@@ -238,6 +238,36 @@ namespace FileDentify
             var inKorgPath = IsKorgPath(path);
             if (StartsWith(header, Encoding.ASCII.GetBytes("WMMS")) || ext == ".wmss")
                 return "Korg WaveMotion sample set";
+            if (StartsWith(header, Encoding.ASCII.GetBytes("p4pm")) || (inKorgPath && ext == ".mp4prog"))
+                return "Korg Mono/Poly program preset";
+            if (StartsWith(header, Encoding.ASCII.GetBytes("MSP1")) || (inKorgPath && ext == ".kmp"))
+                return "Korg KMP multisample map";
+            if (StartsWith(header, Encoding.ASCII.GetBytes("#KORG Script")) || (inKorgPath && ext == ".ksc"))
+                return "Korg KSC sample script";
+            if (StartsWith(header, Encoding.ASCII.GetBytes("KSCSNDRAW")) || (inKorgPath && Path.GetFileName(path).Equals("RAWSND", StringComparison.OrdinalIgnoreCase)))
+                return "Korg Trinity raw PCM sound data";
+            if (StartsWith(header, Encoding.ASCII.GetBytes("cmap")) && inKorgPath)
+                return "Korg Collection controller/parameter map";
+            if (StartsWith(header, Encoding.ASCII.GetBytes("CcnK")) && inKorgPath && (ext == ".fxp" || ext == ".fxb"))
+                return ext == ".fxb" ? "Korg Collection VST bank" : "Korg Collection VST preset";
+            if (inKorgPath)
+            {
+                if (ext == ".er1") return "Korg Electribe-R pattern/program";
+                if (ext == ".program") return "Korg Collection synth program";
+                if (ext == ".pcg") return "Korg PCG program/combi/global data";
+                if (ext == ".bin" && path.IndexOf("TRITON", StringComparison.OrdinalIgnoreCase) >= 0) return "Korg Triton PCM ROM/sample image";
+                if (Regex.IsMatch(ext, @"^\.\d{4}[hl]$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant) &&
+                    path.IndexOf("Binary4M", StringComparison.OrdinalIgnoreCase) >= 0)
+                    return "Korg Trinity/TR-Rack split PCM ROM chunk";
+                if (ext == ".json" && (Path.GetFileName(path).Equals("ProgramChange.json", StringComparison.OrdinalIgnoreCase) ||
+                    Path.GetFileName(path).Equals("PreviewList.json", StringComparison.OrdinalIgnoreCase) ||
+                    path.IndexOf("\\Favorites\\", StringComparison.OrdinalIgnoreCase) >= 0))
+                    return "Korg preset/index JSON";
+                if (ext == ".xml" && LooksLikeText(header))
+                    return "Korg Collection XML preset";
+                if (ext == "" && path.IndexOf("\\InitData\\", StringComparison.OrdinalIgnoreCase) >= 0)
+                    return "Korg Trinity init data";
+            }
             if (StartsWith(header, Encoding.ASCII.GetBytes("Korg")) || inKorgPath)
             {
                 switch (ext)
@@ -294,10 +324,82 @@ namespace FileDentify
             {
                 Add(section, "Header marker", "SQLite");
             }
+            else if (StartsWith(header, Encoding.ASCII.GetBytes("p4pm")))
+            {
+                Add(section, "Header marker", "p4pm");
+                Add(section, "Preset name", ValueOrNotReported(ReadAsciiZ(header, 32, 48)));
+                Add(section, "Plug-in/product marker", FirstUsefulKorgString(sample, "KORG", "KLM", "MonoPoly"));
+            }
+            else if (StartsWith(header, Encoding.ASCII.GetBytes("MSP1")))
+            {
+                Add(section, "Header marker", "MSP1");
+                Add(section, "Multisample name", ValueOrNotReported(ReadAsciiZ(header, 8, 16)));
+                AddKorgReferencedFiles(section, sample, ".KSF", "Referenced sample files");
+            }
+            else if (StartsWith(header, Encoding.ASCII.GetBytes("#KORG Script")) || Path.GetExtension(path).Equals(".ksc", StringComparison.OrdinalIgnoreCase))
+            {
+                Add(section, "Header marker", StartsWith(header, Encoding.ASCII.GetBytes("#KORG Script")) ? "#KORG Script" : "KSC script");
+                AddKorgScriptSummary(section, sample);
+            }
+            else if (StartsWith(header, Encoding.ASCII.GetBytes("KSCSNDRAW")))
+            {
+                Add(section, "Header marker", "KSCSNDRAW");
+                Add(section, "Payload", "Trinity KSC raw sample/audio payload");
+            }
+            else if (StartsWith(header, Encoding.ASCII.GetBytes("cmap")))
+            {
+                Add(section, "Header marker", "cmap");
+                Add(section, "Map id", ValueOrNotReported(ReadAsciiZ(header, 16, 16)));
+            }
+            else if (StartsWith(header, Encoding.ASCII.GetBytes("CcnK")))
+            {
+                Add(section, "Header marker", "CcnK");
+                Add(section, "VST chunk type", header.Length >= 12 ? Encoding.ASCII.GetString(header, 8, 4) : "not reported");
+                Add(section, "Plug-in id", header.Length >= 20 ? Encoding.ASCII.GetString(header, 16, 4) : "not reported");
+                Add(section, "Preset/bank name", ValueOrNotReported(ReadAsciiZ(header, 28, 48)));
+                AddKorgVisibleNames(section, sample, "Visible preset names");
+            }
+            else if (Path.GetExtension(path).Equals(".pcg", StringComparison.OrdinalIgnoreCase))
+            {
+                if (StartsWith(header, Encoding.ASCII.GetBytes("KORG")))
+                    Add(section, "Header marker", "KORG");
+                AddKorgVisibleNames(section, sample, "Visible program/combi names");
+            }
+            else if (Path.GetExtension(path).Equals(".er1", StringComparison.OrdinalIgnoreCase))
+            {
+                Add(section, "Pattern/program name", CleanKorgPresetName(Path.GetFileNameWithoutExtension(path)));
+                AddKorgVisibleNames(section, sample, "Visible names");
+            }
+            else if (Path.GetExtension(path).Equals(".program", StringComparison.OrdinalIgnoreCase))
+            {
+                Add(section, "Program name", ValueOrNotReported(ReadAsciiZ(header, 12, 48)));
+            }
+            else if (Path.GetExtension(path).Equals(".xml", StringComparison.OrdinalIgnoreCase) && LooksLikeText(header))
+            {
+                var text = Encoding.UTF8.GetString(sample.Take(Math.Min(sample.Length, 256 * 1024)).ToArray());
+                Add(section, "Root element", ValueOrNotReported(FirstKorgXmlRoot(text)));
+                Add(section, "Product", ValueOrNotReported(RegexAttribute(text, "product")));
+                Add(section, "Vendor", ValueOrNotReported(RegexAttribute(text, "vendor")));
+                Add(section, "Programmer", ValueOrNotReported(RegexAttribute(text, "programmer")));
+            }
+            else if (Path.GetExtension(path).Equals(".json", StringComparison.OrdinalIgnoreCase) && LooksLikeText(header))
+            {
+                AddKorgJsonIndexInfo(section, sample);
+            }
+            else if (Regex.IsMatch(Path.GetExtension(path), @"^\.\d{4}[hl]$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+            {
+                Add(section, "Chunk side", Path.GetExtension(path).EndsWith("H", StringComparison.OrdinalIgnoreCase) ? "High-byte chunk" : "Low-byte chunk");
+                Add(section, "Chunk id", Path.GetExtension(path).TrimStart('.'));
+            }
+            else if (Path.GetExtension(path).Equals(".bin", StringComparison.OrdinalIgnoreCase) && path.IndexOf("TRITON", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                Add(section, "Payload", "Triton PCM ROM/sample data");
+                Add(section, "PCM resource", Path.GetFileNameWithoutExtension(path));
+            }
 
             if (Path.GetExtension(path).Length == 0)
                 Add(section, "Object id", Path.GetFileName(path));
-            Add(section, "Notes", "Korg sample and synth-library files can belong to wavestate, KORG Collection, Triton, or other Korg instrument libraries. FileDentify reports folder role, header markers, object names, and visible identifiers; it does not decode the sample payload.");
+            Add(section, "Notes", "Korg files can belong to KORG Collection instruments, Triton/Trinity PCM resources, wavestate/WaveMotion data, Electribe patterns, or legacy workstation sample scripts. FileDentify reports folder role, header markers, object names, preset/script clues, and visible identifiers; it does not decode proprietary synth parameters or sample payloads.");
         }
 
         private static string GForceTypeName(string path)
@@ -570,6 +672,11 @@ namespace FileDentify
             if (path.IndexOf("\\Collections\\Sample\\", StringComparison.OrdinalIgnoreCase) >= 0) return "sample collection object";
             if (path.IndexOf("\\Database\\", StringComparison.OrdinalIgnoreCase) >= 0) return "database/index";
             if (path.IndexOf("\\Effects\\IRs\\", StringComparison.OrdinalIgnoreCase) >= 0) return "effect impulse-response data";
+            if (path.IndexOf("\\Presets\\", StringComparison.OrdinalIgnoreCase) >= 0) return "preset/program data";
+            if (path.IndexOf("\\PCM\\", StringComparison.OrdinalIgnoreCase) >= 0) return "PCM sample or workstation resource";
+            if (path.IndexOf("\\MIDI\\", StringComparison.OrdinalIgnoreCase) >= 0) return "MIDI preview/index data";
+            if (path.IndexOf("\\Favorites\\", StringComparison.OrdinalIgnoreCase) >= 0) return "favorites/index data";
+            if (path.IndexOf("\\Resource\\", StringComparison.OrdinalIgnoreCase) >= 0) return "product resource data";
             return "Korg library data";
         }
 
@@ -646,6 +753,127 @@ namespace FileDentify
             while (end < limit && data[end] >= 32 && data[end] < 127)
                 end++;
             return end > offset ? Encoding.ASCII.GetString(data, offset, end - offset).Trim() : string.Empty;
+        }
+
+        private static void AddKorgScriptSummary(ReportSection section, byte[] sample)
+        {
+            var lines = FindReadableTextLines(sample, 2, 120)
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .Take(80)
+                .ToArray();
+            var countLine = lines.FirstOrDefault(value => value.IndexOf("Multi Samples", StringComparison.OrdinalIgnoreCase) >= 0);
+            if (!string.IsNullOrWhiteSpace(countLine))
+                Add(section, "Declared multisamples", countLine.TrimStart('#').Trim());
+            var refs = lines
+                .Where(value => value.EndsWith(".KMP", StringComparison.OrdinalIgnoreCase))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(24)
+                .ToArray();
+            if (refs.Length > 0)
+                Add(section, "Referenced multisamples", string.Join(Environment.NewLine, refs));
+        }
+
+        private static void AddKorgReferencedFiles(ReportSection section, byte[] sample, string extension, string title)
+        {
+            var refs = FindAsciiStrings(sample, 3, 100)
+                .Select(item => item.Value.Trim())
+                .Where(value => value.EndsWith(extension, StringComparison.OrdinalIgnoreCase))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(24)
+                .ToArray();
+            if (refs.Length > 0)
+                Add(section, title, string.Join(Environment.NewLine, refs));
+        }
+
+        private static void AddKorgVisibleNames(ReportSection section, byte[] sample, string title)
+        {
+            var names = FindReadableTextLines(sample, 4, 120)
+                .Select(CleanKorgPresetName)
+                .Where(IsUsefulKorgVisibleName)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(24)
+                .ToArray();
+            if (names.Length > 0)
+                Add(section, title, string.Join(Environment.NewLine, names));
+        }
+
+        private static void AddKorgJsonIndexInfo(ReportSection section, byte[] sample)
+        {
+            var text = Encoding.UTF8.GetString(sample.Take(Math.Min(sample.Length, 512 * 1024)).ToArray());
+            var pathMatches = Regex.Matches(text, "\"path\"\\s*:\\s*\"(?<path>[^\"]+)\"", RegexOptions.IgnoreCase);
+            if (pathMatches.Count > 0)
+            {
+                Add(section, "Indexed paths in sample", pathMatches.Count.ToString(CultureInfo.InvariantCulture));
+                var names = pathMatches.Cast<Match>()
+                    .Select(match => Path.GetFileName(match.Groups["path"].Value.Replace("/", "\\")))
+                    .Where(value => !string.IsNullOrWhiteSpace(value))
+                    .Select(CleanKorgPresetName)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .Take(20)
+                    .ToArray();
+                if (names.Length > 0)
+                    Add(section, "First indexed entries", string.Join(Environment.NewLine, names));
+            }
+            var favoriteMatches = Regex.Matches(text, "\"name\"\\s*:\\s*\"(?<name>[^\"]+)\"", RegexOptions.IgnoreCase);
+            if (favoriteMatches.Count > 0)
+            {
+                var names = favoriteMatches.Cast<Match>()
+                    .Select(match => CleanKorgPresetName(match.Groups["name"].Value))
+                    .Where(IsUsefulKorgVisibleName)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .Take(20)
+                    .ToArray();
+                if (names.Length > 0)
+                    Add(section, "Visible names", string.Join(Environment.NewLine, names));
+            }
+        }
+
+        private static string FirstUsefulKorgString(byte[] sample, params string[] contains)
+        {
+            var value = FindReadableTextLines(sample, 3, 80)
+                .FirstOrDefault(line => contains.Any(part => line.IndexOf(part, StringComparison.OrdinalIgnoreCase) >= 0));
+            return ValueOrNotReported(value);
+        }
+
+        private static string FirstKorgXmlRoot(string text)
+        {
+            var match = Regex.Match(text ?? string.Empty, "<\\s*(?<name>[A-Za-z0-9_:-]+)\\b");
+            return match.Success ? match.Groups["name"].Value : string.Empty;
+        }
+
+        private static string RegexAttribute(string text, string attribute)
+        {
+            var match = Regex.Match(text ?? string.Empty, "\\b" + Regex.Escape(attribute) + "\\s*=\\s*\"(?<value>[^\"]+)\"", RegexOptions.IgnoreCase);
+            return match.Success ? match.Groups["value"].Value : string.Empty;
+        }
+
+        private static string CleanKorgPresetName(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return string.Empty;
+            var cleaned = value.Replace("%20", " ");
+            try { cleaned = Uri.UnescapeDataString(cleaned); }
+            catch { }
+            return Regex.Replace(cleaned, "\\s+", " ").Trim();
+        }
+
+        private static bool IsUsefulKorgVisibleName(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return false;
+            value = value.Trim();
+            if (value.Length < 4 || value.Length > 80)
+                return false;
+            if (value.IndexOf("KORG Script", StringComparison.OrdinalIgnoreCase) >= 0)
+                return false;
+            if (Regex.IsMatch(value, @"[\\/?]"))
+                return false;
+            if (Regex.IsMatch(value, "^[0-9A-Fa-fx]+$"))
+                return false;
+            var letters = value.Count(char.IsLetter);
+            if (letters < 3)
+                return false;
+            return Regex.IsMatch(value, "[AEIOUYaeiouy]");
         }
 
         private static bool IsUsefulKorgMarker(string value)

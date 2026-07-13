@@ -125,6 +125,7 @@ namespace FileDentify
             AddSteinbergCubaseInfo(sections, path, stringSample);
             AddAppleFormatInfo(sections, path, header);
             AddMacAudioPluginInfo(sections, path, header);
+            AddVst3VendorResourceInfo(sections, path, header, stringSample, file.Length);
             AddRolandCloudInfo(sections, path, header, stringSample, file.Length);
             AddSampleLibraryInfo(sections, path, header, stringSample, file.Length);
             AddMusicProjectFormatInfo(sections, path, header, stringSample, file.Length);

@@ -23,6 +23,8 @@ namespace FileDentify
             if (ext == ".adv") return "Ableton device preset";
             if (ext == ".helm") return "Helm synthesizer preset";
             if (ext == ".wt" && StartsWith(header, Encoding.ASCII.GetBytes("vawt"))) return "Surge wavetable";
+            var logicProLibraryType = LogicProLibraryTypeName(path, header);
+            if (logicProLibraryType != null) return logicProLibraryType;
             var audioResourceType = AudioSampleResourceTypeName(path, header);
             if (audioResourceType != null) return audioResourceType;
             if (ext == ".nam") return "Neural Amp Modeler model";
@@ -72,6 +74,7 @@ namespace FileDentify
             AddFmodBankInfo(sections, path, header);
             AddWwiseMediaInfo(sections, path, header);
             AddSpitfireAudioInfo(sections, path, header, stringSample, fileLength);
+            AddLogicProLibraryInfo(sections, path, header, stringSample, fileLength);
             AddAudioSampleResourceInfo(sections, path, header, stringSample, fileLength);
             AddYamahaSoftSynthInfo(sections, path, header, stringSample, fileLength);
             AddOpenAlSpatialAudioInfo(sections, path, header);
@@ -1484,6 +1487,7 @@ namespace FileDentify
                 case ".ignitex": return "Initial Audio Sektor sample data";
                 case ".grir": return "Native Instruments Guitar Rig impulse response";
                 case ".sdir": return "Apple Space Designer impulse response";
+                case ".sdir_1": return "Apple Space Designer impulse response sidecar";
                 case ".caf": return StartsWith(header, Encoding.ASCII.GetBytes("caff")) ? "Core Audio Format audio" : "Core Audio Format audio";
                 case ".scl": return "Scala tuning scale";
                 case ".wt": return StartsWith(header, Encoding.ASCII.GetBytes("vawt")) ? "Surge wavetable" : "Wavetable data";

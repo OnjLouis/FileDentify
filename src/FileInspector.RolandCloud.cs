@@ -12,12 +12,18 @@ namespace FileDentify
         private static string RolandCloudTypeName(string path, byte[] header)
         {
             var ext = Path.GetExtension(path).ToLowerInvariant();
-            if (StartsWith(header, Encoding.ASCII.GetBytes("VEXP")) || ext == ".exz")
+            if (StartsWith(header, Encoding.ASCII.GetBytes("VEXP")) || ext == ".exz" || ext == ".sdz")
                 return "Roland Cloud expansion package";
+            if (ext == ".rom" && IsRolandD50VstResource(path))
+                return "Roland D-50 waveform ROM";
+            if (ext == ".bin" && IsRolandCloudPath(path))
+                return "Roland Cloud binary preset or script payload";
             if (StartsWith(header, Encoding.ASCII.GetBytes("KoaBankFile")))
                 return "Roland Cloud preset bank";
             if (Path.GetFileName(path).Equals("InstalledBankNames.dat", StringComparison.OrdinalIgnoreCase) && IsRolandCloudPath(path))
                 return "Roland Cloud installed bank list";
+            if (Path.GetFileName(path).Equals("TextCodeTable.dat", StringComparison.OrdinalIgnoreCase) && IsRolandCloudPath(path))
+                return "Roland Cloud text/code table";
             return null;
         }
 
@@ -38,6 +44,12 @@ namespace FileDentify
                 AddRolandCloudPresetBankInfo(section, header, stringSample);
             else if (Path.GetFileName(path).Equals("InstalledBankNames.dat", StringComparison.OrdinalIgnoreCase))
                 AddRolandCloudInstalledBanks(section, stringSample);
+            else if (Path.GetFileName(path).Equals("TextCodeTable.dat", StringComparison.OrdinalIgnoreCase))
+                AddRolandCloudTextTable(section, stringSample);
+            else if (Path.GetExtension(path).Equals(".rom", StringComparison.OrdinalIgnoreCase) && IsRolandD50VstResource(path))
+                Add(section, "Role", "Waveform ROM payload used by the Roland D-50 plug-in.");
+            else if (Path.GetExtension(path).Equals(".bin", StringComparison.OrdinalIgnoreCase))
+                AddRolandCloudBinaryResourceInfo(section, path, stringSample);
 
             Add(section, "Notes", "Roland Cloud files are proprietary synthesizer, preset, and expansion data. FileDentify reports visible header fields and bank names only; it does not decode synth parameters or audio payloads.");
         }
@@ -86,9 +98,36 @@ namespace FileDentify
                 Add(section, "Installed banks", string.Join(Environment.NewLine, names));
         }
 
+        private static void AddRolandCloudTextTable(ReportSection section, byte[] sample)
+        {
+            var names = FindReadableTextLines(sample, 2, 100)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(30)
+                .ToArray();
+            if (names.Length > 0)
+                Add(section, "Visible table strings", string.Join(Environment.NewLine, names));
+        }
+
+        private static void AddRolandCloudBinaryResourceInfo(ReportSection section, string path, byte[] sample)
+        {
+            Add(section, "Role", RolandCloudBinaryRole(path));
+            var names = FindReadableTextLines(sample, 4, 80)
+                .Where(s => s.IndexOf("Preset", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    s.IndexOf("Tone", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    s.IndexOf("Initial", StringComparison.OrdinalIgnoreCase) >= 0)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(12)
+                .ToArray();
+            if (names.Length > 0)
+                Add(section, "Visible strings", string.Join(Environment.NewLine, names));
+        }
+
         private static bool IsRolandCloudPath(string path)
         {
-            return path.IndexOf("Roland Cloud", StringComparison.OrdinalIgnoreCase) >= 0;
+            return path.IndexOf("Roland Cloud", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                path.IndexOf("\\VST3\\Roland\\", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                path.IndexOf("/VST3/Roland/", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                path.IndexOf("\\Roland\\", StringComparison.OrdinalIgnoreCase) >= 0 && path.IndexOf(".vst3", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         private static string RolandCloudProductFromPath(string path)
@@ -97,8 +136,24 @@ namespace FileDentify
             for (var i = 0; i < parts.Length; i++)
                 if (parts[i].Equals("Roland Cloud", StringComparison.OrdinalIgnoreCase) && i + 1 < parts.Length)
                     return parts[i + 1];
+                else if (parts[i].Equals("Roland", StringComparison.OrdinalIgnoreCase) && i + 1 < parts.Length)
+                    return Path.GetFileNameWithoutExtension(parts[i + 1]);
             var parent = Path.GetFileName(Path.GetDirectoryName(path) ?? string.Empty);
             return parent ?? string.Empty;
+        }
+
+        private static bool IsRolandD50VstResource(string path)
+        {
+            return path.IndexOf("\\Roland\\D-50.vst3\\", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                path.IndexOf("/Roland/D-50.vst3/", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static string RolandCloudBinaryRole(string path)
+        {
+            if (path.IndexOf("\\Patch\\", StringComparison.OrdinalIgnoreCase) >= 0) return "patch or preset payload";
+            if (path.IndexOf("\\Script\\", StringComparison.OrdinalIgnoreCase) >= 0) return "script/control payload";
+            if (path.IndexOf("\\Resources\\", StringComparison.OrdinalIgnoreCase) >= 0) return "plug-in resource payload";
+            return "binary payload";
         }
     }
 }

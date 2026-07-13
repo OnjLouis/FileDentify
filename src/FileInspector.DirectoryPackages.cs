@@ -63,6 +63,7 @@ namespace FileDentify
 
             AddDirectoryPackageFilesystemInfo(sections, dir);
             AddLogicProjectPackageInfo(sections, dir.FullName);
+            AddLogicProLibraryDirectoryInfo(sections, dir.FullName);
             AddSparseBundleInfo(sections, dir.FullName);
             AddAppleBundleDirectoryInfo(sections, dir.FullName);
             AddAppleResourceDirectoryInfo(sections, dir.FullName);
@@ -87,7 +88,7 @@ namespace FileDentify
                 case ".sparsebundle": return "Apple sparse bundle disk image";
                 case ".app": return "macOS application bundle";
                 case ".framework": return "macOS framework bundle";
-                case ".bundle": return "macOS loadable bundle";
+                case ".bundle": return IsLogicProLibraryBundle(path) ? "Logic Pro library package" : "macOS loadable bundle";
                 case ".plugin": return "macOS plug-in bundle";
                 case ".appex": return "Apple app extension bundle";
                 case ".xpc": return "Apple XPC service bundle";

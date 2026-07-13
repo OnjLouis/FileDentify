@@ -6,6 +6,7 @@ using System.IO.Compression;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Web.Script.Serialization;
 
 namespace FileDentify
 {
@@ -25,6 +26,8 @@ namespace FileDentify
                 return EspeakSpeechTypeName(path);
             if (LooksLikeSuperTonicSpeechData(path, header))
                 return "SuperTonic neural TTS data";
+            if (LooksLikeGoogleTtsForNvdaData(path, header))
+                return GoogleTtsForNvdaTypeName(path);
             if (LooksLikeOrpheusSpeechData(path, header))
                 return OrpheusSpeechTypeName(path);
             if (LooksLikeEloquenceOrIbmTtsData(path, header))
@@ -108,6 +111,7 @@ namespace FileDentify
             }
 
             if (LooksLikeSuperTonicSpeechData(path, header) ||
+                LooksLikeGoogleTtsForNvdaData(path, header) ||
                 LooksLikeOrpheusSpeechData(path, header) ||
                 LooksLikeEloquenceOrIbmTtsData(path, header) ||
                 LooksLikeRhVoiceData(path, header) ||
@@ -178,6 +182,8 @@ namespace FileDentify
                 return EspeakSpeechRole(path);
             if (LooksLikeSuperTonicSpeechData(path, header))
                 return SuperTonicSpeechRole(path);
+            if (LooksLikeGoogleTtsForNvdaData(path, header))
+                return GoogleTtsForNvdaRole(path);
             if (LooksLikeOrpheusSpeechData(path, header))
                 return OrpheusSpeechRole(path);
             if (LooksLikeEloquenceOrIbmTtsData(path, header))
@@ -812,6 +818,215 @@ namespace FileDentify
             return "speech engine support data";
         }
 
+        private static bool LooksLikeGoogleTtsForNvdaData(string path, byte[] header)
+        {
+            if (path == null || path.IndexOf("\\nvda\\googleTtsForNvda\\", StringComparison.OrdinalIgnoreCase) < 0)
+                return false;
+
+            var ext = Path.GetExtension(path).ToLowerInvariant();
+            var name = Path.GetFileName(path) ?? string.Empty;
+            if (ext == ".zvoice" && IsZipHeader(header))
+                return true;
+            if (name.Equals("voices.json", StringComparison.OrdinalIgnoreCase) &&
+                path.IndexOf("\\googleTtsForNvda\\runtime\\", StringComparison.OrdinalIgnoreCase) >= 0 &&
+                LooksLikeText(header))
+                return true;
+            return false;
+        }
+
+        private static string GoogleTtsForNvdaTypeName(string path)
+        {
+            if (Path.GetExtension(path).Equals(".zvoice", StringComparison.OrdinalIgnoreCase))
+                return "Google TTS for NVDA voice package";
+            if (Path.GetFileName(path).Equals("voices.json", StringComparison.OrdinalIgnoreCase))
+                return "Google TTS for NVDA voice catalog";
+            return "Google TTS for NVDA speech data";
+        }
+
+        private static string GoogleTtsForNvdaRole(string path)
+        {
+            var name = Path.GetFileNameWithoutExtension(path) ?? string.Empty;
+            if (Path.GetFileName(path).Equals("voices.json", StringComparison.OrdinalIgnoreCase))
+                return "local voice catalog";
+            if (name.IndexOf("-seanet", StringComparison.OrdinalIgnoreCase) >= 0)
+                return "natural voice package with SeaNet model payloads";
+            if (Path.GetExtension(path).Equals(".zvoice", StringComparison.OrdinalIgnoreCase))
+                return "Chrome OS embedded voice package";
+            return "speech engine support data";
+        }
+
+        private static void AddGoogleTtsForNvdaDetails(ReportSection section, string path, byte[] header)
+        {
+            Add(section, "Vendor/family", "Google TTS for NVDA");
+            Add(section, "Component", Path.GetFileName(Path.GetDirectoryName(path) ?? string.Empty));
+
+            if (Path.GetExtension(path).Equals(".zvoice", StringComparison.OrdinalIgnoreCase))
+                AddGoogleZvoicePackageInfo(section, path);
+            else if (Path.GetFileName(path).Equals("voices.json", StringComparison.OrdinalIgnoreCase))
+                AddGoogleVoiceCatalogInfo(section, path, header);
+
+            Add(section, "Notes", "Google TTS for NVDA stores downloaded Google/Chrome OS voice packages and a local voice catalog under the NVDA roaming profile. FileDentify reports package structure, visible speaker names, and safe model filenames only; it does not run Chrome, contact Google, synthesize speech, or decode proprietary voice models.");
+        }
+
+        private static void AddGoogleZvoicePackageInfo(ReportSection section, string path)
+        {
+            var packageId = Path.GetFileNameWithoutExtension(path) ?? string.Empty;
+            Add(section, "Package ID", packageId);
+            Add(section, "Language hint", GoogleTtsLanguageHint(packageId));
+            Add(section, "Package kind", packageId.IndexOf("-seanet", StringComparison.OrdinalIgnoreCase) >= 0 ? "Natural voice package" : "Chrome OS embedded voice package");
+            AddGoogleVoiceCatalogMatch(section, path, packageId);
+
+            try
+            {
+                using (var archive = ZipFile.OpenRead(path))
+                {
+                    Add(section, "Archive entries", archive.Entries.Count.ToString(CultureInfo.InvariantCulture));
+
+                    var modelEntries = archive.Entries
+                        .Where(e => !string.IsNullOrEmpty(e.Name) &&
+                            (e.FullName.EndsWith(".tflite", StringComparison.OrdinalIgnoreCase) ||
+                             e.FullName.EndsWith(".pb", StringComparison.OrdinalIgnoreCase) ||
+                             e.FullName.EndsWith(".bin", StringComparison.OrdinalIgnoreCase) ||
+                             e.FullName.EndsWith(".far", StringComparison.OrdinalIgnoreCase) ||
+                             e.FullName.EndsWith(".fst", StringComparison.OrdinalIgnoreCase) ||
+                             e.FullName.EndsWith(".fb", StringComparison.OrdinalIgnoreCase) ||
+                             e.FullName.EndsWith(".textproto", StringComparison.OrdinalIgnoreCase)))
+                        .Take(24)
+                        .Select(e => e.FullName + " (" + FormatUnsignedBytes((ulong)e.Length) + ")")
+                        .ToArray();
+                    if (modelEntries.Length > 0)
+                        Add(section, "Voice payload entries", string.Join(Environment.NewLine, modelEntries));
+
+                    var largest = archive.Entries
+                        .Where(e => !string.IsNullOrEmpty(e.Name))
+                        .OrderByDescending(e => e.Length)
+                        .Take(8)
+                        .Select(e => e.FullName + " (" + FormatUnsignedBytes((ulong)e.Length) + ")")
+                        .ToArray();
+                    if (largest.Length > 0)
+                        Add(section, "Largest payloads", string.Join(Environment.NewLine, largest));
+                }
+            }
+            catch (Exception ex)
+            {
+                Add(section, "Archive read note", ex.Message);
+            }
+        }
+
+        private static void AddGoogleVoiceCatalogInfo(ReportSection section, string path, byte[] header)
+        {
+            var text = DecodeTextSample(header, 1024 * 1024);
+            var ids = Regex.Matches(text, "\"id\"\\s*:\\s*\"(?<id>[^\"]+)\"", RegexOptions.IgnoreCase)
+                .Cast<Match>()
+                .Select(m => m.Groups["id"].Value)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(32)
+                .ToArray();
+            if (ids.Length > 0)
+            {
+                Add(section, "Voice package count in sample", ids.Length.ToString(CultureInfo.InvariantCulture));
+                Add(section, "Voice package IDs", string.Join(Environment.NewLine, ids));
+            }
+
+            var speakerNames = Regex.Matches(text, "\"name\"\\s*:\\s*\"(?<name>[^\"]+)\"", RegexOptions.IgnoreCase)
+                .Cast<Match>()
+                .Select(m => CleanMetadataText(m.Groups["name"].Value))
+                .Where(v => !string.IsNullOrWhiteSpace(v))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(32)
+                .ToArray();
+            if (speakerNames.Length > 0)
+                Add(section, "Visible speaker names", string.Join(Environment.NewLine, speakerNames));
+        }
+
+        private static void AddGoogleVoiceCatalogMatch(ReportSection section, string path, string packageId)
+        {
+            var catalog = GoogleTtsVoiceCatalogPath(path);
+            if (catalog == null)
+                return;
+
+            try
+            {
+                var text = File.ReadAllText(catalog, Encoding.UTF8);
+                var serializer = new JavaScriptSerializer();
+                var rows = serializer.DeserializeObject(text) as object[];
+                if (rows == null)
+                    return;
+
+                foreach (var row in rows.OfType<Dictionary<string, object>>())
+                {
+                    object idValue;
+                    if (!row.TryGetValue("id", out idValue) ||
+                        !string.Equals(Convert.ToString(idValue, CultureInfo.InvariantCulture), packageId, StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    Add(section, "Catalog file ID", ValueOrNotReported(GetDictionaryString(row, "fileId")));
+                    Add(section, "Catalog remote flag", ValueOrNotReported(GetDictionaryString(row, "remote")));
+                    Add(section, "Catalog compressed size", ValueOrNotReported(GetDictionaryString(row, "compressedSize")));
+                    var speakers = GoogleTtsSpeakers(row).Take(24).ToArray();
+                    if (speakers.Length > 0)
+                        Add(section, "Catalog speakers", string.Join(Environment.NewLine, speakers));
+                    return;
+                }
+            }
+            catch (Exception ex)
+            {
+                Add(section, "Catalog read note", ex.Message);
+            }
+        }
+
+        private static string GoogleTtsVoiceCatalogPath(string path)
+        {
+            var marker = "\\googleTtsForNvda\\";
+            var index = path.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+            if (index < 0)
+                return null;
+            var root = path.Substring(0, index + marker.Length);
+            var catalog = Path.Combine(root, "runtime", "voices.json");
+            return File.Exists(catalog) ? catalog : null;
+        }
+
+        private static IEnumerable<string> GoogleTtsSpeakers(Dictionary<string, object> row)
+        {
+            object speakersValue;
+            if (!row.TryGetValue("speakers", out speakersValue))
+                yield break;
+            var speakers = speakersValue as object[];
+            if (speakers == null)
+                yield break;
+            foreach (var speaker in speakers.OfType<Dictionary<string, object>>())
+            {
+                var code = GetDictionaryString(speaker, "speaker");
+                var name = GetDictionaryString(speaker, "name");
+                var gender = GetDictionaryString(speaker, "gender");
+                var parts = new[] { code, name, gender }
+                    .Where(v => !string.IsNullOrWhiteSpace(v))
+                    .ToArray();
+                if (parts.Length > 0)
+                    yield return string.Join(" - ", parts);
+            }
+        }
+
+        private static string GetDictionaryString(Dictionary<string, object> dictionary, string key)
+        {
+            object value;
+            if (!dictionary.TryGetValue(key, out value) || value == null)
+                return null;
+            return Convert.ToString(value, CultureInfo.InvariantCulture);
+        }
+
+        private static string GoogleTtsLanguageHint(string packageId)
+        {
+            if (packageId.StartsWith("en-gb-", StringComparison.OrdinalIgnoreCase))
+                return "English (United Kingdom)";
+            if (packageId.StartsWith("en-us-", StringComparison.OrdinalIgnoreCase))
+                return "English (United States)";
+            var match = Regex.Match(packageId ?? string.Empty, "^(?<lang>[a-z]{2})-(?<region>[a-z]{2})-", RegexOptions.IgnoreCase);
+            if (match.Success)
+                return match.Groups["lang"].Value.ToLowerInvariant() + "-" + match.Groups["region"].Value.ToUpperInvariant();
+            return "(not visible)";
+        }
+
         private static void AddPocketTtsDetails(ReportSection section, string path, byte[] header)
         {
             var ext = Path.GetExtension(path).ToLowerInvariant();
@@ -904,7 +1119,7 @@ namespace FileDentify
 
         private static void AddNvdaSpeechEngineInfo(ReportSection section, string path, byte[] header)
         {
-            if (!LooksLikePocketTtsData(path, header))
+            if (!LooksLikePocketTtsData(path, header) && !LooksLikeGoogleTtsForNvdaData(path, header))
             {
                 Add(section, "Vendor/family", NvdaSpeechFamily(path));
                 Add(section, "Component", NvdaSpeechComponent(path));
@@ -922,6 +1137,8 @@ namespace FileDentify
 
             if (LooksLikeSuperTonicSpeechData(path, header))
                 AddSuperTonicDetails(section, path, header);
+            else if (LooksLikeGoogleTtsForNvdaData(path, header))
+                AddGoogleTtsForNvdaDetails(section, path, header);
             else if (LooksLikeOrpheusSpeechData(path, header))
                 AddOrpheusDetails(section, path, header);
             else if (LooksLikeRhVoiceData(path, header))
@@ -935,13 +1152,16 @@ namespace FileDentify
             else if (LooksLikeText(header))
                 AddSpeechTextClues(section, header);
 
-            Add(section, "Notes", "NVDA speech-engine files can be open-source voice data, neural models, dictionaries, or wrappers around engines such as Eloquence, IBM TTS, RHVoice, eSpeak, Orpheus, SuperTonic, and Pocket TTS. FileDentify reports known add-on paths, package manifests, filenames, and safe text/header metadata; it does not load synthesizers, run engine components, or decode proprietary voice payloads.");
+            if (!LooksLikeGoogleTtsForNvdaData(path, header))
+                Add(section, "Notes", "NVDA speech-engine files can be open-source voice data, neural models, dictionaries, or wrappers around engines such as Eloquence, IBM TTS, RHVoice, eSpeak, Orpheus, SuperTonic, and Pocket TTS. FileDentify reports known add-on paths, package manifests, filenames, and safe text/header metadata; it does not load synthesizers, run engine components, or decode proprietary voice payloads.");
         }
 
         private static string NvdaSpeechFamily(string path)
         {
             if (path.IndexOf("\\supertonic\\", StringComparison.OrdinalIgnoreCase) >= 0)
                 return "SuperTonic neural TTS";
+            if (path.IndexOf("\\googleTtsForNvda\\", StringComparison.OrdinalIgnoreCase) >= 0)
+                return "Google TTS for NVDA";
             if (path.IndexOf("\\orpheus\\", StringComparison.OrdinalIgnoreCase) >= 0)
                 return "Dolphin Orpheus TTS";
             if (path.IndexOf("\\IBMTTS\\", StringComparison.OrdinalIgnoreCase) >= 0)

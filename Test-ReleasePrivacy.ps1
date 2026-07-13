@@ -11,6 +11,21 @@ function Fail([string]$message) {
     exit 1
 }
 
+function Test-PrivateProcessFilesAreUntracked {
+    $git = Get-Command git -ErrorAction SilentlyContinue
+    if ($null -eq $git) {
+        return
+    }
+
+    $privateFiles = @(
+        'GITHUB-RELEASE-RULES.md'
+    )
+    $tracked = @(& git -C $repoRoot ls-files -- $privateFiles 2>$null)
+    if ($LASTEXITCODE -eq 0 -and $tracked.Count -gt 0) {
+        Fail ("Private release/process files must not be tracked or shipped: " + ($tracked -join ', '))
+    }
+}
+
 function Get-TextFiles([string]$root) {
     $extensions = @(
         '.bat',
@@ -113,7 +128,7 @@ function Test-ManualChangelog {
     $text = ($manualFiles | ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw }) -join "`n"
     $matches = [regex]::Matches($text, 'AppendLine\("<h3>([0-9]+(?:\.[0-9]+)*)</h3>"\)')
     $versions = @($matches | ForEach-Object { $_.Groups[1].Value })
-    $requiredVersions = @('1.8', '1.7', '1.6', '1.5', '1.4.1', '1.4', '1.3', '1.2', '1.1.1', '1.1', '1.0')
+    $requiredVersions = @('1.9', '1.8', '1.7', '1.6', '1.5', '1.4.1', '1.4', '1.3', '1.2', '1.1.1', '1.1', '1.0')
 
     foreach ($version in $requiredVersions) {
         $count = @($versions | Where-Object { $_ -eq $version }).Count
@@ -175,6 +190,7 @@ function Test-AllHistory {
 }
 
 Test-Directory $repoRoot 'working tree'
+Test-PrivateProcessFilesAreUntracked
 Test-ManualChangelog
 
 if (-not [string]::IsNullOrWhiteSpace($ReleaseZip)) {

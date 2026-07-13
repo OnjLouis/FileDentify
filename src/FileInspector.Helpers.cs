@@ -133,12 +133,16 @@ namespace FileDentify
             if (steinbergType != null) return steinbergType;
             var rolandCloudType = RolandCloudTypeName(path, header);
             if (rolandCloudType != null) return rolandCloudType;
+            var logicProLibraryType = LogicProLibraryTypeName(path, header);
+            if (logicProLibraryType != null) return logicProLibraryType;
             var musicProjectType = MusicProjectFormatTypeName(path, header);
             if (musicProjectType != null) return musicProjectType;
             var projectSidecarType = ProjectSidecarTypeName(path, header);
             if (projectSidecarType != null) return projectSidecarType;
             var audioSupportType = AudioSupportTypeName(path, header);
             if (audioSupportType != null) return audioSupportType;
+            var vst3VendorResourceType = Vst3VendorResourceTypeName(path, header);
+            if (vst3VendorResourceType != null) return vst3VendorResourceType;
             var macAudioPluginType = MacAudioPluginTypeName(path, header);
             if (macAudioPluginType != null) return macAudioPluginType;
             var appleType = AppleFormatTypeName(path, header);
@@ -296,6 +300,9 @@ namespace FileDentify
             var rolandCloudType = RolandCloudTypeName(path, header);
             if (rolandCloudType != null)
                 return rolandCloudType;
+            var logicProLibraryType = LogicProLibraryTypeName(path, header);
+            if (logicProLibraryType != null)
+                return logicProLibraryType;
             var musicProjectType = MusicProjectFormatTypeName(path, header);
             if (musicProjectType != null)
                 return musicProjectType;
@@ -305,6 +312,9 @@ namespace FileDentify
             var audioSupportType = AudioSupportTypeName(path, header);
             if (audioSupportType != null)
                 return audioSupportType;
+            var vst3VendorResourceType = Vst3VendorResourceTypeName(path, header);
+            if (vst3VendorResourceType != null)
+                return vst3VendorResourceType;
             var macAudioPluginType = MacAudioPluginTypeName(path, header);
             if (macAudioPluginType != null)
                 return macAudioPluginType;

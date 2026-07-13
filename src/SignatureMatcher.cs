@@ -99,6 +99,16 @@ namespace FileDentify
                 yield return new ReportItem { Title = "OpenAL Soft HRTF", Detail = "OpenAL Soft minimum-phase HRTF data" };
             if (StartsWith(data, Encoding.ASCII.GetBytes("CcnK")))
                 yield return new ReportItem { Title = "VST preset chunk", Detail = "VST FXP/FXB preset or bank" };
+            if (StartsWith(data, Encoding.ASCII.GetBytes("p4pm")))
+                yield return new ReportItem { Title = "Korg Mono/Poly", Detail = "Korg Mono/Poly program preset" };
+            if (StartsWith(data, Encoding.ASCII.GetBytes("MSP1")))
+                yield return new ReportItem { Title = "Korg KMP", Detail = "Korg multisample map" };
+            if (StartsWith(data, Encoding.ASCII.GetBytes("#KORG Script")))
+                yield return new ReportItem { Title = "Korg KSC", Detail = "Korg sample script" };
+            if (StartsWith(data, Encoding.ASCII.GetBytes("KSCSNDRAW")))
+                yield return new ReportItem { Title = "Korg raw PCM", Detail = "Korg Trinity raw PCM sound data" };
+            if (StartsWith(data, Encoding.ASCII.GetBytes("KORG")))
+                yield return new ReportItem { Title = "Korg marker", Detail = "Korg workstation, synth, or sample-library data" };
             if (data.Length >= 12 && StartsWith(data, Encoding.ASCII.GetBytes("FORM")) && Encoding.ASCII.GetString(data, 8, 4) == "PTCH")
                 yield return new ReportItem { Title = "Reason NN-XT patch", Detail = "Reason NN-XT sampler patch" };
             if (data.Length >= 12 && StartsWith(data, Encoding.ASCII.GetBytes("RIFF")))
@@ -295,6 +305,14 @@ namespace FileDentify
             if (legacyMusic != null)
                 yield return new ReportItem { Title = "Legacy music extension", Detail = legacyMusic };
 
+            var vst3VendorResource = Vst3VendorResourceExtensionDescription(path, data);
+            if (vst3VendorResource != null)
+                yield return new ReportItem { Title = "VST3 vendor resource extension", Detail = vst3VendorResource };
+
+            var logicProLibrary = LogicProLibraryExtensionDescription(path, data);
+            if (logicProLibrary != null)
+                yield return new ReportItem { Title = "Logic Pro library extension", Detail = logicProLibrary };
+
             var game = GameExtensionDescription(path);
             if (game != null)
                 yield return new ReportItem { Title = "Game/ROM extension", Detail = game };
@@ -340,6 +358,7 @@ namespace FileDentify
 
         private static string GameExtensionDescription(string path)
         {
+            var lowerPath = path.ToLowerInvariant();
             switch (Path.GetExtension(path).ToLowerInvariant())
             {
                 case ".nsf": return "NES Sound Format music";
@@ -358,7 +377,7 @@ namespace FileDentify
                 case ".n64":
                 case ".z64":
                 case ".v64": return "Nintendo 64 ROM";
-                case ".rom": return "Generic ROM image";
+                case ".rom": return lowerPath.Contains("\\roland\\d-50.vst3\\") || lowerPath.Contains("/roland/d-50.vst3/") ? null : "Generic ROM image";
                 case ".chd": return "MAME Compressed Hunks of Data disk image";
                 case ".wad": return "Doom/WAD game data";
                 case ".cue": return "CD cue sheet";
@@ -677,7 +696,6 @@ namespace FileDentify
                 case ".pkg": return "macOS installer package";
                 case ".crash": return "Apple crash report";
                 case ".ips": return "Apple diagnostic report";
-                case ".exz": return "Roland Cloud expansion package";
                 case ".xpak": return "XLN Audio sample pack";
                 case ".mlt_omn": return "Spectrasonics Omnisphere multi";
                 case ".mlt_key": return "Spectrasonics Keyscape multi";
@@ -718,14 +736,34 @@ namespace FileDentify
         private static string SampleLibraryExtensionDescription(string path)
         {
             var lowerPath = path.ToLowerInvariant();
+            var ext = Path.GetExtension(path).ToLowerInvariant();
+            if (lowerPath.Contains("\\korg\\") &&
+                Regex.IsMatch(ext, @"^\.[0-9]{4}[hl]$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant) &&
+                lowerPath.Contains("\\binary4m\\"))
+                return "Korg Trinity/TR-Rack split PCM ROM chunk";
+            if (lowerPath.Contains("\\korg\\") && ext == ".bin" && lowerPath.Contains("\\triton\\"))
+                return "Korg Triton PCM ROM/sample image";
+            if (lowerPath.Contains("\\korg\\") && string.IsNullOrEmpty(ext) && lowerPath.Contains("\\initdata\\"))
+                return "Korg Trinity init data";
+            if (lowerPath.Contains("\\korg\\") && string.IsNullOrEmpty(ext) && path.EndsWith("\\RAWSND", StringComparison.OrdinalIgnoreCase))
+                return "Korg Trinity raw PCM sound data";
             switch (Path.GetExtension(path).ToLowerInvariant())
             {
+                case ".exz": return "Roland Cloud expansion package";
+                case ".sdz": return "Roland Cloud preset/scene data";
                 case ".wmss": return "Korg WaveMotion sample set";
                 case ".adsr": return "Korg wavestate ADSR randomization data";
                 case ".voiceamp": return "Korg wavestate voice-amp randomization data";
                 case ".pitch": return "Korg wavestate pitch randomization data";
                 case ".dynamicarpeggiator": return "Korg dynamic arpeggiator data";
                 case ".classicvectoreg": return "Korg classic vector envelope data";
+                case ".mp4prog": return lowerPath.Contains("\\korg\\") ? "Korg Mono/Poly program preset" : null;
+                case ".er1": return lowerPath.Contains("\\korg\\") ? "Korg Electribe-R pattern/program" : null;
+                case ".program": return lowerPath.Contains("\\korg\\") ? "Korg Collection synth program" : null;
+                case ".pcg": return lowerPath.Contains("\\korg\\") ? "Korg PCG program/combi/global data" : null;
+                case ".ksc": return lowerPath.Contains("\\korg\\") ? "Korg KSC sample script" : null;
+                case ".kmp": return lowerPath.Contains("\\korg\\") ? "Korg KMP multisample map" : null;
+                case ".cmap": return lowerPath.Contains("\\korg\\") ? "Korg Collection controller/parameter map" : null;
                 case ".cpt2": return "GForce M-Tron tape bank";
                 case ".k4s":
                 case ".mks":
@@ -760,6 +798,62 @@ namespace FileDentify
                 case ".objeq delay bank":
                     return "Applied Acoustics Systems bank, pack, or preset";
                 default: return null;
+            }
+        }
+
+        private static string Vst3VendorResourceExtensionDescription(string path, byte[] data)
+        {
+            var lowerPath = path.ToLowerInvariant();
+            if (!lowerPath.Contains(".vst3"))
+                return null;
+
+            var ext = Path.GetExtension(path).ToLowerInvariant();
+            switch (ext)
+            {
+                case ".winfo":
+                    return lowerPath.Contains("__pace_eden") || Ascii(data, 0, Math.Min(data.Length, 128)).IndexOf("TChk", StringComparison.OrdinalIgnoreCase) >= 0 ? "PACE Eden wrapper information" : null;
+                case ".dsig":
+                    return lowerPath.Contains("__pace_eden") || Ascii(data, 0, Math.Min(data.Length, 128)).IndexOf("TChk", StringComparison.OrdinalIgnoreCase) >= 0 ? "PACE Eden code-signature metadata" : null;
+                case ".ivg": return lowerPath.Contains("sonic charge") ? "Sonic Charge IVG vector UI resource" : null;
+                case ".ivgfont": return lowerPath.Contains("sonic charge") ? "Sonic Charge IVG font resource" : null;
+                case ".cushy": return lowerPath.Contains("sonic charge") ? "Sonic Charge UI/layout script" : null;
+                case ".makaron": return lowerPath.Contains("sonic charge") ? "Sonic Charge macro/config resource" : null;
+                case ".zlim": return lowerPath.Contains("sonic charge") ? "Sonic Charge compressed resource payload" : null;
+                case ".tagset": return lowerPath.Contains("\\uaudio_") || lowerPath.Contains("/uaudio_") || lowerPath.Contains("universal audio") ? "Universal Audio plug-in tag set" : null;
+                case ".resembed": return lowerPath.Contains("izotope") || lowerPath.Contains("\\iz") || lowerPath.Contains("/iz") ? "iZotope embedded resource bundle" : null;
+                case ".path": return lowerPath.Contains("izotope") || lowerPath.Contains("\\iz") || lowerPath.Contains("/iz") ? "iZotope internal bundle pointer" : null;
+                case ".bt": return StartsWith(data, Encoding.ASCII.GetBytes("ESAS")) || lowerPath.Contains("izotope") ? "iZotope preset/tree data" : null;
+                case ".config": return lowerPath.Contains("izotope") ? "iZotope plug-in configuration resource" : null;
+                case ".vstxml": return "VST3 parameter metadata XML";
+                case ".gdr": return lowerPath.Contains("attack.vst3") || lowerPath.Contains("ppg wave") || lowerPath.Contains("d-pole.vst3") ? "Waldorf plug-in glyph/resource map" : null;
+                case ".nrc": return StartsWith(data, Encoding.ASCII.GetBytes("#NI#RsrcContnr#")) ? "Native Instruments resource container" : null;
+                case ".lua": return lowerPath.Contains("komplete kontrol.vst3") || lowerPath.Contains("maschine") ? "Native Instruments controller script" : null;
+                case ".rom": return lowerPath.Contains("\\roland\\d-50.vst3\\") || lowerPath.Contains("/roland/d-50.vst3/") ? "Roland D-50 waveform ROM" : null;
+                default: return null;
+            }
+        }
+
+        private static string LogicProLibraryExtensionDescription(string path, byte[] data)
+        {
+            if (path.IndexOf("Logic Pro Library.bundle", StringComparison.OrdinalIgnoreCase) < 0)
+                return null;
+
+            switch (Path.GetExtension(path).ToLowerInvariant())
+            {
+                case ".cst": return "Logic Pro channel strip setting";
+                case ".aaz": return "Apple Alchemy sample payload";
+                case ".acp": return "Apple Alchemy preset";
+                case ".pst": return "Logic Pro plug-in setting";
+                case ".zxml": return "Logic Pro patch cache XML";
+                case ".ubs": return "Logic Ultrabeat sample";
+                case ".sdir_1": return "Apple Space Designer impulse response sidecar";
+                default:
+                    if (Path.GetFileName(path).Equals("LibraryUUID", StringComparison.OrdinalIgnoreCase))
+                        return "Logic Pro library UUID";
+                    if (string.IsNullOrWhiteSpace(Path.GetExtension(path)) &&
+                        Path.GetFileName(path).Equals("DisplayStateArchive", StringComparison.OrdinalIgnoreCase))
+                        return "Logic Pro display-state archive";
+                    return null;
             }
         }
 
@@ -853,6 +947,13 @@ namespace FileDentify
                 return "Loquendo TTS package";
             if (lower.Contains("\\supertonic\\") && ext == ".onnx")
                 return "SuperTonic ONNX neural TTS model";
+            if (lower.Contains("\\nvda\\googlettsfornvda\\"))
+            {
+                if (ext == ".zvoice" && StartsWith(data, Encoding.ASCII.GetBytes("PK\x03\x04")))
+                    return "Google TTS for NVDA voice package";
+                if (name.Equals("voices.json", StringComparison.OrdinalIgnoreCase))
+                    return "Google TTS for NVDA voice catalog";
+            }
             if (lower.Contains("\\nvda\\pocket_tts\\"))
             {
                 if (ext == ".onnx")

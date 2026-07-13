@@ -47,6 +47,7 @@ namespace FileDentify
             if (LooksLikeBbcMicroMedia(path, header)) return BbcMicroMediaTypeName(path, header);
             if (LooksLikeTorchMcpProgram(path, header)) return "BBC Micro / Torch MCP program image";
             if (LooksLikeRolandMt32Rom(path)) return "Roland MT-32/CM-32L ROM image";
+            if (IsRolandD50VstResource(path)) return null;
             if (LooksLikeFruitMachineBpak(path)) return "Protected fruit-machine game package";
             if (LooksLikeDuke3dSave(path)) return "Duke Nukem 3D saved game";
 

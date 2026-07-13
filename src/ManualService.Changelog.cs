@@ -7,6 +7,14 @@ namespace FileDentify
         private static void Changelog(StringBuilder html)
         {
             html.AppendLine("<h2 id=\"changelog\">Changelog</h2>");
+            html.AppendLine("<h3>1.9</h3>");
+            html.AppendLine("<ul>");
+            html.AppendLine("<li>Expanded KORG Application Support coverage from a full local KORG folder scan, including Mono/Poly <code>.mp4prog</code> presets, Electribe-R <code>.er1</code> patterns, ARP ODYSSEY/KORG Collection <code>.program</code> files, Trinity/Triton <code>.pcg</code>, <code>.ksc</code>, <code>.kmp</code>, PCM resources, split high/low PCM chunks, controller maps, and KORG preset/index JSON.</li>");
+            html.AppendLine("<li>Expanded Mac VST3 bundle-resource coverage from a fresh VST3 plug-in folder scan, including Roland Cloud payloads inside VST3 bundles, PACE Eden wrapper metadata, Sonic Charge UI/resource files, Universal Audio tag sets, iZotope embedded resources, Waldorf VST metadata/glyph maps, and Native Instruments resource containers/controller scripts.</li>");
+            html.AppendLine("<li>Added Logic Pro Library.bundle reporting from a local Logic user-library package scan, including channel strip settings, Alchemy presets and sample payloads, Drum Kit Designer and plug-in settings, patch cache XML, Ultrabeat samples, Space Designer sidecars, and bounded package-folder summaries.</li>");
+            html.AppendLine("<li>Added Google TTS for NVDA reporting from a local NVDA speech-folder scan, including <code>.zvoice</code> package identity, speaker names from the local voice catalog, model payload listings, and safe notes for Chrome OS / Google voice data.</li>");
+            html.AppendLine("<li>See <a href=\"#supported-file-types\">Supported file types</a> for the maintained coverage table.</li>");
+            html.AppendLine("</ul>");
             html.AppendLine("<h3>1.8</h3>");
             html.AppendLine("<ul>");
             html.AppendLine("<li>Expanded Arturia coverage from a full local Arturia sample-library scan, including Augmented-series presets and multisample presets, MiniFreak hardware presets and raw sample payloads, effect/model presets, SFZ include resources, and Arturia sample/resource payloads.</li>");
