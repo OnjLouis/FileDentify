@@ -14,3 +14,10 @@ FileDentify.exe
 FileDentify-libmagic-*/
 update-*/
 token.txt
+CommunitySearch.ps1
+Test-ReleasePrivacy.ps1
+ClipmanShared.md
+CLIPMAN_AGENT_SYNC.md
+CLIPMAN_SHARED_CONTRACT.md
+SmokeTest.ps1
+HANDOVER.md
