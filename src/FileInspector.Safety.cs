@@ -35,7 +35,7 @@ namespace FileDentify
             if (StartsWith(header, Encoding.ASCII.GetBytes("%PDF-")))
                 return HeaderExpectation.For("a PDF document", ".pdf");
             if (StartsWith(header, Encoding.ASCII.GetBytes("MZ")))
-                return HeaderExpectation.For("a Windows executable or DLL", ".exe", ".dll", ".scr", ".sys", ".ocx", ".cpl", ".drv");
+                return HeaderExpectation.For("a Windows executable or DLL", ".exe", ".dll", ".scr", ".sys", ".ocx", ".cpl", ".drv", ".efi", ".mui", ".mun", ".acm", ".ax", ".pyd", ".node", ".w5s", ".rock");
             if (StartsWith(header, Encoding.ASCII.GetBytes("PK\x03\x04")) || StartsWith(header, Encoding.ASCII.GetBytes("PK\x05\x06")) || StartsWith(header, Encoding.ASCII.GetBytes("PK\x07\x08")))
                 return HeaderExpectation.For("a ZIP-compatible container", ".zip", ".docx", ".xlsx", ".pptx", ".jar", ".apk", ".ipa", ".ipsw", ".epub", ".ablbundle", ".nvda-addon", ".nupkg", ".npz", ".ckpt", ".pt", ".pth", ".appx", ".appxbundle", ".msix", ".msixbundle");
             if (StartsWith(header, Encoding.ASCII.GetBytes("Rar!\x1A\x07\x00")) || StartsWith(header, Encoding.ASCII.GetBytes("Rar!\x1A\x07\x01\x00")))
@@ -45,7 +45,7 @@ namespace FileDentify
             if (StartsWith(header, Encoding.GetEncoding(28591).GetBytes("\x89PNG\r\n\x1A\n")))
                 return HeaderExpectation.For("a PNG image", ".png");
             if (StartsWith(header, new byte[] { 0xFF, 0xD8, 0xFF }))
-                return HeaderExpectation.For("a JPEG image", ".jpg", ".jpeg", ".jpe");
+                return HeaderExpectation.For("a JPEG image", ".jpg", ".jpeg", ".jpe", ".thm");
             if (StartsWith(header, Encoding.ASCII.GetBytes("GIF87a")) || StartsWith(header, Encoding.ASCII.GetBytes("GIF89a")))
                 return HeaderExpectation.For("a GIF image", ".gif");
             if (StartsWith(header, Encoding.ASCII.GetBytes("SQLite format 3\0")))

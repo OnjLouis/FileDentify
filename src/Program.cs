@@ -23,9 +23,9 @@ using System.Windows.Forms;
 [assembly: AssemblyProduct("FileDentify")]
 [assembly: AssemblyCopyright("Copyright (c) Andre Louis")]
 [assembly: AssemblyTrademark("")]
-[assembly: AssemblyVersion("1.9.0.0")]
-[assembly: AssemblyFileVersion("1.9.0.0")]
-[assembly: AssemblyInformationalVersion("1.9")]
+[assembly: AssemblyVersion("1.10.0.0")]
+[assembly: AssemblyFileVersion("1.10.0.0")]
+[assembly: AssemblyInformationalVersion("1.10")]
 
 namespace FileDentify
 {
@@ -34,7 +34,7 @@ namespace FileDentify
         private const string ConsoleStubEnvironmentVariable = "FILEDENTIFY_CONSOLE_STUB";
         private const long LegacyPortableReadmeLength = 6432;
         private static readonly DateTime LegacyPortableReadmeLastWriteUtc = new DateTime(2026, 6, 28, 19, 6, 24, DateTimeKind.Utc);
-        public const string Version = "1.9";
+        public const string Version = "1.10";
         public const string ProjectUrl = "https://github.com/OnjLouis/FileDentify";
 
         [STAThread]
@@ -42,6 +42,7 @@ namespace FileDentify
         {
             try
             {
+                LibFileDentifyBridge.Initialize();
                 RemoveStalePortableReadme();
                 if (TemporaryFileService.TryRunCleanupHelper(args))
                     return;

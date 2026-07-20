@@ -45,6 +45,7 @@ namespace FileDentify
             if (ext == ".ps1xml") return "PowerShell type/format XML";
             if (ext == ".msc") return "Microsoft Management Console snap-in";
             if (ext == ".winmd") return "Windows Runtime metadata";
+            if (ext == ".efi" && StartsWith(header, Encoding.ASCII.GetBytes("MZ"))) return "UEFI executable image";
             if (ext == ".xbf") return "compiled XAML binary file";
             if (ext == ".pri") return "Windows package resource index";
             if (ext == ".nls") return "Windows National Language Support data";
@@ -149,6 +150,10 @@ namespace FileDentify
                     break;
                 case ".winmd":
                     AddWinMdInfo(section, path, header);
+                    break;
+                case ".efi":
+                    AddWindowsResourceModuleInfo(section, path, header, "UEFI firmware executable or boot-service application");
+                    Add(section, "Compatibility note", "EFI applications are executable machine code for firmware environments. FileDentify does not load or run them.");
                     break;
                 case ".xbf":
                     Add(section, "Role", "Compiled XAML binary produced for Windows UI resources.");

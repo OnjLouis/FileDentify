@@ -7,6 +7,19 @@ namespace FileDentify
         private static void Changelog(StringBuilder html)
         {
             html.AppendLine("<h2 id=\"changelog\">Changelog</h2>");
+            html.AppendLine("<h3>1.10</h3>");
+            html.AppendLine("<ul>");
+            html.AppendLine("<li>Separated the reusable, cross-platform identification engine into the open-source <a href=\"https://github.com/OnjLouis/LibFileDentify\">LibFileDentify</a> library. FileDentify embeds the exact tested library assembly inside its portable executable and credits library-supplied matches with their confidence and evidence.</li>");
+            html.AppendLine("<li>Added header-based Orbit Reader 20 Plus firmware identification, including Orbit Research device identity, compatible firmware family, full firmware version, installation context, and a compatibility warning based on the device maker's guidance.</li>");
+            html.AppendLine("<li>Expanded structured system and development-file coverage from fresh Windows and software-library inventories, including Windows servicing manifests and component metadata, Group Policy templates, Windows resource and diagnostic XML, UEFI executables, Java JMOD archives, Lua bytecode, standalone EPUB package documents, and Wavefront material libraries.</li>");
+            html.AppendLine("<li>Added conservative certificate and signature-container reporting for X.509 certificates, PKCS #7 bundles, Windows AppX PKCX signatures, PKCS #12/PFX files, and PEM bundles, including private-key warnings without passwords, certificate installation, trust validation, or key extraction.</li>");
+            html.AppendLine("<li>Expanded real-sample-backed coverage from local Windows, software, archive, Mac, and NAS inventories, including Windows Contacts, SMIL and SubRip subtitle documents, Adobe ebook fulfillment tokens, Audacity projects, Logic Pro MAMD sidecars, Zoom LiveTrak projects, Keyboard Maestro macros, compiled AppleScripts, legacy Skype databases, Symbian drivers and keyboard layouts, PMML music source, Targa and Windows Metafile images, and camera THM thumbnails.</li>");
+            html.AppendLine("<li>Refined header/extension safety checks so legitimate UEFI executables, Windows resource and plug-in modules, and JPEG camera thumbnails are not reported as suspicious merely because they use a specialized extension.</li>");
+            html.AppendLine("<li>Consolidated FileDentify's summary and built-in database classification paths so both report locations now use the same ordered detector result, reducing the risk that new format rules appear in one place but not the other.</li>");
+            html.AppendLine("<li>Fixed the shared <code>.md</code> extension so ordinary Markdown documents are no longer identified as Sega Mega Drive ROMs; Sega <code>.md</code> images now require the expected header marker.</li>");
+            html.AppendLine("<li>Expanded generated-sample detector regression checks for exact-header recognition, structured XML roots, report evidence, version extraction, summary/database agreement, shared-extension collisions, and rejection of unrelated files.</li>");
+            html.AppendLine("<li>See <a href=\"#supported-file-types\">Supported file types</a> for the maintained coverage table.</li>");
+            html.AppendLine("</ul>");
             html.AppendLine("<h3>1.9</h3>");
             html.AppendLine("<ul>");
             html.AppendLine("<li>Expanded KORG Application Support coverage from a full local KORG folder scan, including Mono/Poly <code>.mp4prog</code> presets, Electribe-R <code>.er1</code> patterns, ARP ODYSSEY/KORG Collection <code>.program</code> files, Trinity/Triton <code>.pcg</code>, <code>.ksc</code>, <code>.kmp</code>, PCM resources, split high/low PCM chunks, controller maps, and KORG preset/index JSON.</li>");

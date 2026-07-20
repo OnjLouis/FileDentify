@@ -4,7 +4,7 @@ FileDentify is a portable, accessible Windows file-identification utility.
 
 It is designed to work well from Explorer's Send To menu, from the keyboard, and with screen readers such as NVDA.
 
-FileDentify is not a replacement for every existing tool. If Windows, WSL `file`, Cygwin `file`, or MSYS2 `file` already gives enough information, use that. FileDentify is for the moments when you want more context on Windows: embedded file/libmagic results, FileDentify-specific sections, readable strings, hashes, advanced text/hex/binary/octal viewing, combined reports, folder overviews, Send To integration, and a screen-reader-friendly interface.
+FileDentify is not a replacement for every existing tool. If Windows, WSL `file`, Cygwin `file`, or MSYS2 `file` already gives enough information, use that. FileDentify is for the moments when you want more context on Windows: embedded [LibFileDentify](https://github.com/OnjLouis/LibFileDentify) and file/libmagic results, FileDentify-specific sections, readable strings, hashes, advanced text/hex/binary/octal viewing, combined reports, folder overviews, Send To integration, and a screen-reader-friendly interface.
 
 Build with:
 
@@ -23,8 +23,8 @@ FileDentify can also be used from the SendTo Project, available from <https://on
 - `Options > Preferences` has an Automation tab for adding or removing FileDentify from the Windows Send To menu.
 - `Options > Preferences` has an Updates tab for GitHub Releases update checks.
 - `Help > Check for Updates`, `Help > Version History`, `Help > Project page`, `Help > Contact`, `Help > Donate`, and `Help > Other software` are available from the menu bar.
-- `Help > Third-party notices` shows the embedded Unix `file`/libmagic and required runtime notices.
-- Reports include built-in FileDentify analysis plus an embedded Unix `file`/libmagic section for broader signature coverage.
+- `Help > Third-party notices` shows the embedded LibFileDentify license, Unix `file`/libmagic notices, and required runtime notices.
+- Reports combine the embedded LibFileDentify engine, application-level parsers, and Unix `file`/libmagic for broader signature coverage.
 - Reports include a reader-friendly `Readable text` section for discovered strings, plus offset-based `Printable strings` for forensic detail.
 - FileDentify recognizes common containers, archives, media headers, fonts, disk images, virtual disks, installer formats, sample-library containers, and ZIP-based application bundles such as Ableton Move/Live bundles.
 - Terminal mode with `fd.com [files...]` shows reports in a keyboard-controlled pager when run from PowerShell or Windows Terminal, or prints the report when output is redirected. `fd.com` and `FileDentify.exe` must live in the same folder.
@@ -36,6 +36,10 @@ Source files live under `src`. UI, settings, updater, manual, terminal mode, lib
 ## Embedded libmagic
 
 The build embeds a Windows `file`/libmagic package from `third_party\libmagic` into `FileDentify.exe`. At runtime FileDentify extracts it to a per-process temporary folder, runs `file.exe`, adds the result to the report, and removes the temporary folder on exit.
+
+## Embedded LibFileDentify
+
+The reusable [LibFileDentify](https://github.com/OnjLouis/LibFileDentify) engine is embedded directly in `FileDentify.exe`, so the portable application does not need another loose DLL. Reports credit `LibFileDentify` when its content-validated rules supply the match; mature application-level parsers remain as fallback while additional rules are migrated with parity tests.
 
 ## Command line
 
@@ -75,6 +79,7 @@ FileDentify is free software. If you want to support Andre Louis software, use `
 
 FileDentify uses or can use components from these projects:
 
+- [LibFileDentify](https://github.com/OnjLouis/LibFileDentify), the reusable evidence-based identification engine developed alongside FileDentify.
 - [file/libmagic](https://www.darwinsys.com/file/) and [file on GitHub](https://github.com/file/file), for broad file signature identification.
 - [MSYS2](https://www.msys2.org/) and [MSYS2 Packages](https://packages.msys2.org/), for the embedded Windows build of file/libmagic.
 - [mingw-w64-x86_64-file](https://packages.msys2.org/package/mingw-w64-x86_64-file), the embedded file/libmagic package.

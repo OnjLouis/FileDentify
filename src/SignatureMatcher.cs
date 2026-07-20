@@ -313,7 +313,7 @@ namespace FileDentify
             if (logicProLibrary != null)
                 yield return new ReportItem { Title = "Logic Pro library extension", Detail = logicProLibrary };
 
-            var game = GameExtensionDescription(path);
+            var game = GameExtensionDescription(path, data);
             if (game != null)
                 yield return new ReportItem { Title = "Game/ROM extension", Detail = game };
 
@@ -356,7 +356,7 @@ namespace FileDentify
             }
         }
 
-        private static string GameExtensionDescription(string path)
+        private static string GameExtensionDescription(string path, byte[] data)
         {
             var lowerPath = path.ToLowerInvariant();
             switch (Path.GetExtension(path).ToLowerInvariant())
@@ -370,8 +370,8 @@ namespace FileDentify
                 case ".sfc":
                 case ".smc": return "Super Nintendo / Super Famicom ROM";
                 case ".gen":
-                case ".md":
                 case ".smd": return "Sega Mega Drive / Genesis ROM";
+                case ".md": return data.Length >= 0x104 && Encoding.ASCII.GetString(data, 0x100, 4) == "SEGA" ? "Sega Mega Drive / Genesis ROM" : null;
                 case ".sms": return "Sega Master System ROM";
                 case ".gg": return "Sega Game Gear ROM";
                 case ".n64":

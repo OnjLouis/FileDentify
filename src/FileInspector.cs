@@ -39,10 +39,12 @@ namespace FileDentify
             if (!ReferenceEquals(displayStringSample, displayHeader))
                 displayStringSample = RedactSensitiveQwsSample(path, displayStringSample);
             var libmagic = LibmagicProbe.Identify(path);
+            var libFileDentifyMatch = LibFileDentifyBridge.Identify(file.Name, header, file.Length);
+            var fileDentifyDatabaseType = FileDentifyDatabaseTypeName(path, header, file.Length, libFileDentifyMatch);
             var sections = report.Sections;
 
             var summary = AddSection(sections, "Summary");
-            Add(summary, "Likely type", GuessType(path, header, file.Length, libmagic));
+            Add(summary, "Likely type", GuessType(path, header, file.Length, libmagic, fileDentifyDatabaseType));
             if (libmagic != null && ShouldShowLibmagicInSummary(libmagic.Description))
                 Add(summary, "Unix file says", libmagic.Description);
             Add(summary, "Path", path);
@@ -55,8 +57,6 @@ namespace FileDentify
             AddWindowsPropertyMetadata(sections, path);
             AddDmgInfo(sections, path, file.Length);
 
-            var fileDentifyDatabaseType = FileDentifyDatabaseTypeName(path, header, file.Length);
-
             var signatureMatches = SignatureMatcher.Match(header, path).ToArray();
             if (signatureMatches.Length > 0 || string.IsNullOrWhiteSpace(fileDentifyDatabaseType))
             {
@@ -66,7 +66,7 @@ namespace FileDentify
                 if (signatureMatches.Length == 0)
                     Add(signatures, "No common signature match", "The first bytes do not match the built-in signature list.");
             }
-            AddFileDentifyDatabaseInfo(sections, path, header, file.Length, fileDentifyDatabaseType);
+            AddFileDentifyDatabaseInfo(sections, path, header, file.Length, fileDentifyDatabaseType, libFileDentifyMatch);
             AddLibmagicInfo(sections, libmagic);
             AddSafetyHintInfo(sections, path, header);
 
@@ -104,6 +104,9 @@ namespace FileDentify
             AddSavedReportInfo(sections, path, header);
             AddDeveloperFormatInfo(sections, path, header);
             AddDeveloperAppResourceInfo(sections, path, header);
+            AddStructuredFormatInfo(sections, path, header, file.Length);
+            AddSecurityContainerInfo(sections, path, header, file.Length);
+            AddDiscoveredFormatInfo(sections, path, header, file.Length);
             AddBackupConfigInfo(sections, path, header, stringSample, file.Length);
             AddLegacySoundBankInfo(sections, path, header, stringSample, file.Length);
             AddEnsoniqInfo(sections, path, header, stringSample, file.Length);

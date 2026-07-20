@@ -1,5 +1,6 @@
 bin/
 obj/
+release/
 *.user
 *.suo
 *.pdb
@@ -20,4 +21,5 @@ ClipmanShared.md
 CLIPMAN_AGENT_SYNC.md
 CLIPMAN_SHARED_CONTRACT.md
 SmokeTest.ps1
+SMOKE-TEST.md
 HANDOVER.md

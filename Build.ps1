@@ -23,6 +23,8 @@ $packageStartupError = Join-Path $packageDir 'FileDentify-startup-error.txt'
 $csc = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
 $libmagicRoot = Join-Path $root 'third_party\libmagic\extracted'
 $tolkRoot = Join-Path $root 'third_party\tolk'
+$libFileDentifyRoot = Join-Path $root 'third_party\libfiledentify'
+$libFileDentifyAssembly = Join-Path $libFileDentifyRoot 'LibFileDentify.dll'
 
 if (-not (Test-Path -LiteralPath $csc)) {
     $csc = Join-Path $env:WINDIR 'Microsoft.NET\Framework\v4.0.30319\csc.exe'
@@ -30,6 +32,11 @@ if (-not (Test-Path -LiteralPath $csc)) {
 
 if (-not (Test-Path -LiteralPath $csc)) {
     throw 'Could not find the .NET Framework C# compiler.'
+}
+
+$libFileDentifyVersion = [Reflection.AssemblyName]::GetAssemblyName($libFileDentifyAssembly).Version.ToString(3)
+if ($libFileDentifyVersion -ne '0.1.0') {
+    throw "Expected LibFileDentify 0.1.0, found $libFileDentifyVersion."
 }
 
 New-Item -ItemType Directory -Force -Path $packageDir | Out-Null
@@ -58,7 +65,9 @@ $resources = @(
     ('/resource:{0},FileDentify.Embedded.COPYING.libiconv-lgpl' -f (Join-Path $libmagicRoot 'COPYING.libiconv-lgpl')),
     ('/resource:{0},FileDentify.Embedded.Tolk.dll' -f (Join-Path $tolkRoot 'Tolk.dll')),
     ('/resource:{0},FileDentify.Embedded.nvdaControllerClient64.dll' -f (Join-Path $tolkRoot 'nvdaControllerClient64.dll')),
-    ('/resource:{0},FileDentify.Embedded.Tolk.LICENSE.txt' -f (Join-Path $tolkRoot 'Tolk.LICENSE.txt'))
+    ('/resource:{0},FileDentify.Embedded.Tolk.LICENSE.txt' -f (Join-Path $tolkRoot 'Tolk.LICENSE.txt')),
+    ('/resource:{0},FileDentify.Embedded.LibFileDentify.dll' -f $libFileDentifyAssembly),
+    ('/resource:{0},FileDentify.Embedded.LibFileDentify.LICENSE.txt' -f (Join-Path $libFileDentifyRoot 'LICENSE.txt'))
 )
 
 foreach ($resource in $resources) {
@@ -77,12 +86,14 @@ if (-not (Test-Path -LiteralPath $stubSource)) {
 & (Join-Path $root 'Test-ShortcutParity.ps1')
 & (Join-Path $root 'Test-ChangelogSanity.ps1')
 
-& $csc /nologo /target:winexe /optimize+ /out:$output /reference:System.dll /reference:System.Core.dll /reference:System.Drawing.dll /reference:System.Web.Extensions.dll /reference:System.Windows.Forms.dll /reference:System.IO.Compression.dll /reference:System.IO.Compression.FileSystem.dll /reference:System.Xml.dll $resources $sources
+& $csc /nologo /target:winexe /optimize+ /out:$output /reference:System.dll /reference:System.Core.dll /reference:System.Drawing.dll /reference:System.Web.Extensions.dll /reference:System.Windows.Forms.dll /reference:System.IO.Compression.dll /reference:System.IO.Compression.FileSystem.dll /reference:System.Xml.dll /reference:$libFileDentifyAssembly $resources $sources
 if ($LASTEXITCODE -ne 0) {
     throw "C# compile failed with exit code $LASTEXITCODE."
 }
 
 Write-Host "Built $output"
+
+& (Join-Path $root 'Test-DetectionSanity.ps1') -Executable $output
 
 & $csc /nologo /target:exe /optimize+ /out:$consoleOutput /reference:System.dll $stubSource
 if ($LASTEXITCODE -ne 0) {

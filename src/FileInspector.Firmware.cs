@@ -13,6 +13,8 @@ namespace FileDentify
         private static string FirmwareTypeName(string path, byte[] header)
         {
             var ext = Path.GetExtension(path).ToLowerInvariant();
+            if (LooksLikeOrbitReader20PlusFirmware(header))
+                return "Orbit Reader 20 Plus firmware image";
             if (LooksLikeAndroidBootImage(header))
                 return "Android boot image";
             if (LooksLikeUbootLegacyImage(header))
@@ -56,7 +58,9 @@ namespace FileDentify
             Add(section, "Format hint", type);
             Add(section, "File size", FormatBytes(fileLength) + " (" + fileLength.ToString(CultureInfo.InvariantCulture) + " bytes)");
 
-            if (StartsWith(header, Encoding.ASCII.GetBytes("_PT_")))
+            if (LooksLikeOrbitReader20PlusFirmware(header))
+                AddOrbitReader20PlusFirmwareInfo(section, header);
+            else if (StartsWith(header, Encoding.ASCII.GetBytes("_PT_")))
                 AddPcFirmwareInfo(section, path, header);
             else if (LooksLikeAndroidBootImage(header))
                 AddAndroidBootImageInfo(section, header);
@@ -80,6 +84,31 @@ namespace FileDentify
                 AddRolandMovieInfo(section, header);
 
             Add(section, "Notes", "Firmware and device images are reported from headers, filenames, and visible strings only. FileDentify does not flash, unpack, or modify them.");
+        }
+
+        private static bool LooksLikeOrbitReader20PlusFirmware(byte[] header)
+        {
+            if (header == null || header.Length < 64)
+                return false;
+
+            var marker = ReadNullTerminated(header, 0x20, 8);
+            var family = ReadNullTerminated(header, 0x28, 8);
+            var version = ReadNullTerminated(header, 0x30, 16);
+            return marker.Equals("OR-20-02", StringComparison.Ordinal) &&
+                Regex.IsMatch(family, @"^[A-Z][0-9]\.[0-9]{2}\.[0-9]{2}$", RegexOptions.CultureInvariant) &&
+                Regex.IsMatch(version, @"^[A-Z][0-9]\.[0-9]{2}\.[0-9]{2}\.[0-9]{2}[rb][0-9]{2}$", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase) &&
+                version.StartsWith(family + ".", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static void AddOrbitReader20PlusFirmwareInfo(ReportSection section, byte[] header)
+        {
+            Add(section, "Manufacturer", "Orbit Research");
+            Add(section, "Device", "Orbit Reader 20 Plus braille display and notetaker");
+            Add(section, "Header marker", ReadNullTerminated(header, 0x20, 8));
+            Add(section, "Compatible firmware family", ReadNullTerminated(header, 0x28, 8));
+            Add(section, "Firmware version", ReadNullTerminated(header, 0x30, 16));
+            Add(section, "Installation", "Orbit Research supplies these target-software .bin files for installation with its Windows upgrade utility or from an SD card.");
+            Add(section, "Compatibility note", "Orbit Reader 20 Plus hardware variations use different firmware families. Confirm that the device's current version begins with the compatible family shown above before installing an update.");
         }
 
         private static void AddPcFirmwareInfo(ReportSection section, string path, byte[] header)

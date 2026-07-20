@@ -63,7 +63,6 @@ namespace FileDentify
                 case ".sfc":
                 case ".smc": return "Super Nintendo / Super Famicom ROM";
                 case ".gen":
-                case ".md":
                 case ".smd": return "Sega Mega Drive / Genesis ROM";
                 case ".sms": return "Sega Master System ROM";
                 case ".gg": return "Sega Game Gear ROM";
