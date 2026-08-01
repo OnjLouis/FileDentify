@@ -6,7 +6,13 @@ $sources = Get-ChildItem -LiteralPath $sourceRoot -Filter '*.cs' -File | Sort-Ob
 $stubSource = Join-Path $root 'stub\FdConsoleStub.cs'
 $packageDir = $env:FILEDENTIFY_PACKAGE_DIR
 if ([string]::IsNullOrWhiteSpace($packageDir)) {
-    $packageDir = Join-Path $root 'bin\Release'
+    $packageDir = Join-Path ([IO.Path]::GetTempPath()) 'FileDentify-build\Release'
+}
+$packageDir = [IO.Path]::GetFullPath($packageDir)
+$rootFullPath = [IO.Path]::GetFullPath($root).TrimEnd('\')
+if ($packageDir.TrimEnd('\').StartsWith($rootFullPath + '\', [StringComparison]::OrdinalIgnoreCase) -or
+    $packageDir.TrimEnd('\').Equals($rootFullPath, [StringComparison]::OrdinalIgnoreCase)) {
+    throw "FILEDENTIFY_PACKAGE_DIR must be outside the source repository: $packageDir"
 }
 $installDir = $env:FILEDENTIFY_INSTALL_DIR
 if ([string]::IsNullOrWhiteSpace($installDir)) {
@@ -23,7 +29,7 @@ $packageStartupError = Join-Path $packageDir 'FileDentify-startup-error.txt'
 $csc = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
 $libmagicRoot = Join-Path $root 'third_party\libmagic\extracted'
 $tolkRoot = Join-Path $root 'third_party\tolk'
-$libFileDentifyRoot = Join-Path $root 'third_party\libfiledentify'
+$libFileDentifyRoot = Join-Path $root 'components\libfiledentify'
 $libFileDentifyAssembly = Join-Path $libFileDentifyRoot 'LibFileDentify.dll'
 
 if (-not (Test-Path -LiteralPath $csc)) {
@@ -35,8 +41,8 @@ if (-not (Test-Path -LiteralPath $csc)) {
 }
 
 $libFileDentifyVersion = [Reflection.AssemblyName]::GetAssemblyName($libFileDentifyAssembly).Version.ToString(3)
-if ($libFileDentifyVersion -ne '0.1.0') {
-    throw "Expected LibFileDentify 0.1.0, found $libFileDentifyVersion."
+if ($libFileDentifyVersion -ne '0.2.0') {
+    throw "Expected LibFileDentify 0.2.0, found $libFileDentifyVersion."
 }
 
 New-Item -ItemType Directory -Force -Path $packageDir | Out-Null
@@ -85,6 +91,7 @@ if (-not (Test-Path -LiteralPath $stubSource)) {
 & (Join-Path $root 'Test-SectionOrdering.ps1')
 & (Join-Path $root 'Test-ShortcutParity.ps1')
 & (Join-Path $root 'Test-ChangelogSanity.ps1')
+& (Join-Path $root 'Test-NoteSanity.ps1')
 
 & $csc /nologo /target:winexe /optimize+ /out:$output /reference:System.dll /reference:System.Core.dll /reference:System.Drawing.dll /reference:System.Web.Extensions.dll /reference:System.Windows.Forms.dll /reference:System.IO.Compression.dll /reference:System.IO.Compression.FileSystem.dll /reference:System.Xml.dll /reference:$libFileDentifyAssembly $resources $sources
 if ($LASTEXITCODE -ne 0) {

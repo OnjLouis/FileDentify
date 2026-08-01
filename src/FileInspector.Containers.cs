@@ -278,6 +278,8 @@ namespace FileDentify
 
         private static void AddUfsInfo(List<ReportSection> sections, string path, byte[] header)
         {
+            if (HasUnrelatedHighConfidenceContent(path, header, "uvi.", "ufs."))
+                return;
             var markerAtStart = header.Length >= 4 && StartsWith(header, Encoding.ASCII.GetBytes("UFS2"));
             var hasUfsExtension = string.Equals(Path.GetExtension(path), ".ufs", StringComparison.OrdinalIgnoreCase);
             if (!markerAtStart && !hasUfsExtension)
@@ -296,6 +298,8 @@ namespace FileDentify
 
         private static void AddBlobInfo(List<ReportSection> sections, string path, byte[] header)
         {
+            if (HasUnrelatedHighConfidenceContent(path, header, "ujam."))
+                return;
             if (!string.Equals(Path.GetExtension(path), ".blob", StringComparison.OrdinalIgnoreCase))
                 return;
 

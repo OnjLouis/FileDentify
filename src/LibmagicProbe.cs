@@ -99,7 +99,7 @@ namespace FileDentify
         {
             return new[]
             {
-                new ThirdPartyNotice("Overview", "FileDentify embeds its LibFileDentify engine and the Unix file/libmagic engine for broad file identification." + Environment.NewLine + "Embedded runtime: LibFileDentify 0.1.0 plus the MSYS2 MinGW-w64 file/libmagic 5.48 package and required runtime DLLs."),
+                new ThirdPartyNotice("Overview", "FileDentify embeds its LibFileDentify engine and the Unix file/libmagic engine for broad file identification." + Environment.NewLine + "Embedded runtime: LibFileDentify 0.2.0 plus the MSYS2 MinGW-w64 file/libmagic 5.48 package and required runtime DLLs."),
                 new ThirdPartyNotice("LibFileDentify MIT license", ReadResourceText("FileDentify.Embedded.LibFileDentify.LICENSE.txt")),
                 new ThirdPartyNotice("file/libmagic notice", ReadResourceText("FileDentify.Embedded.COPYING.file")),
                 new ThirdPartyNotice("libsystre notice", ReadResourceText("FileDentify.Embedded.COPYING.libsystre")),

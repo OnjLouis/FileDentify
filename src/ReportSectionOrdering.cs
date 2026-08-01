@@ -59,6 +59,7 @@ namespace FileDentify
             "Logic Pro",
             "Pro Tools",
             "Apple sparse bundle",
+            "Apple sparse-bundle band",
             "Apple mobile backup",
             "Apple mobile backup file",
             "Apple bundle",

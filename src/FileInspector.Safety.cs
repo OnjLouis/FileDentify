@@ -8,8 +8,11 @@ namespace FileDentify
 {
     internal static partial class FileInspector
     {
-        private static void AddSafetyHintInfo(List<ReportSection> sections, string path, byte[] header)
+        private static void AddSafetyHintInfo(List<ReportSection> sections, string path, byte[] header, LibFileDentifyMatch libraryMatch)
         {
+            if (AddLibraryMatchSafetyHint(sections, path, libraryMatch))
+                return;
+
             var expectation = DetectHeaderExpectation(header);
             if (expectation == null)
                 return;
@@ -23,11 +26,46 @@ namespace FileDentify
                 return;
 
             var section = AddSection(sections, "Safety hints");
-            Add(section, "Header and extension mismatch", "The first bytes look like " + expectation.Description + ", but the filename extension is " + (string.IsNullOrEmpty(ext) ? "(none)" : ext) + ".");
-            Add(section, "Expected extension(s)", string.Join(", ", expectation.AcceptedExtensions.ToArray()));
+            Add(section, "Mismatch", "Detected content: " + expectation.Description + ". Filename extension: " + (string.IsNullOrEmpty(ext) ? "none" : ext) + ". Expected: " + string.Join(", ", expectation.AcceptedExtensions.OrderBy(value => value).ToArray()) + ".");
             if (IsExecutableLookingExtension(ext))
-                Add(section, "Executable-looking extension", "This extension can be used to run code or launch a command on Windows, but the header looks like a different file family.");
-            Add(section, "Recommendation", "Treat unexpected mismatches cautiously. Scan the file with trusted security tools and confirm the source before opening it directly.");
+                Add(section, "Risk", "The filename extension can launch code or a command on Windows, while the detected content belongs to a different file family.");
+            AddNote(section, "Advice", "FileDentify identifies file structure, not whether a file is harmless. Because the filename does not match the content, verify the source and scan it with trusted security software before opening it.");
+        }
+
+        private static bool AddLibraryMatchSafetyHint(List<ReportSection> sections, string path, LibFileDentifyMatch match)
+        {
+            if (match == null || !string.Equals(match.Confidence, "High", StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            var ext = Path.GetExtension(path).ToLowerInvariant();
+            var expected = new HashSet<string>(match.ExpectedExtensions ?? new string[0], StringComparer.OrdinalIgnoreCase);
+            var hasExpectedExtensions = expected.Count > 0;
+            var extensionMatches = hasExpectedExtensions && expected.Contains(ext);
+            var extensionMissing = string.IsNullOrEmpty(ext);
+            if (extensionMatches || extensionMissing && !hasExpectedExtensions)
+                return false;
+
+            var section = AddSection(sections, "Safety hints");
+            var expectedText = hasExpectedExtensions ? string.Join(", ", expected.OrderBy(value => value).ToArray()) : "not specified";
+            Add(section, "Mismatch", "Detected content: " + match.Name + ". Filename extension: " + (extensionMissing ? "none" : ext) + ". Expected: " + expectedText + ". The content match does not depend on the filename.");
+            if (IsExecutableOrActiveContent(match))
+                Add(section, "Risk", "The detected content may contain executable code, scripts, shortcuts, firmware, or security-sensitive material. Do not run or install it merely because its filename appears harmless.");
+            else if (IsExecutableLookingExtension(ext))
+                Add(section, "Risk", "The filename extension can launch code or a command on Windows, while the detected content belongs to a different file family.");
+            AddNote(section, "Advice", "FileDentify identifies file structure, not whether a file is harmless. Because the filename does not match the content, verify the source and scan it with trusted security software before opening, running, importing, or installing it.");
+            return true;
+        }
+
+        private static bool IsExecutableOrActiveContent(LibFileDentifyMatch match)
+        {
+            if (match == null)
+                return false;
+            var category = match.Category ?? string.Empty;
+            return category.IndexOf("Executable", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                category.IndexOf("Automation", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                category.IndexOf("Firmware", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                category.IndexOf("Security", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                string.Equals(match.Id, "windows.lnk", StringComparison.OrdinalIgnoreCase);
         }
 
         private static HeaderExpectation DetectHeaderExpectation(byte[] header)

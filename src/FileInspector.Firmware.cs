@@ -13,6 +13,11 @@ namespace FileDentify
         private static string FirmwareTypeName(string path, byte[] header)
         {
             var ext = Path.GetExtension(path).ToLowerInvariant();
+            if (LooksLikeZoomAccessibilityData(header))
+                return "ZOOM H1essential accessibility guide-sound data";
+            var zoomRecorder = ZoomRecorderFirmwareDetails(header);
+            if (zoomRecorder != null)
+                return "ZOOM " + zoomRecorder[0] + " recorder firmware image";
             if (LooksLikeOrbitReader20PlusFirmware(header))
                 return "Orbit Reader 20 Plus firmware image";
             if (LooksLikeAndroidBootImage(header))
@@ -58,7 +63,12 @@ namespace FileDentify
             Add(section, "Format hint", type);
             Add(section, "File size", FormatBytes(fileLength) + " (" + fileLength.ToString(CultureInfo.InvariantCulture) + " bytes)");
 
-            if (LooksLikeOrbitReader20PlusFirmware(header))
+            var zoomRecorder = ZoomRecorderFirmwareDetails(header);
+            if (LooksLikeZoomAccessibilityData(header))
+                AddZoomAccessibilityDataInfo(section, path, fileLength);
+            else if (zoomRecorder != null)
+                AddZoomRecorderFirmwareInfo(section, path, header, fileLength, zoomRecorder);
+            else if (LooksLikeOrbitReader20PlusFirmware(header))
                 AddOrbitReader20PlusFirmwareInfo(section, header);
             else if (StartsWith(header, Encoding.ASCII.GetBytes("_PT_")))
                 AddPcFirmwareInfo(section, path, header);
@@ -84,6 +94,78 @@ namespace FileDentify
                 AddRolandMovieInfo(section, header);
 
             Add(section, "Notes", "Firmware and device images are reported from headers, filenames, and visible strings only. FileDentify does not flash, unpack, or modify them.");
+        }
+
+        private static bool LooksLikeZoomAccessibilityData(byte[] header)
+        {
+            if (header == null || header.Length < 80)
+                return false;
+            var prefix = Encoding.ASCII.GetString(header, 0, Math.Min(header.Length, 128));
+            return prefix.StartsWith("H1essential Accessibility Data", StringComparison.Ordinal) &&
+                prefix.IndexOf("ZOOM Corporation", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static void AddZoomAccessibilityDataInfo(ReportSection section, string path, long fileLength)
+        {
+            Add(section, "Manufacturer", "ZOOM Corporation");
+            Add(section, "Recorder", "H1essential");
+            Add(section, "Role", "accessibility guide-sound data");
+            if (Sha256(path, fileLength) == "49a628ce6bc498987b2728ce97346477146ae752836e8180eb1a71df368e5987")
+                Add(section, "Official package version", "H1essential guide sound version 2.00, English");
+            Add(section, "Detection basis", "H1essential Accessibility Data header and ZOOM copyright marker; filename and extension are not required.");
+            Add(section, "Compatibility note", "This companion image is distinct from system firmware. Follow ZOOM's accessibility-file installation guide when updating guide sounds.");
+        }
+
+        private static string[] ZoomRecorderFirmwareDetails(byte[] header)
+        {
+            if (header == null || header.Length < 80)
+                return null;
+            var prefix = Encoding.ASCII.GetString(header, 0, Math.Min(header.Length, 128));
+            string model = null;
+            string family = null;
+            if (prefix.StartsWith("H1essential System Data", StringComparison.Ordinal)) { model = "H1essential"; family = "H series handy recorder"; }
+            else if (prefix.StartsWith("H6essential System Data", StringComparison.Ordinal)) { model = "H6essential"; family = "H series handy recorder"; }
+            else if (prefix.StartsWith("H6 System Data", StringComparison.Ordinal)) { model = "H6"; family = "H series handy recorder"; }
+            else if (prefix.StartsWith("F8nPro System Data", StringComparison.Ordinal)) { model = "F8n Pro"; family = "F series field recorder"; }
+            else if (prefix.StartsWith("F8n System Data", StringComparison.Ordinal)) { model = "F8n"; family = "F series field recorder"; }
+            else if (prefix.StartsWith("F8 System Data", StringComparison.Ordinal)) { model = "F8"; family = "F series field recorder"; }
+            else if (prefix.StartsWith("F6 System Data", StringComparison.Ordinal)) { model = "F6"; family = "F series field recorder"; }
+            else if (prefix.StartsWith("F3 System Data", StringComparison.Ordinal)) { model = "F3"; family = "F series field recorder"; }
+            return model != null && prefix.IndexOf("ZOOM Corporation", StringComparison.OrdinalIgnoreCase) >= 0
+                ? new[] { model, family }
+                : null;
+        }
+
+        private static void AddZoomRecorderFirmwareInfo(ReportSection section, string path, byte[] header, long fileLength, string[] details)
+        {
+            Add(section, "Manufacturer", "ZOOM Corporation");
+            Add(section, "Recorder", details[0]);
+            Add(section, "Product family", details[1]);
+            Add(section, "Header identity", ReadNullTerminated(header, 0, Math.Min(96, header.Length)).Trim());
+            var version = KnownZoomRecorderFirmwareVersion(path, fileLength);
+            if (version != null)
+                Add(section, "Official package version", version);
+            Add(section, "Detection basis", "Model-specific System Data header and ZOOM copyright marker; filename and extension are not required.");
+            Add(section, "Compatibility note", "Recorder firmware is model-specific. Confirm the recorder model and follow ZOOM's official update guide before using this file.");
+        }
+
+        private static string KnownZoomRecorderFirmwareVersion(string path, long fileLength)
+        {
+            if (fileLength <= 0 || fileLength > 32L * 1024 * 1024)
+                return null;
+            var hash = Sha256(path, fileLength);
+            switch (hash)
+            {
+                case "56524ffafb21bacd15953eda16b473fb80bf1a69115a2770fca0a5c2357b4f26": return "H1essential system version 2.20";
+                case "7e8018e8695a1c71aaf1716b7472f2c2a1ed510029845d01e3eaf4f8fecfe14e": return "H6 system version 2.50";
+                case "a294f3782554ee88d6a949b1acf8fadadbeedc8f15ce75516c7585237f032884": return "H6essential system version 3.30";
+                case "c16f3307ffc3c85b881566dd9b779b5ecbf03131c2ecad4d4f06b370f1cd814d": return "F3 system version 2.20";
+                case "7f14f62186aaa66fdf1478f726026555a864373d73f63909970751e0d908cd19": return "F6 system version 2.20";
+                case "bdc275371b9accc063ef13a655be03a4e361fd68a557eaf677eb3230adae2885": return "F8 system version 6.40";
+                case "b03f0fec4006f669be118e170a57275f328076b3daa58b897b7affc849d02135": return "F8n system version 2.50";
+                case "229f1ca767f80bb1d706de1b650a536964d18b1ee8a7bfd82534f5eb8ba2b7df": return "F8n Pro system version 1.30";
+                default: return null;
+            }
         }
 
         private static bool LooksLikeOrbitReader20PlusFirmware(byte[] header)

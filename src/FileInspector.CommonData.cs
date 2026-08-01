@@ -139,11 +139,7 @@ namespace FileDentify
 
         private static bool LooksLikeSqliteDatabase(string path, byte[] header)
         {
-            if (StartsWith(header, Encoding.ASCII.GetBytes("SQLite format 3\0")))
-                return true;
-
-            var ext = Path.GetExtension(path).ToLowerInvariant();
-            return ext == ".sqlite" || ext == ".sqlite3" || ext == ".db3";
+            return StartsWith(header, Encoding.ASCII.GetBytes("SQLite format 3\0"));
         }
 
         private static bool IsSqliteDatabaseExtension(string extension)
@@ -159,7 +155,7 @@ namespace FileDentify
 
             var section = AddSection(sections, "Database");
             Add(section, "Format hint", "SQLite database");
-            Add(section, "Header marker", StartsWith(header, Encoding.ASCII.GetBytes("SQLite format 3\0")) ? "SQLite format 3" : "Extension-level SQLite family hint");
+            Add(section, "Header marker", "SQLite format 3");
             Add(section, "File size", FormatBytes(fileLength));
             Add(section, "Likely role", SqliteDatabaseRole(path));
 

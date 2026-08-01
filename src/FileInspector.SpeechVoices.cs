@@ -38,6 +38,10 @@ namespace FileDentify
                 return FlexVoiceTypeName(path);
             if (LooksLikePocketTtsData(path, header))
                 return PocketTtsTypeName(path, header);
+            if (Prose2000RomDetails(header) != null)
+                return "Telesensory Systems Prose 2000 firmware ROM";
+            if (LooksLikeDoubleTalkData(path, header))
+                return DoubleTalkTypeName(path, header);
             if (LooksLikeOtherNvdaSpeechEngineData(path, header))
                 return OtherNvdaSpeechEngineTypeName(path, header);
             if (LooksLikeScanSoftRealSpeakMobile(path, header))
@@ -69,6 +73,8 @@ namespace FileDentify
 
         private static void AddSpeechVoiceInfo(List<ReportSection> sections, string path, byte[] header, long fileLength)
         {
+            if (HasUnrelatedHighConfidenceContent(path, header, "speech.", "accessibility."))
+                return;
             var type = SpeechVoiceTypeName(path, header);
             if (type == null)
                 return;
@@ -98,6 +104,18 @@ namespace FileDentify
                 return;
             }
 
+            var proseRom = Prose2000RomDetails(header);
+            if (proseRom != null)
+            {
+                Add(section, "Vendor/family", "Telesensory Systems Prose 2000");
+                Add(section, "ROM role", proseRom[0]);
+                Add(section, "Firmware version", proseRom[1]);
+                Add(section, "Board socket", proseRom[2]);
+                Add(section, "Detection basis", "Exact SHA-256 match to a known Prose 2000 ROM image; filename and folder context are not required.");
+                Add(section, "Notes", "These proprietary ROM images supply firmware and speech data to the vintage Telesensory Systems Prose 2000. FileDentify identifies known dumps without running the emulator or redistributing ROM contents.");
+                return;
+            }
+
             if (LooksLikeScanSoftRealSpeakMobile(path, header))
             {
                 AddScanSoftRealSpeakMobileInfo(section, header);
@@ -117,6 +135,7 @@ namespace FileDentify
                 LooksLikeRhVoiceData(path, header) ||
                 LooksLikeFlexVoiceData(path, header) ||
                 LooksLikePocketTtsData(path, header) ||
+                LooksLikeDoubleTalkData(path, header) ||
                 LooksLikeEspeakSpeechData(path, header) ||
                 LooksLikeOtherNvdaSpeechEngineData(path, header))
             {
@@ -194,6 +213,11 @@ namespace FileDentify
                 return FlexVoiceRole(path);
             if (LooksLikePocketTtsData(path, header))
                 return PocketTtsRole(path);
+            var proseRom = Prose2000RomDetails(header);
+            if (proseRom != null)
+                return proseRom[0];
+            if (LooksLikeDoubleTalkData(path, header))
+                return DoubleTalkRole(path, header);
             if (LooksLikeOtherNvdaSpeechEngineData(path, header))
                 return OtherNvdaSpeechEngineRole(path, header);
             if (LooksLikeScanSoftRealSpeakMobile(path, header))
@@ -201,6 +225,25 @@ namespace FileDentify
             if (LooksLikeModelTalkerData(path, header))
                 return "voice codebook or model support file";
             return PiperVoiceRole(path);
+        }
+
+        private static string[] Prose2000RomDetails(byte[] header)
+        {
+            if (header == null || header.Length != 1024 && header.Length != 1536 && header.Length != 65536)
+                return null;
+            string hash;
+            using (var sha = System.Security.Cryptography.SHA256.Create())
+                hash = BitConverter.ToString(sha.ComputeHash(header)).Replace("-", string.Empty);
+            switch (hash)
+            {
+                case "96F73B10205FE3754DBE88BD624CAABC30E267B8EE85D1CC4AC4753315BE9EEF": return new[] { "DSP data ROM", "3.12 (1988-08-09)", "U29" };
+                case "E275FAC12EA6AFC0140EC32E17C7108F27C7ECAF4695CE342D02BBB84F1A330F": return new[] { "DSP program ROM", "3.12 (1988-08-09)", "U29" };
+                case "0606668A1A873A99E525681AB7EB437B7B35E79FD38A28967114E7AC9DE5B657": return new[] { "Processor ROM 0", "3.4.1", "U21" };
+                case "652B866D235F7C91E8FF90E8782D2793D442308F1B2F7B09E54DB8DE0B38116C": return new[] { "Processor ROM 1", "3.4.1", "U44" };
+                case "86186E0200C994D88AE5FE53A5B4B804746DF59E6599FFC40ABE70065EE30D03": return new[] { "Processor ROM 2", "3.4.1", "U22" };
+                case "FE091C4CAD8FAB452A24D07F596517805494932E5F0E28D9CC782700D9B41D1B": return new[] { "Processor ROM 3", "3.4.1", "U45" };
+                default: return null;
+            }
         }
 
         private static bool LooksLikeModelTalkerData(string path, byte[] header)
@@ -741,6 +784,76 @@ namespace FileDentify
             return false;
         }
 
+        private static bool LooksLikeDoubleTalkData(string path, byte[] header)
+        {
+            var text = Encoding.ASCII.GetString(header ?? new byte[0]);
+            if (text.IndexOf("DoubleTalk (C) 1988-95 RC Systems", StringComparison.Ordinal) >= 0)
+                return true;
+            if (LooksLikeDoubleTalkRules(header))
+                return true;
+            if (LooksLikeDoubleTalkDictionary(header))
+                return true;
+            var lower = (path ?? string.Empty).ToLowerInvariant();
+            if (!lower.Contains("\\doubletalk64\\") && !lower.Contains("\\doubletalkpc\\"))
+                return false;
+            var name = Path.GetFileName(path) ?? string.Empty;
+            return name.Equals("rules.bin", StringComparison.OrdinalIgnoreCase) ||
+                name.Equals("hash.bin", StringComparison.OrdinalIgnoreCase) ||
+                name.Equals("doubletalkpc.bin", StringComparison.OrdinalIgnoreCase) ||
+                Path.GetExtension(path).Equals(".tsv", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string DoubleTalkTypeName(string path, byte[] header)
+        {
+            var text = Encoding.ASCII.GetString(header ?? new byte[0]);
+            if (text.IndexOf("DoubleTalk (C) 1988-95 RC Systems", StringComparison.Ordinal) >= 0)
+                return "RC Systems DoubleTalk PC speech ROM image";
+            if (LooksLikeDoubleTalkRules(header))
+                return "DoubleTalk pronunciation rules";
+            if (LooksLikeDoubleTalkDictionary(header))
+                return "DoubleTalk pronunciation dictionary";
+            var name = Path.GetFileName(path) ?? string.Empty;
+            if (name.Equals("rules.bin", StringComparison.OrdinalIgnoreCase)) return "DoubleTalk pronunciation rules";
+            if (name.Equals("hash.bin", StringComparison.OrdinalIgnoreCase)) return "DoubleTalk pronunciation index";
+            if (Path.GetExtension(path).Equals(".tsv", StringComparison.OrdinalIgnoreCase)) return "DoubleTalk pronunciation dictionary";
+            return "DoubleTalk speech data";
+        }
+
+        private static string DoubleTalkRole(string path, byte[] header)
+        {
+            var name = Path.GetFileName(path) ?? string.Empty;
+            if (Encoding.ASCII.GetString(header ?? new byte[0]).IndexOf("DoubleTalk (C) 1988-95 RC Systems", StringComparison.Ordinal) >= 0)
+                return "hardware synthesizer ROM image";
+            if (LooksLikeDoubleTalkRules(header))
+                return "pronunciation rules";
+            if (LooksLikeDoubleTalkDictionary(header))
+                return "pronunciation dictionary";
+            if (name.Equals("rules.bin", StringComparison.OrdinalIgnoreCase)) return "pronunciation rules";
+            if (name.Equals("hash.bin", StringComparison.OrdinalIgnoreCase)) return "pronunciation lookup index";
+            if (Path.GetExtension(path).Equals(".tsv", StringComparison.OrdinalIgnoreCase)) return "pronunciation dictionary";
+            return "speech engine support data";
+        }
+
+        private static bool LooksLikeDoubleTalkRules(byte[] header)
+        {
+            if (header == null || header.Length < 4096)
+                return false;
+            var text = Encoding.ASCII.GetString(header);
+            return Regex.Matches(text, "\\{\\{-A").Count >= 15 &&
+                text.IndexOf("BOUT { {{-AX", StringComparison.Ordinal) >= 0 &&
+                text.IndexOf("CROSS { {{-AX", StringComparison.Ordinal) >= 0 &&
+                text.IndexOf("GAINST { {{-AX", StringComparison.Ordinal) >= 0;
+        }
+
+        private static bool LooksLikeDoubleTalkDictionary(byte[] header)
+        {
+            var text = Encoding.UTF8.GetString(header ?? new byte[0]);
+            return text.IndexOf("DoubleTalk", StringComparison.OrdinalIgnoreCase) >= 0 &&
+                text.IndexOf("spelling<TAB>phonetics", StringComparison.OrdinalIgnoreCase) >= 0 &&
+                (text.IndexOf("RC Systems", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 text.IndexOf("native user dictionary", StringComparison.OrdinalIgnoreCase) >= 0);
+        }
+
         private static string OtherNvdaSpeechEngineTypeName(string path, byte[] header)
         {
             var lower = path.ToLowerInvariant();
@@ -770,7 +883,9 @@ namespace FileDentify
 
         private static bool LooksLikePocketTtsData(string path, byte[] header)
         {
-            if (path == null || path.IndexOf("\\nvda\\pocket_tts\\", StringComparison.OrdinalIgnoreCase) < 0)
+            if (path == null ||
+                path.IndexOf("\\nvda\\pocket_tts\\", StringComparison.OrdinalIgnoreCase) < 0 &&
+                path.IndexOf("\\nvda\\addons\\Pocket-TTS\\", StringComparison.OrdinalIgnoreCase) < 0)
                 return false;
             var ext = Path.GetExtension(path).ToLowerInvariant();
             var name = Path.GetFileName(path) ?? string.Empty;
@@ -1119,7 +1234,7 @@ namespace FileDentify
 
         private static void AddNvdaSpeechEngineInfo(ReportSection section, string path, byte[] header)
         {
-            if (!LooksLikePocketTtsData(path, header) && !LooksLikeGoogleTtsForNvdaData(path, header))
+            if (!LooksLikePocketTtsData(path, header) && !LooksLikeGoogleTtsForNvdaData(path, header) && !LooksLikeDoubleTalkData(path, header))
             {
                 Add(section, "Vendor/family", NvdaSpeechFamily(path));
                 Add(section, "Component", NvdaSpeechComponent(path));
@@ -1147,13 +1262,35 @@ namespace FileDentify
                 AddFlexVoiceDetails(section, path, header);
             else if (LooksLikePocketTtsData(path, header))
                 AddPocketTtsDetails(section, path, header);
+            else if (LooksLikeDoubleTalkData(path, header))
+                AddDoubleTalkDetails(section, path, header);
             else if (LooksLikeEspeakSpeechData(path, header))
                 AddEspeakDetails(section, path, header);
             else if (LooksLikeText(header))
                 AddSpeechTextClues(section, header);
 
-            if (!LooksLikeGoogleTtsForNvdaData(path, header))
-                Add(section, "Notes", "NVDA speech-engine files can be open-source voice data, neural models, dictionaries, or wrappers around engines such as Eloquence, IBM TTS, RHVoice, eSpeak, Orpheus, SuperTonic, and Pocket TTS. FileDentify reports known add-on paths, package manifests, filenames, and safe text/header metadata; it does not load synthesizers, run engine components, or decode proprietary voice payloads.");
+            if (!LooksLikeGoogleTtsForNvdaData(path, header) && !LooksLikeDoubleTalkData(path, header))
+                Add(section, "Notes", "NVDA speech-engine files can be open-source voice data, neural models, dictionaries, firmware, or wrappers around engines such as Eloquence, IBM TTS, RHVoice, eSpeak, Orpheus, SuperTonic, Pocket TTS, and DoubleTalk. FileDentify reports known add-on paths, package manifests, filenames, and safe text/header metadata; it does not load synthesizers, run engine components, or decode proprietary voice payloads.");
+        }
+
+        private static void AddDoubleTalkDetails(ReportSection section, string path, byte[] header)
+        {
+            var text = Encoding.ASCII.GetString(header ?? new byte[0]);
+            Add(section, "Vendor/family", "RC Systems DoubleTalk");
+            var version = Regex.Match(text, "(?<value>[0-9]+\\.[0-9]+)[\\r\\n.\\0 ]+DoubleTalk \\(C\\) 1988-95 RC Systems");
+            if (version.Success)
+                Add(section, "Firmware version", version.Groups["value"].Value);
+            if (text.IndexOf("DoubleTalk (C) 1988-95 RC Systems", StringComparison.Ordinal) >= 0)
+                Add(section, "Detection basis", "Embedded DoubleTalk copyright marker; filename and folder context are not required.");
+            else if (LooksLikeDoubleTalkRules(header))
+                Add(section, "Detection basis", "Repeated DoubleTalk pronunciation-rule structures and known initial rules; filename and folder context are not required.");
+            else if (LooksLikeDoubleTalkDictionary(header))
+            {
+                Add(section, "Detection basis", "DoubleTalk dictionary header and tab-separated spelling/phonetics columns; filename and folder context are not required.");
+                var entries = Regex.Matches(Encoding.UTF8.GetString(header), "(?m)^[^#\\r\\n\\t]+\\t[^\\r\\n]+\\r?$").Count;
+                Add(section, "Pronunciation entries in sample", entries.ToString(CultureInfo.InvariantCulture));
+            }
+            Add(section, "Notes", "DoubleTalk PC is an RC Systems hardware speech synthesizer. DoubleTalk64 packages its ROM image with native pronunciation rules and dictionaries for use through NVDA; FileDentify identifies these resources without executing or emulating the synthesizer.");
         }
 
         private static string NvdaSpeechFamily(string path)

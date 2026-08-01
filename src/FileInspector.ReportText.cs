@@ -127,19 +127,39 @@ namespace FileDentify
                 {
                     sb.AppendLine("<section>");
                     sb.AppendLine("<h3>" + Html(section.Title) + "</h3>");
-                    sb.AppendLine("<table>");
-                    sb.AppendLine("<thead><tr><th scope=\"col\">Item</th><th scope=\"col\">Details</th></tr></thead>");
-                    sb.AppendLine("<tbody>");
+                    var tableOpen = false;
                     foreach (var item in section.Items)
                     {
                         var detail = ReportSection.NormalizeDetailText(item.Detail);
+                        if (item.IsNote || ReportNotePolicy.IsLegacyNoteTitle(item.Title))
+                        {
+                            if (tableOpen)
+                            {
+                                sb.AppendLine("</tbody>");
+                                sb.AppendLine("</table>");
+                                tableOpen = false;
+                            }
+                            sb.AppendLine("<h4>" + Html(item.Title) + "</h4>");
+                            sb.AppendLine("<pre>" + Html(detail) + "</pre>");
+                            continue;
+                        }
+                        if (!tableOpen)
+                        {
+                            sb.AppendLine("<table>");
+                            sb.AppendLine("<thead><tr><th scope=\"col\">Item</th><th scope=\"col\">Details</th></tr></thead>");
+                            sb.AppendLine("<tbody>");
+                            tableOpen = true;
+                        }
                         if (string.Equals((item.Title ?? string.Empty).Trim(), detail.Trim(), StringComparison.Ordinal))
                             sb.AppendLine("<tr><td colspan=\"2\"><pre>" + Html(detail) + "</pre></td></tr>");
                         else
                             sb.AppendLine("<tr><td>" + Html(item.Title) + "</td><td><pre>" + Html(detail) + "</pre></td></tr>");
                     }
-                    sb.AppendLine("</tbody>");
-                    sb.AppendLine("</table>");
+                    if (tableOpen)
+                    {
+                        sb.AppendLine("</tbody>");
+                        sb.AppendLine("</table>");
+                    }
                     sb.AppendLine("</section>");
                 }
                 sb.AppendLine("</article>");

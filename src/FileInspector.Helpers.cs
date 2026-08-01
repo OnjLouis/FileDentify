@@ -27,44 +27,26 @@ namespace FileDentify
 
         private static void Add(ReportSection section, string title, string detail)
         {
-            if (section != null && IsMergeableReportNoteTitle(title))
+            if (section != null && ReportNotePolicy.IsLegacyNoteTitle(title))
             {
-                var existing = section.Items.FirstOrDefault(item => IsMergeableReportNoteTitle(item.Title));
-                var newDetail = FormatMergedReportNote(title, detail);
-                if (existing != null)
-                {
-                    if (string.IsNullOrWhiteSpace(newDetail))
-                        return;
-                    existing.Title = "Notes";
-                    var oldDetail = existing.Detail ?? string.Empty;
-                    if (oldDetail.IndexOf(newDetail, StringComparison.OrdinalIgnoreCase) >= 0)
-                        return;
-                    existing.Detail = string.IsNullOrWhiteSpace(oldDetail)
-                        ? newDetail
-                        : oldDetail.TrimEnd() + Environment.NewLine + Environment.NewLine + newDetail;
-                    return;
-                }
-                section.Items.Add(new ReportItem { Title = "Notes", Detail = newDetail });
+                AddNote(section, title, detail);
                 return;
             }
             section.Items.Add(new ReportItem { Title = title, Detail = detail ?? string.Empty });
         }
 
-        private static bool IsMergeableReportNoteTitle(string title)
+        private static void AddNote(ReportSection section, string title, string detail)
         {
-            var text = (title ?? string.Empty).Trim();
-            return string.Equals(text, "Notes", StringComparison.OrdinalIgnoreCase) ||
-                text.EndsWith(" note", StringComparison.OrdinalIgnoreCase) ||
-                text.EndsWith(" notes", StringComparison.OrdinalIgnoreCase);
-        }
-
-        private static string FormatMergedReportNote(string title, string detail)
-        {
-            var text = detail ?? string.Empty;
-            var label = (title ?? string.Empty).Trim();
-            if (string.Equals(label, "Notes", StringComparison.OrdinalIgnoreCase) || string.IsNullOrWhiteSpace(label))
-                return text;
-            return label + ": " + text;
+            if (section == null || string.IsNullOrWhiteSpace(detail))
+                return;
+            var category = ReportNotePolicy.Categorize(title, detail);
+            var existing = section.Items.FirstOrDefault(item => string.Equals(item.Title, category, StringComparison.OrdinalIgnoreCase));
+            if (existing != null)
+            {
+                existing.Detail = ReportNotePolicy.MergeDistinct(existing.Detail, detail);
+                return;
+            }
+            section.Items.Add(new ReportItem { Title = category, Detail = detail ?? string.Empty, IsNote = true });
         }
 
         private static void AddFileDentifyDatabaseInfo(List<ReportSection> sections, string path, byte[] header, long length)
@@ -89,7 +71,9 @@ namespace FileDentify
             Add(section, "Source", librarySupplied ? "LibFileDentify " + libraryMatch.Version : "FileDentify database");
             Add(section, "Detection basis", librarySupplied ? libraryMatch.DetectionBasis : FileDentifyDatabaseDetectionBasis(path, header));
             if (librarySupplied)
-                Add(section, "Match confidence", libraryMatch.Confidence + ": content evidence confirmed by the embedded LibFileDentify engine");
+                Add(section, "Match confidence", string.Equals(libraryMatch.Confidence, "High", StringComparison.OrdinalIgnoreCase)
+                    ? "High: content evidence confirmed by the embedded LibFileDentify engine"
+                    : "Medium: structural and content clues support this match, but do not prove the exact origin");
             else if (LooksLikeOrbitReader20PlusFirmware(header))
                 Add(section, "Match confidence", "High: fixed header marker and internally consistent version fields");
             else if (StructuredFormatTypeName(path, header) != null)
@@ -107,10 +91,40 @@ namespace FileDentify
             return FileDentifyDatabaseTypeName(path, header, length, LibFileDentifyBridge.Identify(Path.GetFileName(path), header, length));
         }
 
+        private static bool HasUnrelatedHighConfidenceContent(string path, byte[] header, params string[] acceptedIdPrefixes)
+        {
+            long length = header == null ? 0 : header.LongLength;
+            try
+            {
+                if (File.Exists(path))
+                    length = new FileInfo(path).Length;
+            }
+            catch
+            {
+                // The sampled bytes are still sufficient for detectors that do not use total length.
+            }
+
+            var match = LibFileDentifyBridge.Identify(Path.GetFileName(path), header, length);
+            if (match == null || !string.Equals(match.Confidence, "High", StringComparison.OrdinalIgnoreCase))
+                return false;
+            return !(acceptedIdPrefixes ?? new string[0]).Any(prefix =>
+                !string.IsNullOrWhiteSpace(prefix) && match.Id.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
+        }
+
         private static string FileDentifyDatabaseTypeName(string path, byte[] header, long length, LibFileDentifyMatch libraryMatch)
         {
-            if (libraryMatch != null && libraryMatch.ShouldSurface)
-                return libraryMatch.Name;
+            if (IsSparseBundleBandPath(path))
+                return "Apple sparse-bundle band file";
+            if (libraryMatch != null && libraryMatch.IsContentMatch)
+            {
+                if (libraryMatch.ShouldSurface)
+                    return libraryMatch.Name;
+                var currentExtension = Path.GetExtension(path);
+                var expectedExtensions = libraryMatch.ExpectedExtensions ?? new string[0];
+                if (string.IsNullOrWhiteSpace(currentExtension) ||
+                    !expectedExtensions.Contains(currentExtension, StringComparer.OrdinalIgnoreCase))
+                    return libraryMatch.Name;
+            }
             if (IsWindowsShortcut(header)) return "Windows shortcut (.lnk)";
             if (IsInternetShortcut(path, header)) return "Internet shortcut or web favorite (.url)";
             var savedReportType = SavedReportTypeName(path, header);

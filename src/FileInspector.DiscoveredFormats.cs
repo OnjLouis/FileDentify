@@ -14,22 +14,22 @@ namespace FileDentify
         private static string DiscoveredFormatTypeName(string path, byte[] header)
         {
             var ext = Path.GetExtension(path).ToLowerInvariant();
-            if (ext == ".contact" && XmlHeaderRootIs(header, "contact", "schemas.microsoft.com/Contact")) return "Windows Contact file";
-            if (ext == ".smil" && XmlHeaderRootIs(header, "smil", null)) return "SMIL synchronized multimedia document";
-            if (ext == ".acsm" && XmlHeaderRootIs(header, "fulfillmentToken", "ns.adobe.com/adept")) return "Adobe ebook fulfillment token";
-            if (ext == ".aup" && XmlHeaderRootIs(header, "project", "audacity.sourceforge.net/xml")) return "Audacity legacy project";
-            if (ext == ".kmmacros" && LooksLikeKeyboardMaestroMacros(header)) return "Keyboard Maestro macro library";
-            if (ext == ".mamd" && LooksLikeLogicMamd(header)) return "Logic Pro audio metadata sidecar";
-            if (ext == ".zdt" && StartsWith(header, Encoding.ASCII.GetBytes("ZOOM L-20    PROJECT DATA VER"))) return "Zoom LiveTrak L-20 project data";
-            if (ext == ".dbb" && StartsWith(header, Encoding.ASCII.GetBytes("l33l"))) return "Legacy Skype database";
-            if (ext == ".scpt" && StartsWith(header, Encoding.ASCII.GetBytes("FasdUAS"))) return "Compiled AppleScript";
+            if (XmlHeaderRootIs(header, "contact", "schemas.microsoft.com/Contact")) return "Windows Contact file";
+            if (XmlHeaderRootIs(header, "smil", null)) return "SMIL synchronized multimedia document";
+            if (XmlHeaderRootIs(header, "fulfillmentToken", "ns.adobe.com/adept")) return "Adobe ebook fulfillment token";
+            if (XmlHeaderRootIs(header, "project", "audacity.sourceforge.net/xml")) return "Audacity legacy project";
+            if (LooksLikeKeyboardMaestroMacros(header)) return "Keyboard Maestro macro library";
+            if (LooksLikeLogicMamd(header)) return "Logic Pro audio metadata sidecar";
+            if (StartsWith(header, Encoding.ASCII.GetBytes("ZOOM L-20    PROJECT DATA VER"))) return "Zoom LiveTrak L-20 project data";
+            if (StartsWith(header, Encoding.ASCII.GetBytes("l33l"))) return "Legacy Skype database";
+            if (StartsWith(header, Encoding.ASCII.GetBytes("FasdUAS"))) return "Compiled AppleScript";
             if (ext == ".pdd" && LooksLikeSymbianDriver(header)) return "Symbian physical device driver";
             if (ext == ".kbd" && LooksLikeSymbianKeyboardLayout(header)) return "Symbian keyboard layout";
-            if (ext == ".pml" && LooksLikePmmlMusicSource(header)) return "PMML music macro source";
+            if (LooksLikePmmlMusicSource(header)) return "PMML music macro source";
             if (ext == ".thm" && StartsWith(header, new byte[] { 0xFF, 0xD8, 0xFF })) return "Camera thumbnail JPEG image";
-            if (ext == ".srt" && LooksLikeSubRipSubtitles(header)) return "SubRip subtitle file";
+            if (LooksLikeSubRipSubtitles(header)) return "SubRip subtitle file";
             if (ext == ".tga" && LooksLikeTargaImage(header)) return "Truevision Targa image";
-            if (ext == ".wmf" && LooksLikeWindowsMetafile(header)) return "Windows Metafile image";
+            if (LooksLikeWindowsMetafile(header)) return "Windows Metafile image";
             return null;
         }
 
@@ -38,26 +38,25 @@ namespace FileDentify
             var type = DiscoveredFormatTypeName(path, header);
             if (type == null)
                 return null;
-            var ext = Path.GetExtension(path).ToLowerInvariant();
-            switch (ext)
+            switch (type)
             {
-                case ".contact": return ".contact extension plus Microsoft Contact XML namespace";
-                case ".smil": return ".smil extension plus SMIL XML root";
-                case ".acsm": return ".acsm extension plus Adobe ADEPT fulfillment-token XML root";
-                case ".aup": return ".aup extension plus Audacity project XML namespace";
-                case ".kmmacros": return ".kmmacros extension plus Keyboard Maestro property-list markers";
-                case ".mamd": return ".mamd extension plus FORM/AIFF and Logic metadata chunks";
-                case ".zdt": return ".zdt extension plus fixed ZOOM L-20 project header";
-                case ".dbb": return ".dbb extension plus legacy Skype l33l database marker";
-                case ".scpt": return ".scpt extension plus FasdUAS compiled-script header";
-                case ".pdd": return ".pdd extension plus Symbian UID header fields";
-                case ".kbd": return ".kbd extension plus Symbian UID and EPOC markers";
-                case ".pml": return ".pml extension plus PMML music directives";
-                case ".thm": return ".thm extension plus JPEG image header";
-                case ".srt": return ".srt extension plus numbered SubRip timing blocks";
-                case ".tga": return ".tga extension plus internally consistent Targa image header";
-                case ".wmf": return ".wmf extension plus placeable or standard Windows Metafile header";
-                default: return ext + " extension plus expected format marker";
+                case "Windows Contact file": return "Microsoft Contact XML namespace";
+                case "SMIL synchronized multimedia document": return "SMIL XML root";
+                case "Adobe ebook fulfillment token": return "Adobe ADEPT fulfillment-token XML root";
+                case "Audacity legacy project": return "Audacity project XML namespace";
+                case "Keyboard Maestro macro library": return "Keyboard Maestro property-list markers";
+                case "Logic Pro audio metadata sidecar": return "FORM/AIFF and Logic metadata chunks";
+                case "Zoom LiveTrak L-20 project data": return "fixed ZOOM L-20 project header";
+                case "Legacy Skype database": return "legacy Skype l33l database marker";
+                case "Compiled AppleScript": return "FasdUAS compiled-script header";
+                case "Symbian physical device driver": return ".pdd extension plus Symbian UID header fields";
+                case "Symbian keyboard layout": return ".kbd extension plus Symbian UID and EPOC markers";
+                case "PMML music macro source": return "PMML music directives";
+                case "Camera thumbnail JPEG image": return ".thm extension plus JPEG image header";
+                case "SubRip subtitle file": return "numbered SubRip timing blocks";
+                case "Truevision Targa image": return ".tga extension plus internally consistent Targa image header";
+                case "Windows Metafile image": return "placeable or standard Windows Metafile header";
+                default: return "expected format markers";
             }
         }
 
@@ -67,22 +66,21 @@ namespace FileDentify
             if (type == null)
                 return;
 
-            var ext = Path.GetExtension(path).ToLowerInvariant();
-            if (ext == ".contact") AddWindowsContactInfo(sections, header, fileLength);
-            else if (ext == ".smil") AddSmilInfo(sections, header, fileLength);
-            else if (ext == ".acsm") AddAcsmInfo(sections, header, fileLength);
-            else if (ext == ".aup") AddAudacityProjectInfo(sections, header, fileLength);
-            else if (ext == ".kmmacros") AddKeyboardMaestroInfo(sections, header, fileLength);
-            else if (ext == ".mamd") AddLogicMamdInfo(sections, header, fileLength);
-            else if (ext == ".zdt") AddZoomProjectInfo(sections, header, fileLength);
-            else if (ext == ".dbb") AddLegacySkypeInfo(sections, path, fileLength);
-            else if (ext == ".scpt") AddCompiledAppleScriptInfo(sections, header, fileLength);
-            else if (ext == ".pdd" || ext == ".kbd") AddSymbianSpecialInfo(sections, path, header, fileLength, type);
-            else if (ext == ".pml") AddPmmlInfo(sections, header, fileLength);
-            else if (ext == ".thm") AddCameraThumbnailInfo(sections, fileLength);
-            else if (ext == ".srt") AddSubRipInfo(sections, header, fileLength);
-            else if (ext == ".tga") AddTargaInfo(sections, header, fileLength);
-            else if (ext == ".wmf") AddWindowsMetafileInfo(sections, header, fileLength);
+            if (type == "Windows Contact file") AddWindowsContactInfo(sections, header, fileLength);
+            else if (type == "SMIL synchronized multimedia document") AddSmilInfo(sections, header, fileLength);
+            else if (type == "Adobe ebook fulfillment token") AddAcsmInfo(sections, header, fileLength);
+            else if (type == "Audacity legacy project") AddAudacityProjectInfo(sections, header, fileLength);
+            else if (type == "Keyboard Maestro macro library") AddKeyboardMaestroInfo(sections, header, fileLength);
+            else if (type == "Logic Pro audio metadata sidecar") AddLogicMamdInfo(sections, header, fileLength);
+            else if (type == "Zoom LiveTrak L-20 project data") AddZoomProjectInfo(sections, header, fileLength);
+            else if (type == "Legacy Skype database") AddLegacySkypeInfo(sections, path, fileLength);
+            else if (type == "Compiled AppleScript") AddCompiledAppleScriptInfo(sections, header, fileLength);
+            else if (type == "Symbian physical device driver" || type == "Symbian keyboard layout") AddSymbianSpecialInfo(sections, path, header, fileLength, type);
+            else if (type == "PMML music macro source") AddPmmlInfo(sections, header, fileLength);
+            else if (type == "Camera thumbnail JPEG image") AddCameraThumbnailInfo(sections, fileLength);
+            else if (type == "SubRip subtitle file") AddSubRipInfo(sections, header, fileLength);
+            else if (type == "Truevision Targa image") AddTargaInfo(sections, header, fileLength);
+            else if (type == "Windows Metafile image") AddWindowsMetafileInfo(sections, header, fileLength);
         }
 
         private static void AddWindowsContactInfo(List<ReportSection> sections, byte[] header, long fileLength)

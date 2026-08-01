@@ -13,6 +13,8 @@ namespace FileDentify
     {
         private static string AppleFormatTypeName(string path, byte[] header)
         {
+            if (IsSparseBundleBandPath(path))
+                return "Apple sparse-bundle band file";
             var ext = Path.GetExtension(path).ToLowerInvariant();
             if (LooksLikeMachO(header))
                 return ext == ".dylib" ? "Mach-O dynamic library" : "Mach-O binary";
@@ -42,6 +44,35 @@ namespace FileDentify
             AddAppleResourceInfo(sections, path, header);
             AddAppleZipPackageInfo(sections, path, header);
             AddAppleMobileBackupStoredFileInfo(sections, path, header);
+            AddSparseBundleBandFileInfo(sections, path);
+        }
+
+        private static bool IsSparseBundleBandPath(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path) || !string.IsNullOrEmpty(Path.GetExtension(path)))
+                return false;
+            var parent = Path.GetDirectoryName(path);
+            return string.Equals(Path.GetFileName(parent), "bands", StringComparison.OrdinalIgnoreCase) &&
+                Regex.IsMatch(Path.GetFileName(path) ?? string.Empty, "^[0-9a-f]{1,16}$", RegexOptions.IgnoreCase);
+        }
+
+        private static void AddSparseBundleBandFileInfo(List<ReportSection> sections, string path)
+        {
+            if (!IsSparseBundleBandPath(path))
+                return;
+            var file = new FileInfo(path);
+            var section = AddSection(sections, "Apple sparse-bundle band");
+            Add(section, "Format hint", "Apple sparse-bundle disk-image band file");
+            Add(section, "Band index", file.Name);
+            Add(section, "Band size", FormatBytes(file.Length));
+            var package = Directory.GetParent(file.DirectoryName ?? string.Empty);
+            if (package != null && string.Equals(Path.GetExtension(package.FullName), ".sparsebundle", StringComparison.OrdinalIgnoreCase))
+            {
+                Add(section, "Sparse bundle", package.Name);
+                Add(section, "Info.plist", File.Exists(Path.Combine(package.FullName, "Info.plist")) ? "Present" : "Not found");
+            }
+            Add(section, "Detection basis", "Hexadecimal band filename inside a bands folder; payload bytes may be encrypted or otherwise opaque.");
+            Add(section, "Notes", "Sparse-bundle bands are raw chunks of a directory-backed Apple disk image, commonly used by Time Machine. Keep them with the parent .sparsebundle, Info.plist, and other bands; a band is not independently mountable and FileDentify does not decrypt or traverse it.");
         }
 
         private static void AddAppleMobileBackupStoredFileInfo(List<ReportSection> sections, string path, byte[] header)

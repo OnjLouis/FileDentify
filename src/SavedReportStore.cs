@@ -73,7 +73,7 @@ namespace FileDentify
                 Sections = report.Sections.Select(section => new SavedReportSection
                 {
                     Title = section.Title,
-                    Items = section.Items.Select(item => new SavedReportItem { Title = item.Title, Detail = item.Detail }).ToList()
+                    Items = section.Items.Select(item => new SavedReportItem { Title = item.Title, Detail = item.Detail, IsNote = item.IsNote }).ToList()
                 }).ToList()
             };
         }
@@ -93,7 +93,7 @@ namespace FileDentify
                     if (sourceSection.Items != null)
                     {
                         foreach (var item in sourceSection.Items)
-                            AddLoadedReportItem(section, item.Title ?? string.Empty, item.Detail ?? string.Empty);
+                            AddLoadedReportItem(section, item.Title ?? string.Empty, item.Detail ?? string.Empty, item.IsNote);
                     }
                     report.Sections.Add(section);
                 }
@@ -102,42 +102,21 @@ namespace FileDentify
             return report;
         }
 
-        private static void AddLoadedReportItem(ReportSection section, string title, string detail)
+        private static void AddLoadedReportItem(ReportSection section, string title, string detail, bool isNote)
         {
-            if (IsMergeableReportNoteTitle(title))
+            if (isNote || ReportNotePolicy.IsLegacyNoteTitle(title))
             {
-                var newDetail = FormatMergedReportNote(title, detail);
-                var existing = section.Items.FirstOrDefault(item => IsMergeableReportNoteTitle(item.Title));
+                var category = ReportNotePolicy.Categorize(title, detail);
+                var existing = section.Items.FirstOrDefault(item => item.IsNote && string.Equals(item.Title, category, StringComparison.OrdinalIgnoreCase));
                 if (existing != null)
                 {
-                    existing.Title = "Notes";
-                    if (!string.IsNullOrWhiteSpace(newDetail) && (existing.Detail ?? string.Empty).IndexOf(newDetail, StringComparison.OrdinalIgnoreCase) < 0)
-                        existing.Detail = string.IsNullOrWhiteSpace(existing.Detail)
-                            ? newDetail
-                            : existing.Detail.TrimEnd() + Environment.NewLine + Environment.NewLine + newDetail;
+                    existing.Detail = ReportNotePolicy.MergeDistinct(existing.Detail, detail);
                     return;
                 }
-                section.Items.Add(new ReportItem { Title = "Notes", Detail = newDetail });
+                section.Items.Add(new ReportItem { Title = category, Detail = detail, IsNote = true });
                 return;
             }
             section.Items.Add(new ReportItem { Title = title, Detail = detail });
-        }
-
-        private static bool IsMergeableReportNoteTitle(string title)
-        {
-            var text = (title ?? string.Empty).Trim();
-            return string.Equals(text, "Notes", StringComparison.OrdinalIgnoreCase) ||
-                text.EndsWith(" note", StringComparison.OrdinalIgnoreCase) ||
-                text.EndsWith(" notes", StringComparison.OrdinalIgnoreCase);
-        }
-
-        private static string FormatMergedReportNote(string title, string detail)
-        {
-            var text = detail ?? string.Empty;
-            var label = (title ?? string.Empty).Trim();
-            if (string.Equals(label, "Notes", StringComparison.OrdinalIgnoreCase) || string.IsNullOrWhiteSpace(label))
-                return text;
-            return label + ": " + text;
         }
     }
 
@@ -185,5 +164,6 @@ namespace FileDentify
     {
         public string Title { get; set; }
         public string Detail { get; set; }
+        public bool IsNote { get; set; }
     }
 }

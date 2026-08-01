@@ -11,9 +11,12 @@ namespace FileDentify
     {
         public string Id { get; set; }
         public string Name { get; set; }
+        public string Category { get; set; }
         public string Confidence { get; set; }
         public string DetectionBasis { get; set; }
+        public string[] ExpectedExtensions { get; set; }
         public string Version { get; set; }
+        public bool IsContentMatch { get; set; }
         public bool ShouldSurface { get; set; }
     }
 
@@ -41,13 +44,18 @@ namespace FileDentify
             {
                 var result = FileTypeDatabase.Identify(fileName, sample, fileLength);
                 if (result == null) return null;
+                var descriptor = FileTypeDatabase.Formats.FirstOrDefault(item =>
+                    string.Equals(item.Id, result.Id, StringComparison.OrdinalIgnoreCase));
                 return new LibFileDentifyMatch
                 {
                     Id = result.Id,
                     Name = result.Name,
+                    Category = result.Category,
                     Confidence = result.Confidence.ToString(),
                     DetectionBasis = FileTypeDatabase.DetectionBasis(result),
+                    ExpectedExtensions = descriptor == null ? new string[0] : descriptor.Extensions.ToArray(),
                     Version = FileTypeDatabase.Version,
+                    IsContentMatch = result.Confidence != MatchConfidence.ExtensionHint,
                     ShouldSurface = result.Confidence != MatchConfidence.ExtensionHint && !CommonIds.Contains(result.Id)
                 };
             }

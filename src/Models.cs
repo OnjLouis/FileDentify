@@ -131,6 +131,7 @@ namespace FileDentify
     {
         public string Title;
         public string Detail;
+        public bool IsNote;
     }
 
     internal sealed class ShortcutButton : Button

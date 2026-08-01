@@ -21,10 +21,14 @@ namespace FileDentify
 
         private static void AddNativeInstrumentsInfo(List<ReportSection> sections, string path, byte[] sample)
         {
+            if (HasUnrelatedHighConfidenceContent(path, sample, "native-instruments."))
+                return;
             var ext = Path.GetExtension(path).ToLowerInvariant();
             if (ext == ".rpp" || ext == ".rpp-bak")
                 return;
             var extensionHint = NativeInstrumentsTypeName(path);
+            if (extensionHint == null && FirmwareTypeName(path, sample) != null)
+                return;
             if (extensionHint == null && IsArturiaPath(path) && !PathContainsNativeInstrumentsContext(path))
                 return;
             if (extensionHint == null && !PathContainsNativeInstrumentsContext(path) && WindowsSystemTypeName(path, sample) != null)

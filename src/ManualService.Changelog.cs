@@ -7,6 +7,19 @@ namespace FileDentify
         private static void Changelog(StringBuilder html)
         {
             html.AppendLine("<h2 id=\"changelog\">Changelog</h2>");
+            html.AppendLine("<h3>1.11</h3>");
+            html.AppendLine("<ul>");
+            html.AppendLine("<li>Improved content-first identification for files removed from their original folders or stripped of their extensions. UJAM part-one indexes now expose instrument names, UUID, and format version from their internal structure; detached part-two payloads are identified conservatively as UJAM-style when only their UUID-prefixed binary structure remains. Strong XML roots and binary headers now also identify selected Windows metadata, EPUB package documents, automation files, music-project data, subtitles, and metafiles under neutral filenames.</li>");
+            html.AppendLine("<li>Strengthened misleading-filename handling across the report pipeline. High-confidence content now controls the file family when a file is renamed to an unrelated database, document, executable, plug-in, saved-game, speech, sample-library, or ROM extension; compatible extensions may still provide a more precise role. Safety hints now give one concise mismatch statement, an active-content risk only where applicable, and one practical next step.</li>");
+            html.AppendLine("<li>Reorganized explanatory notes into consistent format, limitation, compatibility, privacy, safety, uncertainty, advice, and viewing categories. Related notes are folded together, while ordinary metadata remains in report tables.</li>");
+            html.AppendLine("<li>Added RC Systems DoubleTalk PC ROM and DoubleTalk64 pronunciation-resource reporting from real NVDA add-on files, including content-based ROM identity and embedded firmware version.</li>");
+            html.AppendLine("<li>Added exact-fingerprint recognition for the six Telesensory Systems Prose 2000 processor and DSP ROM images, including firmware version, ROM role, and board socket even after filenames are removed.</li>");
+            html.AppendLine("<li>Added content-first identification for ZOOM H1essential, H6, H6essential, F3, F6, F8, F8n, and F8n Pro recorder firmware, with exact official-package versions where verified.</li>");
+            html.AppendLine("<li>Added separate H1essential accessibility guide-sound identification so the companion data image is not confused with system firmware.</li>");
+            html.AppendLine("<li>Added Apple sparse-bundle band reporting. Files inside a sparse bundle are identified from their package context, while detached hexadecimal band files receive a clearly qualified possible match because encrypted raw band bytes do not prove their origin.</li>");
+            html.AppendLine("<li>Updated the embedded LibFileDentify engine to 0.2.0 with neutral-name regression coverage for these formats.</li>");
+            html.AppendLine("<li>See <a href=\"#supported-file-types\">Supported file types</a> for the maintained coverage table.</li>");
+            html.AppendLine("</ul>");
             html.AppendLine("<h3>1.10</h3>");
             html.AppendLine("<ul>");
             html.AppendLine("<li>Separated the reusable, cross-platform identification engine into the open-source <a href=\"https://github.com/OnjLouis/LibFileDentify\">LibFileDentify</a> library. FileDentify embeds the exact tested library assembly inside its portable executable and credits library-supplied matches with their confidence and evidence.</li>");

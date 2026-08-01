@@ -65,18 +65,25 @@ if (-not (Test-Path -LiteralPath $csc)) {
     throw 'Could not find the .NET Framework C# compiler.'
 }
 
-$testDir = Join-Path $root 'obj\SectionOrderingSmoke'
+$testDir = Join-Path ([IO.Path]::GetTempPath()) ('FileDentify-SectionOrdering-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Force -Path $testDir | Out-Null
 $testSource = Join-Path $testDir 'SectionOrderingSmoke.cs'
 $testExe = Join-Path $testDir 'SectionOrderingSmoke.exe'
-Set-Content -LiteralPath $testSource -Value ($source + "`r`n" + $stub) -Encoding UTF8
+try {
+    Set-Content -LiteralPath $testSource -Value ($source + "`r`n" + $stub) -Encoding UTF8
 
-& $csc /nologo /target:exe /out:$testExe /reference:System.dll /reference:System.Core.dll $testSource
-if ($LASTEXITCODE -ne 0) {
-    throw "Section ordering smoke compile failed with exit code $LASTEXITCODE."
+    & $csc /nologo /target:exe /out:$testExe /reference:System.dll /reference:System.Core.dll $testSource
+    if ($LASTEXITCODE -ne 0) {
+        throw "Section ordering smoke compile failed with exit code $LASTEXITCODE."
+    }
+
+    & $testExe
+    if ($LASTEXITCODE -ne 0) {
+        throw "Section ordering smoke failed with exit code $LASTEXITCODE."
+    }
 }
-
-& $testExe
-if ($LASTEXITCODE -ne 0) {
-    throw "Section ordering smoke failed with exit code $LASTEXITCODE."
+finally {
+    if (Test-Path -LiteralPath $testDir) {
+        Remove-Item -LiteralPath $testDir -Recurse -Force -ErrorAction SilentlyContinue
+    }
 }

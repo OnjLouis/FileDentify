@@ -68,7 +68,7 @@ namespace FileDentify
             }
             AddFileDentifyDatabaseInfo(sections, path, header, file.Length, fileDentifyDatabaseType, libFileDentifyMatch);
             AddLibmagicInfo(sections, libmagic);
-            AddSafetyHintInfo(sections, path, header);
+            AddSafetyHintInfo(sections, path, header, libFileDentifyMatch);
 
             var hashes = AddSection(sections, "Hashes");
             AddHashInfo(hashes, path, file.Length);

@@ -101,6 +101,8 @@ namespace FileDentify
 
         private static void AddGameFileInfo(List<ReportSection> sections, string path, byte[] header)
         {
+            if (HasUnrelatedHighConfidenceContent(path, header, "game.", "firmware.roland-", "audio."))
+                return;
             var type = GameFileTypeName(path, header);
             if (type == null)
                 return;

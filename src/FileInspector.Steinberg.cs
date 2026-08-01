@@ -39,6 +39,8 @@ namespace FileDentify
 
         private static void AddSteinbergCubaseInfo(List<ReportSection> sections, string path, byte[] data)
         {
+            if (HasUnrelatedHighConfidenceContent(path, data, "steinberg.", "cubase.", "vst."))
+                return;
             var ext = Path.GetExtension(path).ToLowerInvariant();
             if (ext == ".wrk" || ext == ".cwp" || ext == ".rpp" || ext == ".rpp-bak")
                 return;

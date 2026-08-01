@@ -294,7 +294,7 @@ namespace FileDentify
                     if (string.IsNullOrWhiteSpace(detail))
                         continue;
 
-                    if (IsHtmlNavigationHeadingItem(item.Title))
+                    if (item.IsNote || IsHtmlNavigationHeadingItem(item.Title))
                     {
                         FlushReadableTextHtml(sb, readableText);
                         sb.AppendLine("<h3>" + Html((item.Title ?? string.Empty).Trim()) + "</h3>");
@@ -313,7 +313,7 @@ namespace FileDentify
             foreach (var item in section.Items)
             {
                 var detail = ReportSection.NormalizeDetailText(item.Detail);
-                if (IsHtmlNavigationHeadingItem(item.Title))
+                if (item.IsNote || IsHtmlNavigationHeadingItem(item.Title))
                 {
                     if (tableOpen)
                     {
@@ -360,14 +360,12 @@ namespace FileDentify
         private static bool IsHtmlNavigationHeadingItem(string title)
         {
             var text = (title ?? string.Empty).Trim();
-            return string.Equals(text, "Notes", StringComparison.OrdinalIgnoreCase) ||
+            return ReportNotePolicy.IsLegacyNoteTitle(text) ||
                 string.Equals(text, "Scan note", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(text, "Section end", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(text, "End of section", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(text, "Information", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(text, "Info", StringComparison.OrdinalIgnoreCase) ||
-                text.EndsWith(" note", StringComparison.OrdinalIgnoreCase) ||
-                text.EndsWith(" notes", StringComparison.OrdinalIgnoreCase) ||
                 text.EndsWith(" information", StringComparison.OrdinalIgnoreCase);
         }
 

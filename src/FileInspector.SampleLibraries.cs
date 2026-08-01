@@ -113,7 +113,7 @@ namespace FileDentify
                 Add(section, "Pack code", Path.GetFileNameWithoutExtension(path).Split('_').FirstOrDefault() ?? string.Empty);
                 Add(section, "Pack name", CleanSampleLibraryName(Path.GetFileNameWithoutExtension(path)));
                 Add(section, "Common use", "Large XLN Audio sound-data package used by Addictive Drums, Addictive Keys, Addictive Trigger, or XO.");
-                Add(section, "Header note", LooksLikeText(header) ? "Text-like header" : "Binary/proprietary package header");
+                Add(section, "Payload", LooksLikeText(header) ? "Text-like header" : "Binary/proprietary package header");
             }
             else
             {
@@ -425,7 +425,7 @@ namespace FileDentify
             Add(section, "Library folder", SegmentBeforeFile(path, "M-Tron Pro Library"));
             Add(section, "Bank name", CleanSampleLibraryName(Path.GetFileNameWithoutExtension(path)));
             Add(section, "File size", FormatBytes(fileLength));
-            Add(section, "Header note", LooksLikeText(header) ? "Text-like header" : "Binary/proprietary tape-bank payload");
+            Add(section, "Payload", LooksLikeText(header) ? "Text-like header" : "Binary/proprietary tape-bank payload");
             Add(section, "Notes", "GForce M-Tron libraries emulate Mellotron/Chamberlin tape banks. These files are large proprietary tape-bank containers; FileDentify identifies the bank and context without unpacking or decoding the sample data.");
         }
 

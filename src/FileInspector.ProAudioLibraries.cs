@@ -41,7 +41,7 @@ namespace FileDentify
             if (LooksLikeText(header))
                 AddVisibleKeyValuePairs(section, Encoding.UTF8.GetString(sample.Take(Math.Min(sample.Length, 256 * 1024)).ToArray()), "Visible metadata", 18);
             else
-                Add(section, "Header note", "Binary/proprietary payload");
+                Add(section, "Payload", "Binary/proprietary payload");
             Add(section, "Notes", "Universal Audio LUNA is Universal Audio's recording system and plug-in platform. These component files belong to LUNA instruments, effects, reverbs, or model data. FileDentify reports component context, role, size, and visible metadata only.");
         }
 
@@ -186,6 +186,8 @@ namespace FileDentify
 
         private static string UjamTypeName(string path, byte[] header)
         {
+            if (LooksLikeUjamContentIndex(header))
+                return "UJAM content index blob";
             if (!IsUjamPath(path))
                 return null;
             var ext = Path.GetExtension(path).ToLowerInvariant();
@@ -205,6 +207,8 @@ namespace FileDentify
 
         private static string UjamStyleBlobTypeName(string path, byte[] header)
         {
+            if (LooksLikeUjamStyleContentPayload(header))
+                return "UJAM-style content payload blob";
             if (!IsUjamStyleBlobPath(path))
                 return null;
             return "UJAM-style sound or model data blob";
@@ -253,16 +257,21 @@ namespace FileDentify
 
             var section = AddSection(sections, "UJAM");
             Add(section, "Format hint", type);
-            Add(section, "Product folder", SegmentAfter(path, "UJAM"));
-            Add(section, "Role", UjamRoleFromPath(path));
+            if (IsUjamPath(path))
+                Add(section, "Product folder", SegmentAfter(path, "UJAM"));
+            Add(section, "Role", LooksLikeUjamContentIndex(header) ? "content index and instrument metadata" : UjamRoleFromPath(path));
             Add(section, "File size", FormatBytes(fileLength));
 
-            if (Path.GetExtension(path).Equals(".blob", StringComparison.OrdinalIgnoreCase))
+            if (LooksLikeUjamContentIndex(header))
+            {
+                AddUjamContentIndexDetails(section, header);
+            }
+            else if (Path.GetExtension(path).Equals(".blob", StringComparison.OrdinalIgnoreCase))
             {
                 var id = ReadAsciiZ(header, 0, 64);
                 if (Regex.IsMatch(id ?? string.Empty, "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", RegexOptions.IgnoreCase))
                     Add(section, "Leading UUID", id);
-                Add(section, "Header note", LooksLikeText(header) ? "Text-like header" : "Binary/proprietary payload");
+                Add(section, "Payload", LooksLikeText(header) ? "Text-like header" : "Binary/proprietary payload");
             }
             else if (LooksLikeText(header))
             {
@@ -278,6 +287,41 @@ namespace FileDentify
             Add(section, "Notes", "UJAM products include virtual guitarists, beatmakers, drummers, bassists, and effect plug-ins. Their files can be presets, NKS metadata, settings, or large .blob content payloads. FileDentify reports product context, visible preset/build metadata, and blob identity without decoding proprietary payloads.");
         }
 
+        private static bool LooksLikeUjamContentIndex(byte[] header)
+        {
+            if (header == null || header.Length < 32 ||
+                header[0] != 0x67 || header[1] != 0x45 || header[2] != 0xB1 || header[3] != 0x62)
+                return false;
+            var length = ReadUInt32LittleEndian(header, 4);
+            if (length < 24 || length > header.Length - 8 || header[8] != (byte)'{')
+                return false;
+            var json = Encoding.UTF8.GetString(header, 8, (int)length);
+            return json.IndexOf("\"instruments\"", StringComparison.Ordinal) >= 0 &&
+                json.IndexOf("\"sample_index\"", StringComparison.Ordinal) >= 0 &&
+                json.IndexOf("\"uuid\"", StringComparison.Ordinal) >= 0 &&
+                json.IndexOf("\"version\"", StringComparison.Ordinal) >= 0;
+        }
+
+        private static void AddUjamContentIndexDetails(ReportSection section, byte[] header)
+        {
+            var length = (int)ReadUInt32LittleEndian(header, 4);
+            var json = Encoding.UTF8.GetString(header, 8, length);
+            Add(section, "Container marker", "67 45 B1 62");
+            Add(section, "Metadata length", FormatBytes(length));
+            var names = Regex.Matches(json, "\"name\"\\s*:\\s*\"(?<value>[^\"]+)\"")
+                .Cast<Match>().Select(match => CleanMetadataText(match.Groups["value"].Value))
+                .Where(value => !string.IsNullOrWhiteSpace(value)).Distinct(StringComparer.OrdinalIgnoreCase).Take(20).ToArray();
+            if (names.Length > 0)
+                Add(section, "Instruments", string.Join(Environment.NewLine, names));
+            var uuid = Regex.Match(json, "\"uuid\"\\s*:\\s*\"(?<value>[0-9a-f-]{36})\"", RegexOptions.IgnoreCase);
+            if (uuid.Success)
+                Add(section, "Content UUID", uuid.Groups["value"].Value);
+            var version = Regex.Match(json, "\"version\"\\s*:\\s*\\{[^}]*\"major\"\\s*:\\s*(?<major>\\d+)[^}]*\"minor\"\\s*:\\s*(?<minor>\\d+)[^}]*\"patch\"\\s*:\\s*(?<patch>\\d+)", RegexOptions.Singleline);
+            if (version.Success)
+                Add(section, "Format version", version.Groups["major"].Value + "." + version.Groups["minor"].Value + "." + version.Groups["patch"].Value);
+            Add(section, "Detection basis", "Content marker and internally structured instrument/sample-index metadata; the extension and original folder are not required.");
+        }
+
         private static void AddUjamStyleBlobInfo(List<ReportSection> sections, string path, byte[] header, long fileLength)
         {
             var type = UjamStyleBlobTypeName(path, header);
@@ -286,16 +330,37 @@ namespace FileDentify
 
             var section = AddSection(sections, "UJAM-style blob");
             Add(section, "Format hint", type);
-            Add(section, "Vendor folder", UjamStyleBlobVendor(path));
-            Add(section, "Product folder", UjamStyleBlobProduct(path));
+            var vendor = UjamStyleBlobVendor(path);
+            if (!string.IsNullOrWhiteSpace(vendor))
+            {
+                Add(section, "Vendor folder", vendor);
+                Add(section, "Product folder", UjamStyleBlobProduct(path));
+            }
             Add(section, "Role", "content/model payload");
             Add(section, "File size", FormatBytes(fileLength));
 
             var id = ReadAsciiZ(header, 0, 64);
             if (Regex.IsMatch(id ?? string.Empty, "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", RegexOptions.IgnoreCase))
                 Add(section, "Leading UUID", id);
-            Add(section, "Header note", LooksLikeText(header) ? "Text-like header" : "Binary/proprietary payload");
-            Add(section, "Notes", "Some vendors use UJAM-style .blob payload containers for sound or model content even when the product is not made by UJAM. FileDentify reports vendor and product path context, but does not decode the proprietary payload.");
+            Add(section, "Payload form", LooksLikeText(header) ? "Text-like header" : "Binary/proprietary payload");
+            if (LooksLikeUjamStyleContentPayload(header))
+                Add(section, "Detection basis", "Leading content UUID followed by a large opaque binary payload; extension and folder context are not required.");
+            Add(section, "Notes", "UJAM and some other vendors use this UUID-linked payload structure for sound or model content. FileDentify reports vendor and product context when the original path provides it, but does not decode the proprietary payload.");
+        }
+
+        private static bool LooksLikeUjamStyleContentPayload(byte[] header)
+        {
+            if (header == null || header.Length < 128)
+                return false;
+            var uuid = Encoding.ASCII.GetString(header, 0, 36);
+            if (!Regex.IsMatch(uuid, "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", RegexOptions.IgnoreCase))
+                return false;
+            var inspected = Math.Min(header.Length, 4096);
+            var printable = 0;
+            for (var i = 36; i < inspected; i++)
+                if (header[i] == 9 || header[i] == 10 || header[i] == 13 || header[i] >= 32 && header[i] <= 126)
+                    printable++;
+            return printable < (inspected - 36) / 2;
         }
 
         private static void AddValhallaDspInfo(List<ReportSection> sections, string path, byte[] header, byte[] sample, long fileLength)
